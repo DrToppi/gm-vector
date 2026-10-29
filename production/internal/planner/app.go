@@ -27,7 +27,7 @@ type Config struct {
 	Origin          string
 	WebDir          string
 	Secret          []byte
-	Bootstrap       string
+	Bootstrap       string // Deprecated: ignored; first-run setup no longer uses an installation key.
 	LDAP            *LDAPConfig
 	SMTP            SMTPConfig
 }
@@ -79,7 +79,7 @@ func decode(r *http.Request, v any) error {
 func requestID(r *http.Request) string { s, _ := r.Context().Value("requestID").(string); return s }
 func NewApp(s *Store, c Config) (*App, error) {
 	u, e := url.Parse(c.Origin)
-	if e != nil || u.Scheme != "https" || u.Host == "" || u.Path != "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || len(c.Secret) != 32 || len(c.Bootstrap) < 32 {
+	if e != nil || u.Scheme != "https" || u.Host == "" || u.Path != "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || len(c.Secret) != 32 {
 		return nil, errors.New("invalid secure configuration")
 	}
 	if e := validateSMTP(c.SMTP); e != nil {

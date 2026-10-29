@@ -70,21 +70,26 @@ func TestSetupFilesPrivateAndNonOverwriting(t *testing.T) {
 	if err := Initialize(dir, "https://planner.example"); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"instance.id", "bootstrap.token", "encryption.key", "setup-url.txt", "config.json", "database.password"} {
+	for _, name := range []string{"instance.id", "encryption.key", "config.json", "database.password"} {
 		info, err := os.Stat(filepath.Join(dir, name))
 		if err != nil || info.Mode().Perm() != 0600 {
 			t.Fatal("insecure setup file", name)
+		}
+	}
+	for _, name := range []string{"bootstrap.token", "setup-url.txt"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
+			t.Fatal("obsolete first-run credential generated", name)
 		}
 	}
 	identity, _ := os.ReadFile(filepath.Join(dir, "instance.id"))
 	if len(identity) != 32 || !validID.Match(identity) {
 		t.Fatal("invalid installation identity")
 	}
-	before, _ := os.ReadFile(filepath.Join(dir, "bootstrap.token"))
+	before, _ := os.ReadFile(filepath.Join(dir, "encryption.key"))
 	if err := Initialize(dir, "https://planner.example"); err == nil {
 		t.Fatal("second initialization accepted")
 	}
-	after, _ := os.ReadFile(filepath.Join(dir, "bootstrap.token"))
+	after, _ := os.ReadFile(filepath.Join(dir, "encryption.key"))
 	if string(before) != string(after) {
 		t.Fatal("secret overwritten")
 	}

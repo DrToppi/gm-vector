@@ -8,7 +8,7 @@ class Installation(unittest.TestCase):
   with tempfile.TemporaryDirectory() as temp:
    states=[Path(temp)/'one',Path(temp)/'two']
    for s in states:m.initialize(s,19443,'172.30.91.0/29')
-   for name in ('encryption.key','bootstrap.token','database.password'):
+   for name in ('encryption.key','database.password'):
     self.assertNotEqual((states[0]/'config'/name).read_bytes(),(states[1]/'config'/name).read_bytes())
    for s in states:
     self.assertEqual(s.stat().st_mode&0o777,0o700)
@@ -17,7 +17,9 @@ class Installation(unittest.TestCase):
     config=json.loads((s/'config/config.json').read_text())
     self.assertEqual(config['origin'],'https://localhost:19443')
     self.assertEqual(len((s/'config/encryption.key').read_bytes()),32)
-    self.assertEqual((s/'setup-url.txt').read_text(),'https://localhost:19443/#setup='+(s/'config/bootstrap.token').read_text())
+    self.assertNotIn('bootstrap_file',config)
+    self.assertFalse((s/'config/bootstrap.token').exists())
+    self.assertFalse((s/'setup-url.txt').exists())
    with self.assertRaises(FileExistsError):m.initialize(states[0],19443,'172.30.91.0/29')
  def test_invalid_options_no_state(self):
   with tempfile.TemporaryDirectory() as temp:

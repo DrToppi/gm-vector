@@ -4750,6 +4750,9 @@
                     },
                     "otpauth_uri": {
                       "type": "string"
+                    },
+                    "enrollment_token": {
+                      "type": "string"
                     }
                   },
                   "additionalProperties": false
@@ -4846,7 +4849,8 @@
                 "type": "object",
                 "properties": {
                   "token": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Omit for initial administrator setup; required for invitation or recovery enrollment"
                   },
                   "username": {
                     "type": "string"
@@ -4862,7 +4866,6 @@
                 },
                 "additionalProperties": false,
                 "required": [
-                  "token",
                   "username",
                   "name",
                   "password"

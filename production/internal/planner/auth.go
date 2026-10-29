@@ -33,8 +33,8 @@ func (a *App) beginEnrollment(w http.ResponseWriter, r *http.Request, u Principa
 	if e := a.throttle(r, "enroll:"+hash(in.Token)); e != nil {
 		return e
 	}
-	if len(in.Token) < 32 || len(in.Password) > 1024 || checkText(in.Name, 200, true) != nil {
-		return bad("Нужны токен, имя и пароль 15–128 символов")
+	if (in.Token != "" && len(in.Token) < 32) || len(in.Password) > 1024 || checkText(in.Name, 200, true) != nil {
+		return bad("Нужны имя и пароль 15–128 символов")
 	}
 	in.Username = strings.ToLower(strings.TrimSpace(in.Username))
 	if len(in.Username) == 0 || len(in.Username) > 200 {
@@ -53,7 +53,12 @@ func (a *App) beginEnrollment(w http.ResponseWriter, r *http.Request, u Principa
 	if e != nil {
 		return e
 	}
-	setup := available && subtle.ConstantTimeCompare([]byte(hash(in.Token)), []byte(hash(a.Config.Bootstrap))) == 1
+	setup := available && in.Token == ""
+	if setup {
+		// Each first-run attempt owns a fresh continuation token; never derive it
+		// from a shared installation credential or another browser's request.
+		in.Token = token()
+	}
 	directoryAccount := false
 	payload := enrollment{ID: newID(), Username: in.Username, Name: in.Name, Secret: totpSecret(), Admin: setup}
 	if !setup {
@@ -123,7 +128,7 @@ func (a *App) beginEnrollment(w http.ResponseWriter, r *http.Request, u Principa
 		return e
 	}
 	uri := "otpauth://totp/" + url.PathEscape("gmVector:"+payload.Username) + "?secret=" + payload.Secret + "&issuer=gmVector&algorithm=SHA1&digits=6&period=30"
-	jsonResponse(w, 200, map[string]string{"secret": payload.Secret, "otpauth_uri": uri})
+	jsonResponse(w, 200, map[string]string{"secret": payload.Secret, "otpauth_uri": uri, "enrollment_token": in.Token})
 	return nil
 }
 func (a *App) confirmEnrollment(w http.ResponseWriter, r *http.Request, u Principal) error {
@@ -209,6 +214,12 @@ func (a *App) confirmEnrollment(w http.ResponseWriter, r *http.Request, u Princi
 	}
 	if uid == "" {
 		if _, e = tx.Exec(ctx, "INSERT INTO settings(key,value) VALUES('bootstrap_consumed','true'::jsonb) ON CONFLICT(key) DO NOTHING"); e != nil {
+			return e
+		}
+	}
+	if uid == "" {
+		// The winning administrator consumes every pending first-run attempt.
+		if _, e = tx.Exec(ctx, "DELETE FROM enrollments WHERE user_id IS NULL"); e != nil {
 			return e
 		}
 	}
@@ -528,20 +539,30 @@ func (a *App) resumeEnrollment(w http.ResponseWriter, r *http.Request, u Princip
 	if e := a.throttle(r, "resume:"+hash(in.Token)); e != nil {
 		return e
 	}
-	if subtle.ConstantTimeCompare([]byte(hash(in.Token)), []byte(hash(a.Config.Bootstrap))) == 1 {
-		available, e := setupAvailable(r.Context(), a.Store.DB)
-		if e != nil {
-			return e
+	ctx := r.Context()
+	tx, e := a.Store.DB.Begin(ctx)
+	if e != nil {
+		return e
+	}
+	defer tx.Rollback(ctx)
+	if _, e = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(789502)"); e != nil {
+		return e
+	}
+	var encrypted []byte
+	var uid string
+	if e = tx.QueryRow(ctx, "SELECT payload,coalesce(user_id,'') FROM enrollments WHERE hash=$1 AND expires_at>now() AND payload IS NOT NULL", hash(in.Token)).Scan(&encrypted, &uid); e != nil {
+		return denied()
+	}
+	if uid == "" {
+		available, err := setupAvailable(ctx, tx)
+		if err != nil {
+			return err
 		}
 		if !available {
 			return denied()
 		}
 	}
-	var encrypted []byte
-	if e := a.Store.DB.QueryRow(r.Context(), "SELECT payload FROM enrollments WHERE hash=$1 AND expires_at>now() AND payload IS NOT NULL", hash(in.Token)).Scan(&encrypted); e != nil {
-		return denied()
-	}
-	if e := validateEmployeeEnrollment(r.Context(), a.Store.DB, hash(in.Token)); e != nil {
+	if e = validateEmployeeEnrollment(ctx, tx, hash(in.Token)); e != nil {
 		return e
 	}
 	plain, e := unseal(a.Config.Secret, encrypted)
@@ -551,6 +572,9 @@ func (a *App) resumeEnrollment(w http.ResponseWriter, r *http.Request, u Princip
 	var p enrollment
 	if json.Unmarshal(plain, &p) != nil {
 		return denied()
+	}
+	if e = tx.Commit(ctx); e != nil {
+		return e
 	}
 	uri := "otpauth://totp/" + url.PathEscape("gmVector:"+p.Username) + "?secret=" + p.Secret + "&issuer=gmVector&algorithm=SHA1&digits=6&period=30"
 	jsonResponse(w, 200, map[string]string{"secret": p.Secret, "otpauth_uri": uri, "username": p.Username})

@@ -29,8 +29,8 @@ Use `--port 19443 --subnet 172.30.94.0/29` with `init` if defaults conflict.
 
 `prepare` creates separate database runtime and migration roles, applies schema
 migrations, seeds a calendar, and starts API, worker, and reverse proxy. It prints
-the web address and the path to a private `setup-url.txt`. It never creates a
-project or imports working data. Open the private setup link locally, create your
+the normal web address. No installation key is required. It never creates a
+project or imports working data. Open the application locally, create your
 administrator username/name/password, enroll TOTP, then store recovery codes
 securely offline. Setup is closed after the first administrator is created.
 

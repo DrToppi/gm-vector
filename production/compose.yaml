@@ -23,7 +23,7 @@ services:
     entrypoint: [/bin/sh, -ec]
     command:
       - |
-        cp /source/config.json /source/encryption.key /source/bootstrap.token /app-secrets/
+        cp /source/config.json /source/encryption.key /app-secrets/
         if [ -f /source/report-public-key.json ]; then cp /source/report-public-key.json /app-secrets/report-public-key.json; else rm -f /app-secrets/report-public-key.json; fi
         if [ -f /source/smtp.json ]; then cp /source/smtp.json /app-secrets/smtp.json; else rm -f /app-secrets/smtp.json; fi
         if [ -f /source/smtp-ca.pem ]; then cp /source/smtp-ca.pem /app-secrets/smtp-ca.pem; else rm -f /app-secrets/smtp-ca.pem; fi

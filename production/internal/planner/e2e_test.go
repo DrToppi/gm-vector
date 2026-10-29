@@ -84,7 +84,7 @@ func TestBrowserE2E(t *testing.T) {
 	}
 	server := httptest.NewUnstartedServer(nil)
 	defer server.Close()
-	cfg := Config{Origin: "https://" + server.Listener.Addr().String(), WebDir: web, Secret: random(32), Bootstrap: token()}
+	cfg := Config{Origin: "https://" + server.Listener.Addr().String(), WebDir: web, Secret: random(32)}
 	// Ephemeral synthetic support key; never loaded from a production installation.
 	reportPrivate, err := rsa.GenerateKey(rand.Reader, 3072)
 	if err != nil {
@@ -114,7 +114,7 @@ func TestBrowserE2E(t *testing.T) {
 	}
 	password := token() + "-e2e"
 	// Synthetic credentials travel over stdin, never process arguments or artifacts.
-	input, err := json.Marshal(map[string]string{"origin": cfg.Origin, "username": "e2e-admin", "password": password, "bootstrap": cfg.Bootstrap, "chrome": chrome, "report_private_key": reportPEM, "report_directory": cfg.ReportDirectory, "profile": t.TempDir()})
+	input, err := json.Marshal(map[string]string{"origin": cfg.Origin, "username": "e2e-admin", "password": password, "chrome": chrome, "report_private_key": reportPEM, "report_directory": cfg.ReportDirectory, "profile": t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

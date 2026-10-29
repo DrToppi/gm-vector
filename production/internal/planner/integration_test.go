@@ -52,7 +52,7 @@ func TestAPIIntegration(t *testing.T) {
 	if e = store.Migrate(ctx); e != nil {
 		t.Fatal(e)
 	}
-	cfg := Config{Origin: "https://localhost:9443", WebDir: t.TempDir(), Secret: random(32), Bootstrap: token()}
+	cfg := Config{Origin: "https://localhost:9443", WebDir: t.TempDir(), Secret: random(32)}
 	app, e := NewApp(store, cfg)
 	if e != nil {
 		t.Fatal(e)
@@ -108,13 +108,29 @@ func TestAPIIntegration(t *testing.T) {
 	admin := testSession{}
 	code, _ := request("POST", "/auth/bootstrap", map[string]any{"token": token(), "username": "admin", "name": "Admin", "password": "correct horse battery staple"}, nil, nil)
 	expect(403, code, "wrong bootstrap")
-	code, b := request("POST", "/auth/bootstrap", map[string]any{"token": cfg.Bootstrap, "username": "admin", "name": "Admin", "password": "correct horse battery staple"}, nil, nil)
+	code, b := request("POST", "/auth/bootstrap", map[string]any{"username": "admin", "name": "Admin", "password": "correct horse battery staple"}, nil, nil)
 	expect(200, code, "bootstrap")
 	var enroll struct {
 		Secret string `json:"secret"`
+		Token  string `json:"enrollment_token"`
 	}
 	json.Unmarshal(b, &enroll)
-	code, b = request("POST", "/auth/bootstrap/resume", map[string]string{"token": cfg.Bootstrap}, nil, nil)
+	if len(enroll.Token) < 32 {
+		t.Fatal("missing opaque continuation token")
+	}
+	code, otherBody := request("POST", "/auth/bootstrap", map[string]any{"username": "other-admin", "name": "Other", "password": "another correct horse battery staple"}, nil, nil)
+	expect(200, code, "independent unfinished first-run")
+	var other struct {
+		Secret string `json:"secret"`
+		Token  string `json:"enrollment_token"`
+	}
+	json.Unmarshal(otherBody, &other)
+	if other.Token == enroll.Token || other.Secret == enroll.Secret {
+		t.Fatal("first-run attempts share credentials")
+	}
+	code, _ = request("POST", "/auth/bootstrap/confirm", map[string]string{"code": totpAt(enroll.Secret, time.Now().Unix()/30)}, nil, nil)
+	expect(403, code, "confirmation requires browser continuation")
+	code, b = request("POST", "/auth/bootstrap/resume", map[string]string{"token": enroll.Token}, nil, nil)
 	expect(200, code, "resume unfinished enrollment")
 	var resumed struct {
 		Secret string `json:"secret"`
@@ -126,10 +142,16 @@ func TestAPIIntegration(t *testing.T) {
 	code, _ = request("POST", "/auth/bootstrap/resume", map[string]string{"token": token()}, nil, nil)
 	expect(403, code, "foreign enrollment denied")
 	otp := totpAt(enroll.Secret, time.Now().Unix()/30)
-	code, b = request("POST", "/auth/bootstrap/confirm", map[string]any{"token": cfg.Bootstrap, "code": otp}, &admin, nil)
+	code, b = request("POST", "/auth/bootstrap/confirm", map[string]any{"token": enroll.Token, "code": otp}, &admin, nil)
 	expect(200, code, "MFA confirmation")
-	code, _ = request("POST", "/auth/bootstrap/resume", map[string]string{"token": cfg.Bootstrap}, nil, nil)
+	code, _ = request("POST", "/auth/bootstrap/resume", map[string]string{"token": enroll.Token}, nil, nil)
 	expect(403, code, "consumed key cannot resume")
+	code, _ = request("POST", "/auth/bootstrap/resume", map[string]string{"token": other.Token}, nil, nil)
+	expect(403, code, "losing first-run cannot resume")
+	code, _ = request("POST", "/auth/bootstrap/confirm", map[string]string{"token": other.Token, "code": totpAt(other.Secret, time.Now().Unix()/30)}, nil, nil)
+	expect(403, code, "losing first-run cannot create second administrator")
+	code, _ = request("POST", "/auth/bootstrap", map[string]string{"username": "replacement", "name": "Replacement", "password": "correct horse battery staple"}, nil, nil)
+	expect(403, code, "setup closed without token after confirmation")
 	var recovery struct {
 		Codes []string `json:"recovery_codes"`
 	}
@@ -797,8 +819,8 @@ func TestAPIIntegration(t *testing.T) {
 	if _, e = store.DB.Exec(ctx, "UPDATE users SET admin=false WHERE admin"); e != nil {
 		t.Fatal(e)
 	}
-	code, _ = request("POST", "/auth/bootstrap", map[string]string{"token": cfg.Bootstrap, "username": "replacement", "name": "Replacement", "password": "correct horse battery staple"}, nil, nil)
-	expect(403, code, "raw key cannot bypass consumption")
+	code, _ = request("POST", "/auth/bootstrap", map[string]string{"username": "replacement", "name": "Replacement", "password": "correct horse battery staple"}, nil, nil)
+	expect(403, code, "tokenless setup cannot bypass consumption")
 	t.Log("PostgreSQL migration, MFA/replay, CSRF, RBAC, concurrent revisions, cycles, free setup and integration pause verified")
 	_ = fmt.Sprintf
 }

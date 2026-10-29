@@ -10,9 +10,9 @@ DOCKER=['docker']+(['--host',_host] if _host else [])
 DB_IMAGE='postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873'
 MAX_SECRET=1024*1024
 MAX_ARCHIVE=512*1024*1024
-CORE=('config.json','encryption.key','bootstrap.token','database.password','instance.id')
-RUNTIME_FILES={'secret_file':'encryption.key','bootstrap_file':'bootstrap.token','smtp_file':'smtp.json','report_public_key_file':'report-public-key.json','ldap_file':'ldap.json'}
-OPTIONAL=('smtp.json','smtp-ca.pem','report-public-key.json','ldap.json','ldap-ca.pem','migration-config.json')
+CORE=('config.json','encryption.key','database.password','instance.id')
+RUNTIME_FILES={'secret_file':'encryption.key','smtp_file':'smtp.json','report_public_key_file':'report-public-key.json','ldap_file':'ldap.json'}
+OPTIONAL=('bootstrap.token','smtp.json','smtp-ca.pem','report-public-key.json','ldap.json','ldap-ca.pem','migration-config.json')
 def run(args,data=None):
  p=subprocess.run(DOCKER+args,input=data,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=180)
  if p.returncode:raise RuntimeError('Docker backup operation failed: '+args[0])
@@ -40,7 +40,7 @@ def collect_secrets(config):
  if not isinstance(runtime,dict):raise ValueError('invalid runtime config')
  for field,name in RUNTIME_FILES.items():
   value=runtime.get(field,'')
-  if field in ('secret_file','bootstrap_file') or value:
+  if field == 'secret_file' or value:
    referenced_name(value,name,config)
    if 'secrets/'+name not in values:values['secrets/'+name]=read_secret(config/name)
  if runtime.get('smtp_file'):
@@ -69,7 +69,7 @@ def validate_members(values,meta):
  runtime=json.loads(values['secrets/config.json'])
  for field,name in RUNTIME_FILES.items():
   value=runtime.get(field,'')
-  if field in ('secret_file','bootstrap_file') or value:
+  if field == 'secret_file' or value:
    # The collector already resolved host paths. Archive only needs a fixed basename.
    if not isinstance(value,str) or Path(value).name!=name or 'secrets/'+name not in values:raise ValueError('missing runtime dependency')
  if runtime.get('smtp_file'):

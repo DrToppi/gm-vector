@@ -14,7 +14,7 @@ def otp(secret):
 with tempfile.TemporaryDirectory(prefix='gm-vector-install-check-') as temp:
  state=Path(temp)/'state';port=free_port();m.initialize(state,port,'172.30.96.0/29');manifest=m.package();compose,env=m.context(state,manifest)
  try:
-  original={n:(state/'config'/n).read_bytes() for n in ('encryption.key','bootstrap.token','instance.id','database.password')}
+  original={n:(state/'config'/n).read_bytes() for n in ('encryption.key','instance.id','database.password')}
   tls_original={n:(state/'tls'/n).read_bytes() for n in ('fullchain.pem','privkey.pem')}
   m.prepare(state,manifest)
   db=m.run(compose+['ps','-q','db'],env,capture=True)
@@ -27,12 +27,15 @@ with tempfile.TemporaryDirectory(prefix='gm-vector-install-check-') as temp:
    req=Request(origin+'/api/v1'+path,data=None if body is None else json.dumps(body).encode(),headers={'Origin':origin,'Content-Type':'application/json'})
    with urlopen(req,context=trust,timeout=15) as r:return json.load(r)
   assert call('/auth/status')['setup_required'] is True
-  bootstrap=original['bootstrap.token'].decode().strip()
-  enrolled=call('/auth/bootstrap',{'token':bootstrap,'username':'synthetic-admin','name':'Synthetic administrator','password':secrets.token_urlsafe(32)})
-  confirmed=call('/auth/bootstrap/confirm',{'token':bootstrap,'code':otp(enrolled['secret'])})
+  assert not (state/'config/bootstrap.token').exists()
+  assert not (state/'setup-url.txt').exists()
+  enrolled=call('/auth/bootstrap',{'username':'synthetic-admin','name':'Synthetic administrator','password':secrets.token_urlsafe(32)})
+  confirmed=call('/auth/bootstrap/confirm',{'token':enrolled['enrollment_token'],'code':otp(enrolled['secret'])})
   assert len(confirmed['recovery_codes'])>=1
   assert call('/auth/status')['setup_required'] is False
   m.prepare(state,manifest)
+  assert not (state/'config/bootstrap.token').exists()
+  assert not (state/'setup-url.txt').exists()
   assert all((state/'config'/n).read_bytes()==v for n,v in original.items()),'repeat prepare changed secrets'
   assert all((state/'tls'/n).read_bytes()==v for n,v in tls_original.items()),'repeat prepare changed TLS credentials'
   assert query('SELECT count(*) FROM projects')=='0'

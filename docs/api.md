@@ -96,3 +96,13 @@ offline conversion before import. Do not attach this release to an existing priv
 database or rewrite its migration journal. Imported projects intentionally clear
 external bindings to prevent accidental cross-system updates. An adapter should
 explicitly set its own reference after import.
+
+## First-run enrollment
+
+On an installation whose initial setup is still available, `POST /auth/bootstrap`
+accepts `username`, `name` and `password` without a token. Its response includes
+`enrollment_token`, `secret` and `otpauth_uri`. Keep these values private and use
+the continuation token with `/auth/bootstrap/confirm` plus a TOTP `code`.
+The browser handles this automatically; no installation key is entered manually.
+After initial setup is consumed, a valid invitation/recovery token is required.
+See [first-run decision](first-run.md).

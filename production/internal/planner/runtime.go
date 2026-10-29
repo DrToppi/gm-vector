@@ -20,7 +20,7 @@ type RuntimeConfig struct {
 	Origin              string   `json:"origin"`
 	WebDir              string   `json:"web_dir"`
 	SecretFile          string   `json:"secret_file"`
-	BootstrapFile       string   `json:"bootstrap_file"`
+	BootstrapFile       string   `json:"bootstrap_file,omitempty"` // Deprecated compatibility field; never read.
 	LDAPFile            string   `json:"ldap_file,omitempty"`
 	SMTPFile            string   `json:"smtp_file,omitempty"`
 	ReportPublicKeyFile string   `json:"report_public_key_file,omitempty"`
@@ -40,10 +40,6 @@ func LoadRuntime(path string) (RuntimeConfig, Config, error) {
 	if e != nil {
 		return r, c, e
 	}
-	bootstrap, e := os.ReadFile(r.BootstrapFile)
-	if e != nil {
-		return r, c, e
-	}
 	_, release, e := RuntimeReleaseTrust()
 	if e != nil {
 		return r, c, e
@@ -53,7 +49,7 @@ func LoadRuntime(path string) (RuntimeConfig, Config, error) {
 	if e != nil {
 		return r, c, e
 	}
-	c = Config{ReportDirectory: r.ReportDirectory, Origin: r.Origin, WebDir: r.WebDir, Secret: key, Bootstrap: string(bootstrap)}
+	c = Config{ReportDirectory: r.ReportDirectory, Origin: r.Origin, WebDir: r.WebDir, Secret: key}
 	proxyCIDRs := r.TrustedProxyCIDRs
 	if override := os.Getenv("GMA_TRUSTED_PROXY_CIDRS"); override != "" {
 		proxyCIDRs = strings.Split(override, ",")
@@ -106,13 +102,13 @@ func Initialize(dir, origin string) error {
 	if _, e := os.Stat(filepath.Join(dir, "config.json")); e == nil {
 		return errors.New("already initialized; no secrets overwritten")
 	}
-	password, runtimePassword, migrationPassword, bootstrap := token(), token(), token(), token()
-	for name, b := range map[string][]byte{"instance.id": []byte(newID()), "encryption.key": random(32), "bootstrap.token": []byte(bootstrap), "database.password": []byte(password), "setup-url.txt": []byte(origin + "/#setup=" + bootstrap)} {
+	password, runtimePassword, migrationPassword := token(), token(), token()
+	for name, b := range map[string][]byte{"instance.id": []byte(newID()), "encryption.key": random(32), "database.password": []byte(password)} {
 		if e := writeNew(filepath.Join(dir, name), b); e != nil {
 			return e
 		}
 	}
-	r := RuntimeConfig{DatabaseURL: "postgres://planner_runtime:" + runtimePassword + "@db:5432/planner?sslmode=disable", Origin: origin, WebDir: "/app/web", SecretFile: "/run/secrets/encryption.key", BootstrapFile: "/run/secrets/bootstrap.token"}
+	r := RuntimeConfig{DatabaseURL: "postgres://planner_runtime:" + runtimePassword + "@db:5432/planner?sslmode=disable", Origin: origin, WebDir: "/app/web", SecretFile: "/run/secrets/encryption.key"}
 	migration := MigrationConfig{DatabaseURL: "postgres://planner_migrator:" + migrationPassword + "@db:5432/planner?sslmode=disable", RuntimeRole: "planner_runtime"}
 	raw, _ := json.MarshalIndent(migration, "", "  ")
 	if e := writeNew(filepath.Join(dir, "migration-config.json"), raw); e != nil {

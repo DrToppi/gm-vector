@@ -58,7 +58,7 @@ async function main() {
   const click = async text => {await wait(`!!(${selectButton(text)}) && !(${selectButton(text)}).disabled`,text);await evaluate(`(${selectButton(text)}).click()`)};
   const field = async (selector,value) => {await wait(`!!document.querySelector(${JSON.stringify(selector)})`, 'input exists');await evaluate(`(()=>{const x=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(x,${JSON.stringify(value)});x.dispatchEvent(new Event('input',{bubbles:true}));return new Promise(resolve=>requestAnimationFrame(()=>resolve(true)));})()`)};
   const read = suffix => evaluate(`fetch('/api/v1'+${JSON.stringify(suffix)}).then(async r=>{if(!r.ok)throw Error('read failed');return r.json()})`);
-  await send('Network.enable');await send('Runtime.enable');await send('Page.enable');await send('Page.addScriptToEvaluateOnNewDocument',{source:`try{localStorage.setItem('gm-vector.locale','ru')}catch{}`});await send('Page.addScriptToEvaluateOnNewDocument',{source:`{const originalFetch=window.fetch.bind(window);let release;const gate=new Promise(resolve=>release=resolve);window.releaseCalendarFixture=release;window.fetch=async(...args)=>{if(String(args[0]).endsWith('/api/v1/calendars'))await gate;return originalFetch(...args)};}`});await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});await send('Page.navigate',{url:config.origin+'/#setup='+encodeURIComponent(config.bootstrap)});
+  await send('Network.enable');await send('Runtime.enable');await send('Page.enable');await send('Page.addScriptToEvaluateOnNewDocument',{source:`try{localStorage.setItem('gm-vector.locale','ru')}catch{}`});await send('Page.addScriptToEvaluateOnNewDocument',{source:`{const originalFetch=window.fetch.bind(window);let release;const gate=new Promise(resolve=>release=resolve);window.releaseCalendarFixture=release;window.fetch=async(...args)=>{if(String(args[0]).endsWith('/api/v1/calendars'))await gate;return originalFetch(...args)};}`});await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});await send('Page.navigate',{url:config.origin});
   await wait(`!!document.querySelector('input[autocomplete="username"]')`, 'login screen');
   assert.equal(await evaluate('document.title'),'gmVector','application tab name');
   assert.equal(await evaluate("document.querySelector('.brand').textContent"),'gmVector','login branding');
@@ -69,8 +69,9 @@ async function main() {
    await wait(`document.querySelector('.auth-card h2')?.textContent===${JSON.stringify(catalog.md74489dc8f)}`,'localized first-run heading '+locale);
   }
 
+  assert.equal(await evaluate(`document.querySelector('.auth-card input[autocomplete="off"]') !== null`),false,'no installation key field');
   await field('input[autocomplete="username"]',config.username);
-  assert.equal(await evaluate('location.hash'),'','bootstrap proof removed from URL');
+  assert.equal(await evaluate('location.hash'),'','first run has no secret URL');
   await field('.auth-card input:not([autocomplete])','E2E Admin');
   await field('input[autocomplete="new-password"]',config.password);
   await click('Настроить MFA');

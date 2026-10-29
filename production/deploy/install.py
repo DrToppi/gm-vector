@@ -118,17 +118,15 @@ def initialize(state, port, subnet):
     cfg = state / 'config'; cfg.mkdir(mode=0o700)
     instance = uuid.uuid4().hex
     bootstrap, runtime, migration = [secrets.token_urlsafe(36) for _ in range(3)]
-    for name, value in {'database.password': bootstrap.encode(), 'bootstrap.token': secrets.token_urlsafe(36).encode(), 'encryption.key': secrets.token_bytes(32), 'instance.id': instance.encode()}.items():
+    for name, value in {'database.password': bootstrap.encode(), 'encryption.key': secrets.token_bytes(32), 'instance.id': instance.encode()}.items():
         private(cfg/name, value)
     if support_key is not None: private(cfg/'report-public-key.json', support_key)
-    private(cfg/'config.json', {'report_directory': '/var/lib/planner-reports', **({'report_public_key_file': '/run/secrets/report-public-key.json'} if support_key is not None else {}), 'database_url': f'postgres://planner_runtime:{runtime}@db:5432/planner?sslmode=disable', 'origin': f'https://localhost:{port}', 'web_dir': '/app/web', 'secret_file': '/run/secrets/encryption.key', 'bootstrap_file': '/run/secrets/bootstrap.token'})
+    private(cfg/'config.json', {'report_directory': '/var/lib/planner-reports', **({'report_public_key_file': '/run/secrets/report-public-key.json'} if support_key is not None else {}), 'database_url': f'postgres://planner_runtime:{runtime}@db:5432/planner?sslmode=disable', 'origin': f'https://localhost:{port}', 'web_dir': '/app/web', 'secret_file': '/run/secrets/encryption.key'})
     private(cfg/'migration-config.json', {'database_url': f'postgres://planner_migrator:{migration}@db:5432/planner?sslmode=disable', 'runtime_role': 'planner_runtime'})
     private(state/'installation.json', {'project': 'gm-vector-'+instance[:12], 'port': port, 'subnet': str(network), 'proxy_ip': str(network.network_address+2), 'api_ip': str(network.network_address+3)})
     local_tls(state)
     render_nginx(state, 'localhost', f'https://localhost:{port}')
-    setup='https://localhost:'+str(port)+'/#setup='+(cfg/'bootstrap.token').read_text().strip()
-    private(state/'setup-url.txt',setup.encode())
-    print('Installation initialized. First-run URL is stored privately in '+str(state/'setup-url.txt'))
+    print('Installation initialized. Open https://localhost:'+str(port)+' after prepare to create the first administrator.')
 
 
 def https_options(state):
@@ -268,7 +266,7 @@ def prepare(state, manifest):
     """Start the workspace without creating an administrator automatically."""
     # Read state first: missing/partial initialization must not start Docker services.
     compose, env = context(state, manifest)
-    for name in ('config.json','migration-config.json','database.password','bootstrap.token','encryption.key'):
+    for name in ('config.json','migration-config.json','database.password','encryption.key'):
         if not (state/'config'/name).is_file():
             raise ValueError('incomplete installation state')
     if (ROOT/'images.tar').is_file(): run(docker()+['load','--input',str(ROOT/'images.tar')],capture=True)
@@ -289,11 +287,7 @@ def prepare(state, manifest):
     wait_web(state,compose,env)
     origin=env.get('GMA_PUBLIC_ORIGIN','https://localhost:'+env['GMA_HTTPS_PORT'])
     print('Workspace: '+origin)
-    setup=origin+'/#setup='+(state/'config/bootstrap.token').read_text().strip()
-    target=state/'setup-url.txt'
-    pending=state/('setup-url.'+uuid.uuid4().hex+'.tmp')
-    private(pending,setup.encode());os.replace(pending,target)
-    print('First administrator: open the private URL in '+str(target))
+    print('First administrator: open the workspace URL above. No installation key is required.')
     print('Create your administrator credentials and confirm TOTP. Keep recovery codes offline.')
 
 

@@ -8,7 +8,7 @@ b=importlib.util.module_from_spec(spec);spec.loader.exec_module(b)
 def fixture(root):
  cfg=root/'config';cfg.mkdir(mode=0o700)
  for n in b.CORE:(cfg/n).write_bytes(b'S'*32 if n=='encryption.key' else b'synthetic')
- runtime={field:'/run/secrets/'+name for field,name in b.RUNTIME_FILES.items() if field in ('secret_file','bootstrap_file')}
+ runtime={field:'/run/secrets/'+name for field,name in b.RUNTIME_FILES.items() if field == 'secret_file'}
  (cfg/'config.json').write_text(json.dumps(runtime));return cfg,runtime
 class BackupManifestTests(unittest.TestCase):
  def test_dependencies_and_no_private_keys(self):
@@ -24,8 +24,19 @@ class BackupManifestTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as d:
    cfg,r=fixture(Path(d));r['smtp_file']='/etc/shadow';(cfg/'config.json').write_text(json.dumps(r))
    with self.assertRaises(ValueError):b.collect_secrets(cfg)
-   r.pop('smtp_file');(cfg/'config.json').write_text(json.dumps(r));(cfg/'bootstrap.token').unlink()
+   r.pop('smtp_file');(cfg/'config.json').write_text(json.dumps(r));(cfg/'encryption.key').unlink()
    with self.assertRaises(FileNotFoundError):b.collect_secrets(cfg)
+ def test_legacy_bootstrap_is_not_a_runtime_dependency(self):
+  with tempfile.TemporaryDirectory() as d:
+   cfg,r=fixture(Path(d))
+   r['bootstrap_file']='/run/secrets/bootstrap.token';(cfg/'config.json').write_text(json.dumps(r))
+   self.assertNotIn('secrets/bootstrap.token',b.collect_secrets(cfg))
+   (cfg/'bootstrap.token').write_text('synthetic-legacy-value')
+   self.assertNotIn('secrets/bootstrap.token',b.collect_secrets(cfg))
+   v=b.collect_secrets(cfg);v['secrets/bootstrap.token']=b'synthetic-legacy-value';v['database.dump']=b'dump'
+   meta={'format':2,'dump_sha256':b.hashlib.sha256(b'dump').hexdigest(),'files':{n:{'size':len(data),'sha256':b.hashlib.sha256(data).hexdigest()} for n,data in v.items()}}
+   v['manifest.json']=json.dumps(meta).encode()
+   self.assertTrue(b.validate_members(v,meta))
  def test_symlinks_and_size(self):
   with tempfile.TemporaryDirectory() as d:
    root=Path(d);target=root/'target';target.write_text('secret');link=root/'link';link.symlink_to(target)
@@ -38,7 +49,7 @@ class BackupManifestTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as d:
    cfg,r=fixture(Path(d));v=b.collect_secrets(cfg);v['database.dump']=b'dump';m={'format':2,'dump_sha256':b.hashlib.sha256(b'dump').hexdigest(),'files':{n:{'size':len(data),'sha256':b.hashlib.sha256(data).hexdigest()} for n,data in v.items()}};v['manifest.json']=json.dumps(m).encode()
    self.assertTrue(b.validate_members(v,m));old=dict(m,format=1);self.assertFalse(b.validate_members(v,old))
-   v['secrets/bootstrap.token']=b'changed'
+   v['secrets/encryption.key']=b'changed'
    with self.assertRaises(ValueError):b.validate_members(v,m)
    v['../escape']=b'x'
    with self.assertRaises(ValueError):b.validate_members(v,m)

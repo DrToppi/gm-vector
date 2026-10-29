@@ -46,7 +46,7 @@ requests={
  'POST /auth/bootstrap/resume':obj({'token':string},['token']),
  'POST /trash/{id}/restore':obj({'revision':integer},['revision']),
  'POST /auth/login':obj({'username':string,'password':string,'code':string},['username','password','code']),
- 'POST /auth/bootstrap':obj({'token':string,'username':string,'name':string,'password':{'type':'string','minLength':15,'maxLength':128}},['token','username','name','password']),
+ 'POST /auth/bootstrap':obj({'token':{'type':'string','description':'Omit for initial administrator setup; required for invitation or recovery enrollment'},'username':string,'name':string,'password':{'type':'string','minLength':15,'maxLength':128}},['username','name','password']),
  'POST /auth/bootstrap/confirm':obj({'token':string,'code':string},['token','code']),
  'POST /auth/logout':obj({}),
  'POST /auth/password':obj({'old_password':string,'new_password':string,'code':string},['old_password','new_password','code']),
@@ -85,7 +85,7 @@ for method,path in routes:
   if path==resource and method=='GET':success={'type':'array','items':ref(model)}
  if key=='GET /auth/me':success=obj({'user':ref('User'),'csrf':string,'version':string})
  if key=='GET /auth/status':success=obj({'setup_required':boolean,'version':string,})
- if key=='POST /auth/bootstrap':success=obj({'secret':string,'otpauth_uri':string})
+ if key=='POST /auth/bootstrap':success=obj({'secret':string,'otpauth_uri':string,'enrollment_token':string})
  if key=='POST /auth/bootstrap/confirm':success=obj({'recovery_codes':{'type':'array','items':string}})
  if key in ['GET /projects/{id}/members','GET /projects/{id}/member-candidates','GET /trash','GET /tokens','GET /audit','GET /directory/people']:success={'type':'array','items':{'type':'object'}}
  if key=='GET /directory/status':success=obj({'ldap':obj({'configured':boolean,'enabled':boolean,'provider':string}),'sources':{'type':'array','items':string},'source_details':{'type':'array','items':obj({'provider':string,'kind':{'type':'string','enum':['ldap','api']}},['provider','kind'])}})
