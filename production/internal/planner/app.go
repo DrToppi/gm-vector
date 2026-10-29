@@ -21,6 +21,8 @@ var Version = "0.1.0"
 var ReleaseDate = time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC)
 
 type Config struct {
+	UpdaterSocket   string
+	UpdaterToken    string
 	TrustedProxies  []netip.Prefix
 	ReportPublicKey *ReportPublicKey
 	ReportDirectory string
@@ -101,6 +103,7 @@ func (a *App) Handler() http.Handler {
 		jsonResponse(w, 200, map[string]bool{"ready": true})
 	})
 	routes := map[string]handler{
+		"GET /api/v1/admin/updates": a.updaterStatus, "POST /api/v1/admin/updates/check": a.updaterCheck, "POST /api/v1/admin/updates/apply": a.updaterApply, "POST /api/v1/admin/updates/recover": a.updaterRecover,
 		"GET /api/v1/projects/{id}/tasks/{task}/comments": a.taskComments, "POST /api/v1/projects/{id}/tasks/{task}/comments": a.addTaskComment,
 		"GET /api/v1/auth/me": a.me, "POST /api/v1/auth/logout": a.logout, "POST /api/v1/auth/password": a.changePassword, "PUT /api/v1/auth/preferences": a.preferences,
 		"GET /api/v1/projects": a.projects, "POST /api/v1/projects": a.createProject, "GET /api/v1/projects/{id}": a.getProject, "PUT /api/v1/projects/{id}": a.saveProject, "DELETE /api/v1/projects/{id}": a.archiveProject, "POST /api/v1/projects/{id}/preview": a.previewProject, "POST /api/v1/projects/{id}/undo": a.undoProject,

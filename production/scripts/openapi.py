@@ -36,7 +36,11 @@ schemas['DiagnosticEvent']=obj({'time':{'type':'string','format':'date-time'},'r
 schemas['DirectoryPerson']=obj({'id':string,'name':string,'email':string,'provider':string})
 schemas['DirectoryEntry']=obj({'id':string,'name':string,'email':string,'username':string,'active':boolean,'groups':{'type':'array','items':string}},['id','name','active'])
 schemas['Project']['properties']['external_reference']={'type':'string','maxLength':500,'description':'At most 500 UTF-8 bytes. Optional reference in an external system. No vendor-specific semantics or outbound request.'}
+schemas['UpdaterStatus']=obj({'enabled':boolean,'state':{'type':'string','enum':['disabled','idle','checking','ready','updating','succeeded','failed','recovery_required','recovering']},'phase':{'type':'string','enum':['queued','fetch','build','preflight','backup','migrate','verify','restore','complete']},'message':string,'current_commit':{'type':'string','pattern':'^[a-f0-9]{40}$'},'candidate_commit':{'type':'string','pattern':'^[a-f0-9]{40}$'},'operation_id':{'type':'string','pattern':'^[a-f0-9]{32}$'},'recovery_available':boolean},['enabled','state','recovery_available'])
 requests={
+ 'POST /admin/updates/check':obj({'ref':{'type':'string','minLength':1,'maxLength':121,'description':'Explicit official Git ref or commit; no arbitrary repository or revision expression'}},['ref']),
+ 'POST /admin/updates/apply':obj({'commit':{'type':'string','pattern':'^[a-f0-9]{40}$'},'confirmation':{'type':'string','description':'Must exactly equal commit'}},['commit','confirmation']),
+ 'POST /admin/updates/recover':obj({'operation_id':{'type':'string','pattern':'^[a-f0-9]{32}$'},'confirmation':{'type':'string','description':'Must exactly equal operation_id'}},['operation_id','confirmation']),
  'PUT /auth/preferences':obj({'locale':{'type':'string','enum':['en','ru','de','fr','es','pt-BR','zh-Hans']}},['locale']),
  'POST /directory/sync':obj({'provider':string,'entries':{'type':'array','maxItems':1000,'items':ref('DirectoryEntry')}},['provider','entries']),
  'POST /directory/ldap/sync':obj({}),
@@ -83,6 +87,7 @@ for method,path in routes:
  if key=='GET /projects/{id}':success=obj({'project':ref('Project'),'role':string})
  for resource,model in [('/employees','Employee'),('/calendars','Calendar'),('/users','User'),('/projects/{id}/time-entries','TimeEntry')]:
   if path==resource and method=='GET':success={'type':'array','items':ref(model)}
+ if path.startswith('/admin/updates'):success=ref('UpdaterStatus')
  if key=='GET /auth/me':success=obj({'user':ref('User'),'csrf':string,'version':string})
  if key=='GET /auth/status':success=obj({'setup_required':boolean,'version':string,})
  if key=='POST /auth/bootstrap':success=obj({'secret':string,'otpauth_uri':string,'enrollment_token':string})
@@ -110,6 +115,9 @@ for method,path in routes:
   operation['responses']['201']={'description':'Account, binding and encrypted invitation queue created.','content':{'application/json':{'schema':success}}}
  if key=='POST /projects/{id}/tasks/{task}/comments':
   operation['responses']['201']={'description':'Comment created; email only with explicit opt-in. 200 denotes identical UUID/text/option retry.','content':{'application/json':{'schema':success}}}
+ if path.startswith('/admin/updates'):
+  operation['description']='Administrator cookie session only; service tokens rejected. Bounded Unix-socket relay to an explicitly configured host updater. No Docker access in the API. A local administrator audit request is written before mutation dispatch; audit failure prevents the host request. Maximum request JSON 1 KiB. Status messages are sanitized, with no paths or logs. Disabled GET returns enabled=false; configured but unavailable service returns 503.'
+  if method=='POST':operation['responses']['202']={'description':'Asynchronous operation accepted','content':{'application/json':{'schema':success}}}
  if path.startswith('/directory/'):
   operation['description']='Administrator session or an explicitly scoped administrator service token (directory:read for search, directory:write for synchronization). LDAP configuration/status/sync require an administrator cookie. Explicit inactive records revoke linked access; missing records are reported without removal.'
  if key in requests:operation['requestBody']={'required':True,'content':{'application/json':{'schema':requests[key]}}}

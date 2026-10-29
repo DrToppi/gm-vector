@@ -184,6 +184,8 @@ def context(state, manifest):
     # Never silently accept an inherited synthetic runtime opt-in for customer images.
     env.pop('GMA_ALLOW_SYNTHETIC_BUILD', None)
     command=docker()+['compose', '-f', str(ROOT/'compose.yaml')]
+    if (state/'updater.compose.yaml').is_file():
+        command+=['-f',str(state/'updater.compose.yaml')]
     options=https_options(state)
     if options:
         profiles=ROOT if (ROOT/'compose.https.yaml').exists() else ROOT.parent
@@ -262,6 +264,21 @@ def wait_web(state, compose, env, timeout=120):
     raise RuntimeError('local HTTPS readiness timed out; installation state was preserved')
 
 
+def record_deployment(state, manifest, compose, env):
+    for service,kind in [('api','app'),('worker','app'),('db','db'),('proxy','proxy')]:
+        container=run(compose+['ps','-q',service],env,capture=True)
+        if not container or '\n' in container: raise RuntimeError('service is unavailable')
+        if run(docker()+['inspect','--format','{{.Image}}',container],capture=True)!=manifest['images'][kind]:
+            raise RuntimeError('unexpected deployed image')
+        if service=='api': api=container
+    release=json.loads(run(docker()+['exec',api,'/app/planner','release-info'],capture=True))
+    value={'commit':release['git_commit'],'version':release['version'],'images':manifest['images'],
+           'origin':json.loads((state/'config/config.json').read_text())['origin'],
+           'deployed_at':__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat()}
+    temp=state/('.deployment-'+uuid.uuid4().hex)
+    private(temp,value);os.replace(temp,state/'deployment.json')
+
+
 def prepare(state, manifest):
     """Start the workspace without creating an administrator automatically."""
     # Read state first: missing/partial initialization must not start Docker services.
@@ -285,6 +302,7 @@ def prepare(state, manifest):
     run(compose+['run','--rm','--no-deps','calendar'],env)
     run(compose+['up','-d','--no-deps','api','worker','proxy'],env)
     wait_web(state,compose,env)
+    record_deployment(state,manifest,compose,env)
     origin=env.get('GMA_PUBLIC_ORIGIN','https://localhost:'+env['GMA_HTTPS_PORT'])
     print('Workspace: '+origin)
     print('First administrator: open the workspace URL above. No installation key is required.')

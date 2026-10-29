@@ -120,7 +120,7 @@ func TestSecurityAuditAccess(t *testing.T) {
 		t.Logf("all %d protected method/path routes reject anonymous", len(routes))
 	})
 	t.Run("roles scope and revocation matrix", func(t *testing.T) {
-		adminRoutes := []string{"GET /api/v1/users", "POST /api/v1/users", "PATCH /api/v1/users/absent", "POST /api/v1/employees", "POST /api/v1/employees/absent/invite", "GET /api/v1/employees/absent/invite", "POST /api/v1/calendars", "GET /api/v1/integrations", "GET /api/v1/diagnostics", "GET /api/v1/audit", "GET /api/v1/trash", "POST /api/v1/trash/absent/restore", "POST /api/v1/projects", "POST /api/v1/import", "GET /api/v1/tokens", "POST /api/v1/tokens", "DELETE /api/v1/tokens/absent", "GET /api/v1/directory/people?q=xx", "POST /api/v1/directory/sync", "GET /api/v1/directory/status", "POST /api/v1/directory/ldap/sync"}
+		adminRoutes := []string{"GET /api/v1/admin/updates", "POST /api/v1/admin/updates/check", "POST /api/v1/admin/updates/apply", "POST /api/v1/admin/updates/recover", "GET /api/v1/users", "POST /api/v1/users", "PATCH /api/v1/users/absent", "POST /api/v1/employees", "POST /api/v1/employees/absent/invite", "GET /api/v1/employees/absent/invite", "POST /api/v1/calendars", "GET /api/v1/integrations", "GET /api/v1/diagnostics", "GET /api/v1/audit", "GET /api/v1/trash", "POST /api/v1/trash/absent/restore", "POST /api/v1/projects", "POST /api/v1/import", "GET /api/v1/tokens", "POST /api/v1/tokens", "DELETE /api/v1/tokens/absent", "GET /api/v1/directory/people?q=xx", "POST /api/v1/directory/sync", "GET /api/v1/directory/status", "POST /api/v1/directory/ldap/sync"}
 		request := func(route, cookie, csrf, bearer string) int {
 			parts := strings.SplitN(route, " ", 2)
 			r := httptest.NewRequest(parts[0], cfg.Origin+parts[1], strings.NewReader(`{}`))
@@ -344,7 +344,7 @@ func TestSecurityAuditMatrix(t *testing.T) {
 	matches := regexp.MustCompile(`"((?:GET|POST|PUT|PATCH|DELETE) /api/[^" ]+)":\s*a\.(\w+)`).FindAllStringSubmatch(string(source), -1)
 	publicMatches := regexp.MustCompile(`mux.HandleFunc\("((?:GET|POST) /api/[^" ]+)", a.wrap\(a\.(\w+), false\)\)`).FindAllStringSubmatch(string(source), -1)
 	matches = append(matches, publicMatches...)
-	if len(matches) != 51 {
+	if len(matches) != 55 {
 		t.Fatal("route inventory changed", len(matches))
 	}
 	password := "synthetic audit password only"
@@ -355,7 +355,7 @@ func TestSecurityAuditMatrix(t *testing.T) {
 	results := []string{"endpoint,handler,role,variant,expected_http,actual_http,status"}
 	failures := 0
 	adminHandlers := map[string]bool{}
-	for _, h := range strings.Fields("users inviteUser updateUser saveEmployee inviteEmployee employeeInvite importCalendar integrations diagnostics auditLog trash restoreProject createProject importProject tokens createToken revokeToken directoryPeople directoryStatus syncDirectory syncLDAPDirectory") {
+	for _, h := range strings.Fields("updaterStatus updaterCheck updaterApply updaterRecover users inviteUser updateUser saveEmployee inviteEmployee employeeInvite importCalendar integrations diagnostics auditLog trash restoreProject createProject importProject tokens createToken revokeToken directoryPeople directoryStatus syncDirectory syncLDAPDirectory") {
 		adminHandlers[h] = true
 	}
 	managerOnly := map[string]bool{}
@@ -427,6 +427,15 @@ func TestSecurityAuditMatrix(t *testing.T) {
 				method := strings.SplitN(pattern, " ", 2)[0]
 				want := 200
 				switch h {
+				case "updaterCheck":
+					body = map[string]string{"ref": "main"}
+					want = 503
+				case "updaterApply":
+					body = map[string]string{"commit": strings.Repeat("a", 40), "confirmation": strings.Repeat("a", 40)}
+					want = 503
+				case "updaterRecover":
+					body = map[string]string{"operation_id": strings.Repeat("b", 32), "confirmation": strings.Repeat("b", 32)}
+					want = 503
 				case "createProject":
 					body = map[string]string{"title": "New", "start": "2026-10-23", "duration_mode": "working", "calendar_id": cal.ID}
 					want = 201

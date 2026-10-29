@@ -1,6 +1,6 @@
 # Multi-year planning and managed updates
 
-Status: requested 2026-10-30; architectural options pending user selection.
+Status: requested 2026-10-30. Update entry point B was accepted; calendar options remain pending.
 The user confirmed projects must be able to span more than one year.
 
 ## Evidence
@@ -41,7 +41,9 @@ untouched. Stop writers before the final backup/migration window. A failed
 migration cannot be rolled back merely by starting the old image; restoration of
 matching database/config must be explicit and tested. Never delete user volumes.
 
-Default release policy (proposed): operator-selected release tag or commit;
+See [accepted updater contract](updater.md).
+
+Default release policy: operator-selected release tag or commit;
 tracking main only as an explicit choice. No automatic internet check or update
 until configured. Image/source authentication follows the selected official
 repository and optional signed release provenance; a SHA alone is not a signature.

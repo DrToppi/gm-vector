@@ -48,3 +48,5 @@ initial alternatives. The updater remains a separate request; it is not silently
 included in the remediation programme. Proposed choices require user approval.
 
 Return to the [project README](../README.md).
+
+- [Managed Git updates](updater.md) — optional administrator UI and host service.

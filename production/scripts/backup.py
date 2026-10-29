@@ -11,8 +11,8 @@ DB_IMAGE='postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c66
 MAX_SECRET=1024*1024
 MAX_ARCHIVE=512*1024*1024
 CORE=('config.json','encryption.key','database.password','instance.id')
-RUNTIME_FILES={'secret_file':'encryption.key','smtp_file':'smtp.json','report_public_key_file':'report-public-key.json','ldap_file':'ldap.json'}
-OPTIONAL=('bootstrap.token','smtp.json','smtp-ca.pem','report-public-key.json','ldap.json','ldap-ca.pem','migration-config.json')
+RUNTIME_FILES={'secret_file':'encryption.key','smtp_file':'smtp.json','report_public_key_file':'report-public-key.json','ldap_file':'ldap.json','updater_token_file':'updater.token'}
+OPTIONAL=('updater.token','bootstrap.token','smtp.json','smtp-ca.pem','report-public-key.json','ldap.json','ldap-ca.pem','migration-config.json')
 def run(args,data=None):
  p=subprocess.run(DOCKER+args,input=data,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=180)
  if p.returncode:raise RuntimeError('Docker backup operation failed: '+args[0])
@@ -94,9 +94,9 @@ def read_archive(args,path):
  complete=validate_members(values,meta)
  return values,meta,complete
 
-def counts(container):
+def counts(container, database="planner"):
  sql="SELECT 'projects',count(*) FROM projects UNION ALL SELECT 'tasks',count(*) FROM tasks UNION ALL SELECT 'dependencies',count(*) FROM dependencies UNION ALL SELECT 'users',count(*) FROM users UNION ALL SELECT 'time_entries',count(*) FROM time_entries UNION ALL SELECT 'calendars',count(*) FROM calendars ORDER BY 1;"
- return run(['exec',container,'psql','-U','planner','-d','planner','-At','-c',sql]).decode().strip()
+ return run(['exec',container,'psql','-U','planner','-d',database,'-At','-c',sql]).decode().strip()
 def key(path,create=False):
  if create and not path.exists():
   path.parent.mkdir(mode=0o700,parents=True,exist_ok=True)
@@ -143,6 +143,7 @@ def runtime_smoke(args,name,values):
  run(['exec',name,'psql','-U','planner','-d','planner','-v','ON_ERROR_STOP=1','-c',sql])
  config['database_url']='postgres://'+role+'@127.0.0.1:5432/planner?sslmode=disable'
  config['web_dir']='/tmp/gma-restore/web'
+ config.pop('updater_socket',None);config.pop('updater_token_file',None)
  for field,filename in RUNTIME_FILES.items():
   if config.get(field):config[field]='/tmp/gma-restore/'+filename
  copied={n.removeprefix('secrets/'):v for n,v in values.items() if n.startswith('secrets/')}

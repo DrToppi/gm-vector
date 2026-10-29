@@ -667,6 +667,111 @@
         }
       }
     },
+    "/admin/updates": {
+      "get": {
+        "operationId": "get_admin_updates",
+        "summary": "GET /admin/updates",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdaterStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or hidden by permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "External service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Administrator cookie session only; service tokens rejected. Bounded Unix-socket relay to an explicitly configured host updater. No Docker access in the API. A local administrator audit request is written before mutation dispatch; audit failure prevents the host request. Maximum request JSON 1 KiB. Status messages are sanitized, with no paths or logs. Disabled GET returns enabled=false; configured but unavailable service returns 503."
+      }
+    },
     "/audit": {
       "get": {
         "operationId": "get_audit",
@@ -4731,6 +4836,453 @@
         }
       }
     },
+    "/admin/updates/apply": {
+      "post": {
+        "operationId": "post_admin_updates_apply",
+        "summary": "POST /admin/updates/apply",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required for cookie mutations; not for Bearer tokens. Browser writes require the exact deployment Origin."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdaterStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or hidden by permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "External service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Asynchronous operation accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdaterStatus"
+                }
+              }
+            }
+          }
+        },
+        "description": "Administrator cookie session only; service tokens rejected. Bounded Unix-socket relay to an explicitly configured host updater. No Docker access in the API. A local administrator audit request is written before mutation dispatch; audit failure prevents the host request. Maximum request JSON 1 KiB. Status messages are sanitized, with no paths or logs. Disabled GET returns enabled=false; configured but unavailable service returns 503.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "commit": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{40}$"
+                  },
+                  "confirmation": {
+                    "type": "string",
+                    "description": "Must exactly equal commit"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "commit",
+                  "confirmation"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/updates/check": {
+      "post": {
+        "operationId": "post_admin_updates_check",
+        "summary": "POST /admin/updates/check",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required for cookie mutations; not for Bearer tokens. Browser writes require the exact deployment Origin."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdaterStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or hidden by permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "External service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Asynchronous operation accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdaterStatus"
+                }
+              }
+            }
+          }
+        },
+        "description": "Administrator cookie session only; service tokens rejected. Bounded Unix-socket relay to an explicitly configured host updater. No Docker access in the API. A local administrator audit request is written before mutation dispatch; audit failure prevents the host request. Maximum request JSON 1 KiB. Status messages are sanitized, with no paths or logs. Disabled GET returns enabled=false; configured but unavailable service returns 503.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 121,
+                    "description": "Explicit official Git ref or commit; no arbitrary repository or revision expression"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "ref"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/updates/recover": {
+      "post": {
+        "operationId": "post_admin_updates_recover",
+        "summary": "POST /admin/updates/recover",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required for cookie mutations; not for Bearer tokens. Browser writes require the exact deployment Origin."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdaterStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or hidden by permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "External service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Asynchronous operation accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdaterStatus"
+                }
+              }
+            }
+          }
+        },
+        "description": "Administrator cookie session only; service tokens rejected. Bounded Unix-socket relay to an explicitly configured host updater. No Docker access in the API. A local administrator audit request is written before mutation dispatch; audit failure prevents the host request. Maximum request JSON 1 KiB. Status messages are sanitized, with no paths or logs. Disabled GET returns enabled=false; configured but unavailable service returns 503.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "operation_id": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{32}$"
+                  },
+                  "confirmation": {
+                    "type": "string",
+                    "description": "Must exactly equal operation_id"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "operation_id",
+                  "confirmation"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
     "/auth/bootstrap": {
       "post": {
         "operationId": "post_auth_bootstrap",
@@ -7342,6 +7894,68 @@
           "id",
           "name",
           "active"
+        ]
+      },
+      "UpdaterStatus": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Computed by the server."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "disabled",
+              "idle",
+              "checking",
+              "ready",
+              "updating",
+              "succeeded",
+              "failed",
+              "recovery_required",
+              "recovering"
+            ]
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "fetch",
+              "build",
+              "preflight",
+              "backup",
+              "migrate",
+              "verify",
+              "restore",
+              "complete"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "current_commit": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          },
+          "candidate_commit": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          },
+          "operation_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "recovery_available": {
+            "type": "boolean",
+            "description": "Computed by the server."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "enabled",
+          "state",
+          "recovery_available"
         ]
       }
     },

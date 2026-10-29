@@ -8,8 +8,10 @@ implementation or deployment.
 
 ## Current work mode
 
-The remediation programme is **documentation only** until the user explicitly
-approves implementation. Its scope and ordering are recorded in
+The user approved implementation beginning with the Git updater, followed by
+the remediation programme on2026-10-30. The updater entry point is option B
+(administrator UI and separate host service); see docs/updater.md. Unresolved
+architectural decisions still require human approval. Its scope and ordering are recorded in
 [the programme README](docs/remediation/2026-10-30/README.md).
 Do not change application code, dependencies, schemas, workflows, running services
 or installation data as part of a documentation-only task. Do not mark planned

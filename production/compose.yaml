@@ -29,6 +29,7 @@ services:
         if [ -f /source/smtp-ca.pem ]; then cp /source/smtp-ca.pem /app-secrets/smtp-ca.pem; else rm -f /app-secrets/smtp-ca.pem; fi
         if [ -f /source/ldap.json ]; then cp /source/ldap.json /app-secrets/ldap.json; else rm -f /app-secrets/ldap.json; fi
         if [ -f /source/ldap-ca.pem ]; then cp /source/ldap-ca.pem /app-secrets/ldap-ca.pem; else rm -f /app-secrets/ldap-ca.pem; fi
+        if [ -f /source/updater.token ]; then cp /source/updater.token /app-secrets/updater.token; else rm -f /app-secrets/updater.token; fi
         chmod 700 /app-secrets
         chmod 600 /app-secrets/*
         chown -R 65532:65532 /app-secrets

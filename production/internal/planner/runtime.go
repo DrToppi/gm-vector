@@ -14,6 +14,8 @@ import (
 )
 
 type RuntimeConfig struct {
+	UpdaterSocket       string   `json:"updater_socket,omitempty"`
+	UpdaterTokenFile    string   `json:"updater_token_file,omitempty"`
 	ReportDirectory     string   `json:"report_directory,omitempty"`
 	TrustedProxyCIDRs   []string `json:"trusted_proxy_cidrs,omitempty"`
 	DatabaseURL         string   `json:"database_url"`
@@ -50,6 +52,10 @@ func LoadRuntime(path string) (RuntimeConfig, Config, error) {
 		return r, c, e
 	}
 	c = Config{ReportDirectory: r.ReportDirectory, Origin: r.Origin, WebDir: r.WebDir, Secret: key}
+	c.UpdaterSocket, c.UpdaterToken, e = loadUpdater(r.UpdaterSocket, r.UpdaterTokenFile)
+	if e != nil {
+		return r, c, e
+	}
 	proxyCIDRs := r.TrustedProxyCIDRs
 	if override := os.Getenv("GMA_TRUSTED_PROXY_CIDRS"); override != "" {
 		proxyCIDRs = strings.Split(override, ",")
