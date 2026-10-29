@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=r
 const ts=require('../web/node_modules/typescript'),{buildSync}=require('../web/node_modules/esbuild');
 const root=path.resolve(__dirname,'../web'),sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const commit='a'.repeat(40),previous='b'.repeat(40),operation='synthetic-operation';
-let chrome,socket,server,profile,seq=0,held=[],mode='idle',loseApply=false,holdNext=false,apiCalls=[],uncaught=[];
+let chrome,socket,server,profile,seq=0,held=[],reconciliations=[],blockReconcile=false,mode='idle',loseApply=false,holdNext=false,apiCalls=[],uncaught=[];
 const pending=new Map();
 let state={enabled:true,state:'idle',phase:'',current_commit:previous,candidate_commit:'',operation_id:'',recovery_available:false,message:'SYNTHETIC_PRIVATE_SERVER_PATH'};
 function unit(){
@@ -27,27 +27,30 @@ async function main(){
  const bundled=buildSync({stdin:{contents:entry,resolveDir:root,loader:'tsx'},bundle:true,platform:'browser',format:'iife',write:false,loader:{'.css':'empty'}}).outputFiles[0].text;
  server=http.createServer(async(req,res)=>{
   const pathname=new URL(req.url,'http://localhost').pathname;res.setHeader('Cache-Control','no-store');
-  const json=(body,status=200)=>{res.statusCode=status;res.setHeader('Content-Type','application/json');res.end(JSON.stringify(body))};
+  const json=(body,status=200)=>{if(!res.headersSent){res.statusCode=status;res.setHeader('Content-Type','application/json')}res.end(JSON.stringify(body))};
   if(pathname==='/test.js'){res.setHeader('Content-Type','text/javascript');return res.end(bundled)}
   if(pathname==='/'){res.setHeader('Content-Type','text/html');return res.end('<div id="root"></div><script src="/test.js"></script>')}
   if(pathname.startsWith('/api/v1/admin/updates')){
    apiCalls.push({method:req.method,path:pathname});
    if(req.method==='GET'){
-    if(holdNext){holdNext=false;const old={...state};held.push(()=>json(old));return}
+    // Publish no-store headers now: hold only the body, otherwise Chrome's
+    // same-URL cache lock can queue reconciliation behind the stale request.
+    if(holdNext){holdNext=false;const old={...state};res.setHeader('Content-Type','application/json');res.flushHeaders();held.push(()=>json(old));return}
+    if(blockReconcile){const accepted={...state};reconciliations.push(()=>json(accepted));return}
     if(mode==='unavailable')return json({error:{message:'SYNTHETIC_PRIVATE_SERVER_PATH'}},503);
     return json(mode==='disabled'?{enabled:false,state:'disabled'}:state);
    }
    assert.equal(req.headers['x-csrf-token'],'synthetic-csrf','mutations preserve CSRF');
    let text='';for await(const chunk of req)text+=chunk;const body=JSON.parse(text);
    if(pathname.endsWith('/check')){assert.equal(body.ref,'main');state={...state,state:'ready',phase:'complete',candidate_commit:commit};return json(state)}
-   if(pathname.endsWith('/apply')){assert.deepEqual(body,{commit,confirmation:commit});state={...state,state:'updating',phase:'backup',operation_id:operation};if(loseApply){loseApply=false;req.socket.destroy();return}return json(state)}
+   if(pathname.endsWith('/apply')){assert.deepEqual(body,{commit,confirmation:commit});state={...state,state:'updating',phase:'backup',operation_id:operation};if(loseApply){loseApply=false;res.setHeader('X-Fixture-Lost-Ack','yes')}return json(state)}
    if(pathname.endsWith('/recover')){assert.deepEqual(body,{operation_id:operation,confirmation:operation});state={...state,state:'recovering',phase:'restore'};return json(state)}
   }
   res.statusCode=404;res.end();
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='http://127.0.0.1:'+server.address().port;
  profile=await fs.mkdtemp(path.join(os.tmpdir(),'gm-vector-updater-ui-'));
- chrome=spawn(process.env.GMA_CHROME_BIN||'google-chrome',['--headless=new','--no-first-run','--disable-background-networking','--disable-component-update','--disable-sync','--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--user-data-dir='+profile,'about:blank'],{stdio:'ignore'});
+ chrome=spawn(process.env.GMA_CHROME_BIN||'google-chrome',['--headless=new','--no-first-run','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows','--disable-background-networking','--disable-component-update','--disable-sync','--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--user-data-dir='+profile,'about:blank'],{stdio:'ignore'});
  let launchError=false;chrome.on('error',()=>launchError=true);let port;
  for(let i=0;i<150;i++){if(launchError||chrome.exitCode!==null)throw Error('Chrome unavailable');try{port=Number((await fs.readFile(path.join(profile,'DevToolsActivePort'),'utf8')).split('\n')[0]);if(port)break}catch{}await sleep(100)}assert(port,'fresh Chrome');
  const pages=await(await fetch('http://127.0.0.1:'+port+'/json/list')).json();socket=new WebSocket(pages.find(page=>page.type==='page').webSocketDebuggerUrl);await new Promise((resolve,reject)=>{socket.onopen=resolve;socket.onerror=reject});
@@ -57,7 +60,7 @@ async function main(){
  const wait=async(expression,label)=>{for(let i=0;i<200;i++){if(await evaluate(expression))return;await sleep(40)}throw Error('condition timeout '+label)};
  const click=async label=>{const selector=`[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===${JSON.stringify(label)})`;await wait(`!!(${selector})&&!(${selector}).disabled`,label);await evaluate(`(${selector}).click()`)};
  const fill=async(selector,value)=>{await wait(`!!document.querySelector(${JSON.stringify(selector)})`,'input');await evaluate(`(()=>{const element=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(element,${JSON.stringify(value)});element.dispatchEvent(new Event('input',{bubbles:true}));})()`);await sleep(20)};
- await send('Page.enable');await send('Runtime.enable');await send('Page.addScriptToEvaluateOnNewDocument',{source:`{const real=window.fetch.bind(window);window.fetch=(url,options={})=>{const {signal,...rest}=options;return real(url,rest)};}`});
+ await send('Page.enable');await send('Runtime.enable');await send('Page.addScriptToEvaluateOnNewDocument',{source:`{const real=window.fetch.bind(window);window.fetch=(url,options={})=>{const {signal,...rest}=options;return real(url,rest).then(response=>{if(response.headers.get('X-Fixture-Lost-Ack')==='yes')throw new TypeError('Synthetic lost acknowledgement');return response})};}`});
  mode='disabled';await send('Page.navigate',{url:origin});await wait("!!document.querySelector('[data-updates-disabled]')",'disabled service');
  assert.equal(apiCalls.filter(call=>call.method==='POST').length,0,'mount never checks/applies automatically');assert(!await evaluate("!!document.querySelector('.updates-check')"));
  mode='idle';await click('Refresh status');await wait("document.querySelector('[data-update-state]')?.dataset.updateState==='idle'",'idle');await click('Check revision');await wait("!!document.querySelector('[data-update-confirm]')",'candidate');
@@ -65,7 +68,15 @@ async function main(){
  await fill('[data-update-confirm] input',commit.slice(0,12));assert.equal(await evaluate("[...document.querySelectorAll('button')].find(button=>button.textContent==='Install update').disabled"),true);
  await fill('[data-update-confirm] input',commit);await wait("![...document.querySelectorAll('button')].find(button=>button.textContent==='Install update').disabled",'exact confirmation');
  holdNext=true;await click('Refresh status');await wait("true",'request');for(let i=0;i<30&&!held.length;i++)await sleep(20);assert.equal(held.length,1,'old status held');
- loseApply=true;await click('Install update');await wait("document.body.textContent.includes('command acknowledgement')",'lost acknowledgement');held.shift()();
+ // Drop acknowledgement at the fetch boundary AFTER the server accepted apply.
+ // Destroying a TCP socket instead would involve Chrome's transport retries.
+ // Hold reconciliation until its pending state is asserted, so the test does
+ // not depend on sampling a transient error before a successful status read.
+ blockReconcile=true;loseApply=true;await click('Install update');
+ for(let i=0;i<200&&!reconciliations.length;i++){await evaluate('true');await sleep(40)}
+ assert.equal(reconciliations.length,1,'one status read reconciles the lost acknowledgement');
+ await wait("document.body.textContent.includes('command acknowledgement')",'lost acknowledgement');held.shift()();
+ blockReconcile=false;for(const release of reconciliations.splice(0))release();
  await wait("document.querySelector('[data-update-state]')?.dataset.updateState==='updating'",'status reconciliation');
  assert.equal(apiCalls.filter(call=>call.path.endsWith('/apply')).length,1,'lost acknowledgement never retries mutation');assert(!await evaluate("!!document.querySelector('[data-update-confirm]')"),'stale ready response cannot resurrect candidate');
  assert(!await evaluate("document.body.textContent.includes('SYNTHETIC_PRIVATE_SERVER_PATH')"),'raw service message hidden');
@@ -80,4 +91,4 @@ async function main(){
 }
 const timeout=setTimeout(()=>{console.error('Updater UI timeout');chrome?.kill('SIGKILL');process.exit(1)},70000);
 async function stopChrome(){if(!chrome?.pid||chrome.exitCode!==null||chrome.signalCode!==null)return;await new Promise((resolve,reject)=>{const force=setTimeout(()=>chrome.kill('SIGKILL'),4000),deadline=setTimeout(()=>reject(Error('Chrome cleanup timeout')),8000);chrome.once('close',()=>{clearTimeout(force);clearTimeout(deadline);resolve()});chrome.kill('SIGTERM')})}
-main().catch(error=>{console.error(error.message);process.exitCode=1}).finally(async()=>{clearTimeout(timeout);for(const request of pending.values())clearTimeout(request.timer);for(const release of held)release();socket?.close();server?.closeAllConnections();server?.close();await stopChrome();if(profile)await fs.rm(profile,{recursive:true,force:true,maxRetries:8,retryDelay:150})}).catch(error=>{console.error('Updater UI cleanup failed:',error.message);process.exitCode=1});
+main().catch(error=>{console.error(error.message);process.exitCode=1}).finally(async()=>{clearTimeout(timeout);for(const request of pending.values())clearTimeout(request.timer);for(const release of [...held,...reconciliations])release();socket?.close();server?.closeAllConnections();server?.close();await stopChrome();if(profile)await fs.rm(profile,{recursive:true,force:true,maxRetries:8,retryDelay:150})}).catch(error=>{console.error('Updater UI cleanup failed:',error.message);process.exitCode=1});

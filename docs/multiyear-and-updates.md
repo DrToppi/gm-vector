@@ -1,6 +1,6 @@
 # Multi-year planning and managed updates
 
-Status: requested 2026-10-30. Update entry point B was accepted; calendar options remain pending.
+Status: requested 2026-10-30. Update entry point B and calendar option B were accepted. Scheduling budget follows D02 option B.
 The user confirmed projects must be able to span more than one year.
 
 ## Evidence

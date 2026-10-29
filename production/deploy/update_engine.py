@@ -82,7 +82,7 @@ class Engine:
 
     def command(self, args, cwd=None, env=None, data=None, timeout=600):
         # Never echo subprocess output: build scripts and DB tools can emit credentials.
-        capture = 'rev-parse' in args or ('image' in args and 'inspect' in args)
+        capture = 'rev-parse' in args or 'ls-remote' in args or ('image' in args and 'inspect' in args)
         p = subprocess.run(args, cwd=cwd, env=env, input=data, stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL, timeout=timeout)
         if p.returncode: raise RuntimeError('operation_failed')
@@ -96,15 +96,29 @@ class Engine:
             raise ValueError('deployment_unidentified')
         return value
 
-    def checkout(self, ref):
+    def checkout(self, ref, installed=False):
         ref = reference(ref)
         dest = self.root/'releases'/uuid.uuid4().hex; dest.mkdir(mode=0o700, parents=True)
         env = {**os.environ, 'GIT_TERMINAL_PROMPT':'0', 'GIT_CONFIG_NOSYSTEM':'1'}
         git = ['git','-c','core.hooksPath=/dev/null','-c','protocol.file.allow=never','-c','credential.helper=']
         self.command(git+['init','--quiet',str(dest)],env=env)
-        self.command(git+['-C',str(dest),'fetch','--no-recurse-submodules',REPOSITORY,ref],env=env)
+        expected = ref if installed else None
+        target = ref
+        if not installed:
+            advertised = {}
+            for line in self.command(git+['ls-remote','--heads','--tags',REPOSITORY],env=env).splitlines():
+                parts=line.split()
+                if len(parts)==2 and re.fullmatch('[a-f0-9]{40}',parts[0]): advertised[parts[1]]=parts[0]
+            names=[ref] if ref.startswith('refs/') else ['refs/heads/'+ref,'refs/tags/'+ref]
+            if re.fullmatch('[a-f0-9]{40}',ref):
+                names=[name for name,sha in advertised.items() if sha==ref and not name.endswith('^{}')]
+                names += [name[:-3] for name,sha in advertised.items() if sha==ref and name.endswith('^{}')]
+            selected=next((name for name in names if name in advertised),None)
+            if selected is None: raise ValueError('unadvertised_source')
+            target=selected; expected=advertised.get(selected+'^{}',advertised[selected])
+        self.command(git+['-C',str(dest),'fetch','--no-recurse-submodules',REPOSITORY,target],env=env)
         commit = self.command(git+['-C',str(dest),'rev-parse','FETCH_HEAD^{commit}'],env=env)
-        if not re.fullmatch('[a-f0-9]{40}', commit): raise ValueError('invalid_commit')
+        if not re.fullmatch('[a-f0-9]{40}', commit) or commit!=expected: raise ValueError('ref_changed')
         self.command(git+['-C',str(dest),'checkout','--detach','--quiet',commit],env=env)
         for path in dest.rglob('*'):
             if '.git' not in path.relative_to(dest).parts and path.is_symlink(): raise ValueError('source_symlink')
@@ -152,7 +166,7 @@ class Engine:
 
     def check(self):
         self.phase('fetch'); previous = self.manifest()
-        old, sha = self.checkout(previous['commit'])
+        old, sha = self.checkout(previous['commit'],installed=True)
         if sha != previous['commit']: raise ValueError('baseline_changed')
         candidate, commit = self.checkout(self.record['ref'])
         self.command(['git','-C',str(candidate),'merge-base','--is-ancestor',previous['commit'],commit])

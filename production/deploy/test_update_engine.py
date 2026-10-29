@@ -56,6 +56,7 @@ class UpdateEngineTests(unittest.TestCase):
         calls = []
         def command(args, **kwargs):
             calls.append((args, kwargs))
+            if 'ls-remote' in args: return SHA + '\trefs/tags/v0.2.0'
             return SHA if 'rev-parse' in args else ''
         engine.command = command
         path, actual = engine.checkout('refs/tags/v0.2.0')
@@ -65,6 +66,75 @@ class UpdateEngineTests(unittest.TestCase):
         self.assertIn('--no-recurse-submodules', fetch)
         self.assertTrue(path.is_relative_to(engine.root / 'releases'))
         self.assertTrue(all(kwargs['env']['GIT_TERMINAL_PROMPT'] == '0' for args, kwargs in calls))
+
+    def test_unadvertised_fork_sha_is_not_fetched(self):
+        engine = self.engine()
+        calls = []
+        def command(args, **kwargs):
+            calls.append(args)
+            return SHA + '\trefs/heads/main' if 'ls-remote' in args else ''
+        engine.command = command
+        with self.assertRaisesRegex(ValueError, 'unadvertised_source'):
+            engine.checkout('f' * 40)
+        self.assertFalse(any('fetch' in args for args in calls))
+
+    def test_moved_advertised_ref_is_rejected_before_checkout(self):
+        engine = self.engine()
+        calls = []
+        def command(args, **kwargs):
+            calls.append(args)
+            if 'ls-remote' in args: return SHA + '\trefs/heads/main'
+            if 'rev-parse' in args: return 'f' * 40
+            return ''
+        engine.command = command
+        with self.assertRaises(ValueError): engine.checkout('main')
+        self.assertFalse(any('checkout' in args for args in calls))
+
+    def test_raw_sha_is_accepted_only_when_advertised_as_official_tip(self):
+        engine = self.engine()
+        calls = []
+        def command(args, **kwargs):
+            calls.append(args)
+            if 'ls-remote' in args: return SHA + '\trefs/heads/main'
+            if 'rev-parse' in args: return SHA
+            return ''
+        engine.command = command
+        _, actual = engine.checkout(SHA)
+        self.assertEqual(actual, SHA)
+        fetch = next(args for args in calls if 'fetch' in args)
+        self.assertEqual(fetch[-2:], [updater.REPOSITORY, 'refs/heads/main'])
+
+    def test_startup_interrupted_maintenance_positively_stops_writers(self):
+        (self.state / 'updater').mkdir(mode=0o700)
+        updater.atomic(self.state / 'updater/operation.json',
+                       {'state': 'updating', 'phase': 'verify', 'writers_stopped': True})
+        with patch.object(updater.Engine, 'stop_writers') as stop:
+            engine = self.engine()
+        stop.assert_called_once_with()
+        self.assertEqual(engine.status()['state'], 'recovery_required')
+        self.assertTrue(engine.status()['recovery_available'])
+        self.assertFalse(engine.record.get('stop_unconfirmed', False))
+
+    def test_annotated_tag_uses_peeled_commit_for_name_and_raw_sha(self):
+        engine = self.engine()
+        tag_object = 'b' * 40
+        advertised = tag_object + '\trefs/tags/v0.3.0\n' + SHA + '\trefs/tags/v0.3.0^{}'
+        for ref in ('v0.3.0', SHA):
+            with self.subTest(ref=ref):
+                calls = []
+                def command(args, **kwargs):
+                    calls.append(args)
+                    if 'ls-remote' in args: return advertised
+                    if 'rev-parse' in args: return SHA
+                    return ''
+                engine.command = command
+                _, actual = engine.checkout(ref)
+                self.assertEqual(actual, SHA)
+                self.assertNotEqual(actual, tag_object)
+                fetch = next(args for args in calls if 'fetch' in args)
+                self.assertEqual(fetch[-2:], [updater.REPOSITORY, 'refs/tags/v0.3.0'])
+                checkout = next(args for args in calls if 'checkout' in args)
+                self.assertEqual(checkout[-1], SHA)
 
     def test_private_state_symlink_and_permissions_rejected(self):
         link = Path(self.temp.name) / 'link'

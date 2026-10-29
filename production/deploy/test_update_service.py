@@ -78,7 +78,7 @@ class UpdaterHTTPTests(unittest.TestCase):
         self.assertEqual(self.engine.calls, [('check', {'ref': 'v0.2.0'})])
 
     def test_bearer_is_required_and_not_returned(self):
-        for auth in ('', 'Bearer wrong', self.server.token):
+        for auth in ('', 'Bearer wrong', 'Bearer é', self.server.token):
             code, raw = self.request('GET', '/status', headers={'Authorization': auth})
             self.assertEqual(code, 401)
             self.assertNotIn(self.server.token.encode(), raw)

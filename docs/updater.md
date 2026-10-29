@@ -119,7 +119,9 @@ Offline/archive installations need a clean official source checkout to configure
 this optional source-building host service.
 
 In Management → Update from Git, explicitly check a branch/tag/commit, review the
-resolved full SHA, then type that SHA to install. Candidate must descend from the
+resolved full SHA, then type that SHA to install. A selected commit must be the advertised tip of an official branch/tag; arbitrary
+unadvertised objects (including fork/PR objects accessible by SHA) are rejected.
+The advertised commit is rechecked after fetch to reject a moving ref. Candidate must descend from the
 installed commit; downgrades and unrelated histories are rejected. The status
 endpoint does not itself fetch or install anything. No update starts merely by
 opening Management.
