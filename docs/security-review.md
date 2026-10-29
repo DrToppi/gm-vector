@@ -65,7 +65,7 @@ older private installation; migrate via reviewed exports into a new workspace.
 Updated chi/v5 from 5.3.2 to 5.4.0 (GHSA-j6qf-3m9c-vwj3) and
 go-jose/v4 from 4.1.5 to 4.1.6 (GHSA-mgcc-cww5-fp2q).
 
-Three advisories remain open for go-jose/v3 3.0.5: GHSA-mgcc-cww5-fp2q,
+Before proxy replacement, three advisories remained open for go-jose/v3 3.0.5: GHSA-mgcc-cww5-fp2q,
 GHSA-4w3g-jfj2-cw2q and GHSA-vvm8-gf78-28g4. Upstream lists no patched
 v3 release. This dependency is compiled into Caddy through its internal PKI,
 smallstep/certificates and go.step.sm/crypto/jose; it is not merely a test
@@ -77,7 +77,7 @@ References: [RSA JWK advisory](https://github.com/advisories/GHSA-mgcc-cww5-fp2q
 [JSON advisory](https://github.com/advisories/GHSA-vvm8-gf78-28g4),
 [crypto release](https://github.com/smallstep/crypto/releases/tag/v0.91.1).
 
-### Remaining decision (not yet accepted)
+### Decision — option B accepted on 2026-10-30
 
 | Option | Benefits | Costs and risks |
 | --- | --- | --- |
@@ -85,5 +85,12 @@ References: [RSA JWK advisory](https://github.com/advisories/GHSA-mgcc-cww5-fp2q
 | B: replace the bundled proxy with maintained nginx, supplying certificates separately | Removes this dependency chain without owning a cryptographic fork. | Changes packaging, header handling and certificate lifecycle; internal CA and automatic ACME need separate provisioning and regression tests. |
 | C: maintain a reviewed patch/backport of the affected dependency chain | Can preserve Caddy behavior while addressing the vulnerable operations. | Own security-critical fork, provenance and update burden; a module-path replacement alone is unsafe because v3/v4 APIs differ. |
 
-Recommendation: B if removal of the vulnerable dependency is required immediately;
-implement only after approval of the deployment change. No alerts are dismissed.
+The user approved option B: replace Caddy with nginx and manage certificates
+separately. The old proxy Go module and binary are removed from new builds.
+The preceding 2026-10-29 results describe the initial snapshot, not validation of
+this replacement. Replacement local verification passed: unit/race, API and role matrix, real
+nginx per-client/account throttling, browser E2E, TLS certificate/header checks,
+and empty Docker installation with repeated preparation and local recovery.
+The new archive contains 36 OCI layers; no forbidden private files or complete
+private keys were detected. GitHub CI is an independent publication gate.
+No vulnerability alerts are dismissed.

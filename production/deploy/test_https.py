@@ -35,12 +35,9 @@ class HTTPSConfiguration(unittest.TestCase):
    with self.assertRaises(ValueError):m.https_options(state)
    self.options(state);p=state/'certs/privkey.pem';p.unlink();p.symlink_to(state/'certs/fullchain.pem')
    with self.assertRaises(ValueError):m.https_options(state)
- def test_acme_port_rules_and_no_cert_mount(self):
+ def test_acme_requires_external_issuance(self):
   with tempfile.TemporaryDirectory() as temp:
-   state=self.state(temp);value=self.options(state,mode='acme',origin='https://planner.example.test',http_port=80);value.pop('cert_dir');(state/'https.json').write_text(json.dumps(value))
-   options=m.https_options(state);self.assertEqual(options['port'],443)
-   command,env=m.context(state,{'images':{}});self.assertNotIn('compose.https.files.yaml',' '.join(command))
-   value['http_port']=8080;(state/'https.json').write_text(json.dumps(value))
+   state=self.state(temp);self.options(state,mode='acme')
    with self.assertRaises(ValueError):m.https_options(state)
  def test_custom_readiness_preserves_hostname_and_trust(self):
   from unittest.mock import Mock
@@ -54,6 +51,29 @@ class HTTPSConfiguration(unittest.TestCase):
    https.assert_called_once_with('planner.example.test',24443,'127.0.0.1',context=tls,timeout=5)
    self.assertTrue(tls.check_hostname);self.assertEqual(tls.verify_mode,m.ssl.CERT_REQUIRED)
    connection.request.assert_called_once_with('GET','/readyz',headers={'Host':'planner.example.test:24443'})
+ def test_wrong_hostname_rejected_before_any_docker_operation(self):
+  with tempfile.TemporaryDirectory() as temp:
+   state=self.state(temp)
+   env={'GMA_TLS_DIR':str(state/'tls'),'GMA_TLS_CA_FILE':str(state/'tls/fullchain.pem'),'GMA_PUBLIC_ORIGIN':'https://wrong.example.test'}
+   with patch.object(m,'run') as run:
+    with self.assertRaises(ValueError):m.check_https([],env)
+    run.assert_not_called()
+ def test_local_renewal_preserves_application_secrets(self):
+  with tempfile.TemporaryDirectory() as temp:
+   state=self.state(temp)
+   original=(state/'tls/fullchain.pem').read_bytes()
+   secret=(state/'config/encryption.key').read_bytes()
+   m.local_tls(state,renew=True)
+   self.assertNotEqual(original,(state/'tls/fullchain.pem').read_bytes())
+   self.assertEqual(secret,(state/'config/encryption.key').read_bytes())
+   self.assertEqual((state/'tls/privkey.pem').stat().st_mode&0o777,0o600)
+   env={'GMA_TLS_DIR':str(state/'tls'),'GMA_TLS_CA_FILE':str(state/'tls/fullchain.pem'),'GMA_NGINX_CONFIG':str(state/'nginx.conf'),'GMA_PROXY_IMAGE':'sha256:'+'a'*64}
+   with patch.object(m,'run') as run:m.check_https([],env)
+   run.assert_called_once()
+   command=run.call_args.args[0]
+   self.assertNotIn('compose',command)
+   self.assertEqual(command[command.index('--network')+1],'none')
+   self.assertNotIn('--publish',command)
  def test_apply_checks_before_recreate_and_refreshes_origin(self):
   with tempfile.TemporaryDirectory() as temp:
    state=self.state(temp);self.options(state)

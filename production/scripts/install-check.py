@@ -15,13 +15,13 @@ with tempfile.TemporaryDirectory(prefix='gm-vector-install-check-') as temp:
  state=Path(temp)/'state';port=free_port();m.initialize(state,port,'172.30.96.0/29');manifest=m.package();compose,env=m.context(state,manifest)
  try:
   original={n:(state/'config'/n).read_bytes() for n in ('encryption.key','bootstrap.token','instance.id','database.password')}
+  tls_original={n:(state/'tls'/n).read_bytes() for n in ('fullchain.pem','privkey.pem')}
   m.prepare(state,manifest)
   db=m.run(compose+['ps','-q','db'],env,capture=True)
   query=lambda sql:m.run(m.docker()+['exec',db,'psql','-U','planner','-d','planner','-Atc',sql],capture=True)
   assert query('SELECT count(*) FROM projects')=='0','unexpected seeded project'
   assert query('SELECT count(*) FROM users')=='0','unexpected seeded account'
-  proxy=m.run(compose+['ps','-q','proxy'],env,capture=True)
-  pem=m.run(m.docker()+['exec',proxy,'cat','/data/caddy/pki/authorities/local/root.crt'],capture=True)
+  pem=(state/'tls/fullchain.pem').read_text()
   trust=ssl.create_default_context(cadata=pem);origin='https://localhost:'+str(port)
   def call(path,body=None):
    req=Request(origin+'/api/v1'+path,data=None if body is None else json.dumps(body).encode(),headers={'Origin':origin,'Content-Type':'application/json'})
@@ -34,6 +34,7 @@ with tempfile.TemporaryDirectory(prefix='gm-vector-install-check-') as temp:
   assert call('/auth/status')['setup_required'] is False
   m.prepare(state,manifest)
   assert all((state/'config'/n).read_bytes()==v for n,v in original.items()),'repeat prepare changed secrets'
+  assert all((state/'tls'/n).read_bytes()==v for n,v in tls_original.items()),'repeat prepare changed TLS credentials'
   assert query('SELECT count(*) FROM projects')=='0'
   assert query('SELECT count(*) FROM users WHERE active')=='1'
   recovered=subprocess.run([os.sys.executable,str(ROOT/'deploy/install.py'),'recover-admin','--state',str(state),'--username','synthetic-admin'],check=True,capture_output=True)

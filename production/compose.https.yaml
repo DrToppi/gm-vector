@@ -1,12 +1,7 @@
-# Optional HTTPS overlay; keep backend origin equal to GMA_PUBLIC_ORIGIN.
+# Optional public HTTPS ports. The installer renders an exact-origin nginx config.
 # Compose 2.24.4+ is required for !override.
 services:
   proxy:
-    environment:
-      GMA_HTTPS_HOST: ${GMA_HTTPS_HOST:?set the certificate hostname}
-      GMA_PUBLIC_ORIGIN: ${GMA_PUBLIC_ORIGIN:?set exact HTTPS origin}
     ports: !override
       - "${GMA_BIND_ADDRESS:-127.0.0.1}:${GMA_HTTPS_PORT:-443}:9443"
       - "${GMA_BIND_ADDRESS:-127.0.0.1}:${GMA_HTTP_PORT:-80}:9080"
-    volumes:
-      - ${GMA_CADDYFILE:?set absolute path to Caddyfile}:/etc/caddy/Caddyfile:ro

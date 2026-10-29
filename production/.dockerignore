@@ -4,7 +4,6 @@
 !bin
 bin/*
 !bin/planner
-!bin/caddy
 !web
 web/*
 !web/dist

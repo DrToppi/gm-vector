@@ -54,6 +54,5 @@ if not a.backend_only:
  subprocess.run(['npm','ci','--ignore-scripts'],cwd=root/'web',check=True)
  subprocess.run(['npm','run','build'],cwd=root/'web',check=True)
  subprocess.run(['python3',str(root/'scripts/openapi.py')],check=True)
- subprocess.run([str(go),'build','-buildvcs=false','-trimpath','-ldflags=-s -w','-o','../bin/caddy','.'],cwd=root/'proxy',env=env,check=True)
  subprocess.run(['python3',str(root/'scripts/notices.py')],check=True)
 print('Built',metadata['version'],metadata['git_commit'],metadata['channel'])

@@ -15,7 +15,7 @@ It is free and open-source software under the Apache License 2.0.
 - Invite colleagues by email and protect accounts with TOTP.
 - Integrate your own systems through a documented HTTP API.
 - Connect a corporate directory for LDAP authentication and synchronization.
-- Use your own HTTPS certificate or Caddy's automatic certificate management.
+- Use nginx HTTPS with local or operator-managed certificates.
 
 Authentication, project permissions, and request validation still protect your data.
 External integrations are optional and must be configured by the operator.

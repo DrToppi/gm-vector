@@ -1,30 +1,45 @@
 # HTTPS certificates
 
-The default deployment keeps Caddy's local `tls internal` configuration. Operators
-can opt into their own PEM certificate or automatic ACME issuance through a
-Caddyfile and Compose overlays. No production certificates were changed by this
-implementation. Private keys must never enter Git, images, archives or Bug Reports.
+The bundled nginx proxy terminates TLS; certificate issuance and renewal are
+separate operator responsibilities. Default installation generates a localhost
+self-signed certificate with OpenSSL. nginx does not contact an ACME service or
+renew certificates automatically. Private keys must never enter Git, images,
+distribution archives or Bug Reports.
 
-## Bring your own certificate
+## Local installation
 
-Prepare `fullchain.pem` (leaf first, followed by intermediates) and the matching
-unencrypted `privkey.pem` outside the repository. The certificate SAN must cover
-the configured hostname/IP. The directory is mounted read-only into **proxy only**;
-API and worker never receive it.
+The installer creates `state/tls/fullchain.pem` and `state/tls/privkey.pem` during
+`init`. The private key stays protected on the host. Certificate material is
+staged into a dedicated proxy certificate volume for container UID/GID 1000:1000;
+API and worker do not receive that volume. The proxy mounts it read-only.
 
-Caddy runs as container UID/GID `1000:1000`. Give this identity read access using
-ownership/group permissions, for example directory0750 and key0640. Never make
-the key world-readable. Rootless Docker translates container IDs: container
-UID1000 is not necessarily host UID1000. Resolve the mapping rather than using
-`chmod 777`. Validation below checks whether the proxy can load the pair.
+Readiness verifies TLS against the local certificate. Browser trust is a separate,
+explicit operator action; the installer does not modify the host trust store.
+Do not disable TLS validation to bypass a trust error. Repeated `prepare` keeps
+the existing certificate and installation keys. The generated certificate lasts
+365 days and covers localhost, 127.0.0.1 and ::1. Renew it explicitly before expiry:
 
-For the packaged installation:
+```sh
+python3 production/deploy/install.py renew-local-tls --state /absolute/state
+python3 production/deploy/install.py apply-https --state /absolute/state
+```
 
-1. Back up `state/Caddyfile`, `state/config/config.json` and any existing
-   `state/https.json` outside Git. Do not rerun installation initialization.
-2. Copy `tls/Caddyfile.files` to `state/Caddyfile`. The proxy needs read access
-   to the Caddyfile as well.
-3. Create `state/https.json`:
+Renewal replaces the local pair; `apply-https` activates it. Retain a protected
+backup for rollback, and update browser trust after replacing a self-signed
+certificate. Use this operation only for the local certificate, not externally
+issued certificates.
+
+## Operator-managed certificates
+
+Prepare `fullchain.pem` (server certificate first, then intermediate certificates)
+and matching unencrypted `privkey.pem` in a protected directory outside the repo.
+The certificate SAN must match the public hostname/IP. The host installer must be
+able to read regular files; symlink certificate paths are rejected. Copy resolved
+Certbot files into a private staging directory. Do not make the private key world-readable. nginx validates
+that the certificate and key match. [nginx HTTPS configuration](https://nginx.org/en/docs/http/configuring_https_servers.html).
+
+Back up `state/nginx.conf`, `state/config/config.json` and any existing
+`state/https.json` before changing HTTPS. Create `state/https.json`:
 
 ```json
 {
@@ -37,104 +52,65 @@ For the packaged installation:
 }
 ```
 
-`ca_file` is the public trust anchor for a private CA, **not its private key**.
-Omit it for a publicly trusted certificate; system trust is used. The default
-bind address stays loopback. Set a specific interface or `0.0.0.0`/`::` explicitly
-for network access. HTTPS port is taken from origin, default443. Rootless Docker
-may need host configuration to publish ports below1024; with your own certificate
-you can instead use `https://planner.example.com:9443` and HTTP port9080.
+`ca_file` is a public trust anchor, never a CA private key. Omit it for certificates
+trusted by the system. Set `origin` in `state/config/config.json` to exactly the
+same URL. Keep Host, Origin and CSRF checks enabled.
 
-4. Change only `origin` in `state/config/config.json` to the exact same string.
-   Do not weaken Host/Origin/CSRF checks to work around mismatches.
-5. Validate and apply, replacing the state path:
+The default network bind remains loopback. Use a specific interface or `0.0.0.0`
+only when network access is intended. The HTTPS port comes from origin, default
+443. Rootless Docker may require host configuration for ports below 1024; a
+custom origin port 9443 and HTTP port 9080 are an alternative.
 
-```sh
-python3 install.py check-https --state /absolute/state
-python3 install.py apply-https --state /absolute/state
-```
-
-Validation runs `caddy validate` in a temporary proxy container without publishing
-ports. Invalid configuration prevents recreation of the running proxy. Apply
-repeats validation, copies the existing source configuration into the secrets
-volume, recreates API/worker/proxy, and checks `/readyz` using verified TLS.
-There is a brief restart: `admin off` is retained, so `caddy reload` is unavailable.
-The readiness probe connects to the local published port while using the public
-hostname for SNI/certificate verification and the exact public Host header.
-It neither follows redirects nor uses HTTP proxy environment variables.
-
-If application fails after validation, restore the saved configuration and prior
-certificate pair, then run apply again. To return to the previous internal TLS,
-remove only the new `https.json`, restore the old Caddyfile and backend origin,
-then apply. Do not delete Docker volumes or regenerate database keys.
-
-## Automatic ACME for a public domain
-
-Use `tls/Caddyfile.acme` instead, with:
-
-```json
-{
-  "mode": "acme",
-  "origin": "https://planner.example.com",
-  "bind_address": "0.0.0.0",
-  "http_port": 80
-}
-```
-
-Set the same backend origin. DNS A/AAAA records must lead to this installation
-and external ports80/443 must reach Caddy. The overlay forwards them to container
-ports9080/9443, allowing an unprivileged proxy. Keep persistent `caddy_data` and
-`caddy_config`: they hold managed certificate state.
-
-Caddy obtains and renews managed certificates. Successful validation does not
-prove that an external CA can issue one: DNS/network reachability still matters.
-Tests do not perform live issuance. This profile requires external80/443;
-nonstandard ACME ports are rejected. Wildcard/DNS challenge needs an appropriate
-DNS provider module, whose presence is not promised by this configuration.
-
-## Standard production Compose
-
-The same templates and overlays work with `production/compose.yaml`. Set these
-non-secret values in the deployment env file: absolute `GMA_CADDYFILE`,
-`GMA_HTTPS_HOST` (certificate hostname without port), `GMA_PUBLIC_ORIGIN`,
-`GMA_BIND_ADDRESS`, `GMA_HTTPS_PORT`, `GMA_HTTP_PORT`, and `GMA_TLS_DIR` for files
-mode. IPv6 host/bind values in Compose/Caddy require square brackets.
-Compose2.24.4+ is required for `!override`, replacing the default ports rather
-than leaving an unintended additional listener.
+From the source repository root:
 
 ```sh
-docker compose --env-file /private/compose.env \
-  -f production/compose.yaml -f production/compose.https.yaml \
-  -f production/compose.https.files.yaml \
-  run --rm --no-deps proxy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+python3 production/deploy/install.py check-https --state /absolute/state
+python3 production/deploy/install.py apply-https --state /absolute/state
 ```
 
-Omit `compose.https.files.yaml` for ACME. Always use the same daemon, project,
-env and overlay list for deployment commands. Update the backend origin in its
-source config, run `init-secrets`, then
-`up -d --no-deps --force-recreate api worker proxy` with the same Compose options.
-The old `production/scripts/service.sh` does not automatically add these overlays;
-use explicit Compose commands. Verify the new HTTPS URL with a trusted CA;
-`curl -k` is not an acceptance check.
+In a distribution archive, use `install.py` instead. Validation precedes service
+recreation. Apply refreshes the staged configuration/certificates and checks
+readiness with verified TLS. Allow a maintenance window. A successful syntax
+check is not proof of public DNS reachability or external certificate issuance.
 
-## Renewal and rollback
+## Public certificates and automated renewal
 
-For operator-managed certificates, stage a complete new pair in another private
-directory, update cert_dir and validate before applying. Keep the old pair for
-the rollback period. Caddy does not renew manually supplied certificates.
-Do not partially overwrite a key file currently read by a service. ACME renewal
-is managed by Caddy; do not discard its persistent storage during upgrades.
+Use your organization's certificate service or an external ACME client such as
+Certbot. With a suitable DNS provider plugin, DNS-01 issuance does not require
+opening an HTTP challenge endpoint on Planner. Keep DNS credentials in the
+certificate service's protected configuration, outside Planner and its images.
+The manual DNS method does not renew unattended without an authentication hook.
+[Certbot authenticators](https://eff-certbot.readthedocs.io/en/stable/using.html#dns-plugins).
 
-## Verification
+The operator must install and schedule the chosen certificate client. Configure a
+successful-renewal deploy hook that:
 
-- `python3 -m unittest discover -s production/demo -p 'test_*.py'` covers default
-  and custom origins, CA/SNI, permissions, invalid settings and apply ordering.
-- `python3 production/scripts/https-check.py` starts a real unprivileged Caddy with
-  a synthetic CA: valid TLS, mismatched key, wrong hostname/untrusted CA, trusted
-  proxy header replacement. ACME is adapted only; no external issuance occurs.
-- Validate merged Compose profiles: one Caddyfile mount, replacement ports,
-  certificate mount read-only and absent from every service except proxy.
+1. Copies the renewed full chain and key into a new private staging directory.
+2. Updates `cert_dir` to that directory while retaining the previous pair for rollback.
+3. Runs `check-https`, followed by `apply-https` using the installation owner's
+   Docker context, state path and permissions.
+4. Reports failures without printing private keys or application secrets.
 
-Primary sources checked2026-10-29:
-[Caddy TLS](https://caddyserver.com/docs/caddyfile/directives/tls),
-[Automatic HTTPS](https://caddyserver.com/docs/automatic-https),
-[CLI validation](https://caddyserver.com/docs/command-line#caddy-validate).
+Run the hook only for this application's certificate. A root-owned Certbot job
+must not accidentally target a different root-owned Docker daemon; explicitly run
+the deployment step as the installation owner. nginx cannot see the host's
+renewed files until the installer stages them into its volume. Test renewal and
+the deployment hook before relying on the schedule. Certbot supports deploy hooks
+for successful renewals. [Certbot renewal](https://eff-certbot.readthedocs.io/en/stable/using.html#renewing-certificates).
+
+The old `mode: acme` configuration is unsupported. Use `mode: files` after obtaining
+a certificate externally. No live certificate issuance is performed by tests.
+
+## Rollback and checks
+
+If application fails, restore the saved configuration and previous certificate
+pair, then apply again. Do not delete database volumes or regenerate application
+encryption/bootstrap keys. Keep private backups outside distributable archives.
+
+Installer unit tests live in `production/deploy`; HTTPS integration checks use
+`production/scripts/https-check.py` with the locally built nginx proxy image.
+The Go proxy integration test also needs native `nginx` on PATH or the
+`GMA_NGINX_BIN` environment variable set to its executable. CI installs nginx in
+its disposable runner. The disposable installation check is `production/scripts/install-check.py`.
+These checks cover synthetic TLS and installation behavior, not your public DNS,
+certificate authority account or renewal scheduler.

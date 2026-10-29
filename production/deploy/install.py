@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """gmVector local installation and HTTPS management."""
-import argparse, base64, hashlib, http.client, ipaddress, json, os, re, secrets, socket, ssl, subprocess, sys, time, uuid
+import argparse, base64, hashlib, http.client, ipaddress, json, os, re, secrets, socket, ssl, subprocess, sys, tempfile, time, uuid
 from urllib.parse import urlsplit
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent
@@ -82,6 +82,30 @@ def report_public_key(path):
     return key
 
 
+def local_tls(state, renew=False):
+    """Generate a local-only certificate; never alter host trust or external PEM."""
+    directory=state/'tls'
+    if directory.exists() and not renew: raise FileExistsError('local TLS already exists')
+    with tempfile.TemporaryDirectory(prefix='.tls-',dir=state) as pending:
+        target=Path(pending)
+        result=subprocess.run(['openssl','req','-x509','-newkey','rsa:3072','-sha256','-nodes','-days','365','-subj','/CN=localhost','-addext','subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1','-addext','basicConstraints=critical,CA:FALSE','-addext','extendedKeyUsage=serverAuth','-keyout',str(target/'privkey.pem'),'-out',str(target/'fullchain.pem')],stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=60)
+        if result.returncode: raise RuntimeError('local TLS generation failed')
+        ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER).load_cert_chain(target/'fullchain.pem',target/'privkey.pem')
+        directory.mkdir(mode=0o700,exist_ok=True)
+        for name in ('privkey.pem','fullchain.pem'):
+            os.chmod(target/name,0o600)
+            os.replace(target/name,directory/name)
+
+
+def render_nginx(state, hostname, origin):
+    source=ROOT/'tls/nginx.files.conf'
+    if not source.exists(): source=ROOT.parent/'tls/nginx.files.conf'
+    value=source.read_text().replace('__HOST__',hostname).replace('__ORIGIN__',origin)
+    temporary=state/('nginx-'+uuid.uuid4().hex+'.tmp')
+    private(temporary,value.encode());os.chmod(temporary,0o644)
+    os.replace(temporary,state/'nginx.conf')
+
+
 def initialize(state, port, subnet):
     import ipaddress
     network = ipaddress.ip_network(subnet)
@@ -100,8 +124,8 @@ def initialize(state, port, subnet):
     private(cfg/'config.json', {'report_directory': '/var/lib/planner-reports', **({'report_public_key_file': '/run/secrets/report-public-key.json'} if support_key is not None else {}), 'database_url': f'postgres://planner_runtime:{runtime}@db:5432/planner?sslmode=disable', 'origin': f'https://localhost:{port}', 'web_dir': '/app/web', 'secret_file': '/run/secrets/encryption.key', 'bootstrap_file': '/run/secrets/bootstrap.token'})
     private(cfg/'migration-config.json', {'database_url': f'postgres://planner_migrator:{migration}@db:5432/planner?sslmode=disable', 'runtime_role': 'planner_runtime'})
     private(state/'installation.json', {'project': 'gm-vector-'+instance[:12], 'port': port, 'subnet': str(network), 'proxy_ip': str(network.network_address+2), 'api_ip': str(network.network_address+3)})
-    private(state/'Caddyfile', b"{\n admin off\n auto_https disable_redirects\n}\nhttps://localhost:9443 {\n tls internal\n encode zstd gzip\n reverse_proxy api:8080 {\n  header_up X-GMA-Client-IP {http.request.remote.host}\n }\n}\n")
-    os.chmod(state/'Caddyfile', 0o644)  # Public proxy config; parent remains private.
+    local_tls(state)
+    render_nginx(state, 'localhost', f'https://localhost:{port}')
     setup='https://localhost:'+str(port)+'/#setup='+(cfg/'bootstrap.token').read_text().strip()
     private(state/'setup-url.txt',setup.encode())
     print('Installation initialized. First-run URL is stored privately in '+str(state/'setup-url.txt'))
@@ -115,8 +139,8 @@ def https_options(state):
     allowed = {'mode','origin','bind_address','http_port','cert_dir','ca_file'}
     if not isinstance(options,dict) or set(options)-allowed:
         raise ValueError('unknown HTTPS setting')
-    if options.get('mode') not in ('files','acme'):
-        raise ValueError('HTTPS mode must be files or acme')
+    if options.get('mode') != 'files':
+        raise ValueError('HTTPS mode must be files; issue ACME certificates externally')
     origin = options.get('origin','')
     if not isinstance(origin,str) or any(c.isspace() for c in origin):
         raise ValueError('invalid HTTPS origin')
@@ -135,8 +159,6 @@ def https_options(state):
     http_port = options.get('http_port',80)
     if type(http_port) is not int or not 1<=http_port<=65535 or http_port==port:
         raise ValueError('invalid HTTP port')
-    if options['mode']=='acme' and (port!=443 or http_port!=80):
-        raise ValueError('ACME requires external ports 80 and 443 in this profile')
     runtime = json.loads((state/'config/config.json').read_text())
     if runtime.get('origin')!=origin:
         raise ValueError('HTTPS origin must exactly match backend configuration')
@@ -159,7 +181,7 @@ def https_options(state):
 def context(state, manifest):
 
     info = json.loads((state/'installation.json').read_text())
-    env = {**os.environ, 'GMA_PROJECT': info['project'], 'GMA_SECRETS_DIR': str(state/'config'), 'GMA_CADDYFILE': str(state/'Caddyfile'), 'GMA_HTTPS_PORT': str(info['port']), 'GMA_EDGE_SUBNET': info['subnet'], 'GMA_PROXY_IP': info['proxy_ip'], 'GMA_API_IP': info['api_ip']}
+    env = {**os.environ, 'GMA_PROJECT': info['project'], 'GMA_SECRETS_DIR': str(state/'config'), 'GMA_NGINX_CONFIG': str(state/'nginx.conf'), 'GMA_TLS_DIR': str(state/'tls'), 'GMA_TLS_CA_FILE': str(state/'tls/fullchain.pem'), 'GMA_HTTPS_PORT': str(info['port']), 'GMA_EDGE_SUBNET': info['subnet'], 'GMA_PROXY_IP': info['proxy_ip'], 'GMA_API_IP': info['api_ip']}
     for key, value in manifest['images'].items(): env['GMA_'+key.upper()+'_IMAGE'] = value
     # Never silently accept an inherited synthetic runtime opt-in for customer images.
     env.pop('GMA_ALLOW_SYNTHETIC_BUILD', None)
@@ -172,6 +194,8 @@ def context(state, manifest):
         if options['mode']=='files':
             command+=['-f',str(profiles/'compose.https.files.yaml')]
             env['GMA_TLS_DIR']=options['cert_dir']
+            env['GMA_TLS_CA_FILE']=options.get('ca_file','')
+    render_nginx(state,options['hostname'] if options else 'localhost',options['origin'] if options else 'https://localhost:'+str(info['port']))
     return command, env
 
 
@@ -194,12 +218,21 @@ class LocalTLSConnection(http.client.HTTPSConnection):
 
 
 def check_https(compose, env):
+    # Check trust, purpose, validity dates and hostname before staging certificates.
+    pem=str(Path(env['GMA_TLS_DIR'])/'fullchain.pem')
+    host=urlsplit(env.get('GMA_PUBLIC_ORIGIN','https://localhost')).hostname
+    try: ipaddress.ip_address(host); identity='-verify_ip'
+    except ValueError: identity='-verify_hostname'
+    command=['openssl','verify','-purpose','sslserver',identity,host,'-untrusted',pem]
+    if env.get('GMA_TLS_CA_FILE'): command+=['-CAfile',env['GMA_TLS_CA_FILE']]
+    checked=subprocess.run(command+[pem],stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=30)
+    if checked.returncode: raise ValueError('certificate trust, validity or hostname verification failed')
     # Validation failure aborts before touching a running proxy. No port publish.
-    run(compose+['run','--rm','--no-deps','proxy','caddy','validate','--config','/etc/caddy/Caddyfile','--adapter','caddyfile'],env,capture=True)
+    run(docker()+['run','--rm','--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges:true','--tmpfs','/tmp:rw,nosuid,nodev,size=32m','--volume',env['GMA_TLS_DIR']+':/etc/nginx/certs:ro','--volume',env['GMA_NGINX_CONFIG']+':/etc/nginx/nginx.conf:ro','--user','0:0',env['GMA_PROXY_IMAGE'],'nginx','-t','-g','user root;','-c','/etc/nginx/nginx.conf'],env,capture=True)
 
 
 def wait_web(state, compose, env, timeout=120):
-    """Verify local HTTPS with the CA read from this installation's proxy only."""
+    """Verify local HTTPS using the installation certificate, never skip TLS checks."""
     port = json.loads((state/'installation.json').read_text())['port']
     options=https_options(state)
     deadline = time.monotonic() + timeout
@@ -213,11 +246,7 @@ def wait_web(state, compose, env, timeout=120):
                 connection=LocalTLSConnection(options['hostname'],options['port'],connect_host,context=tls,timeout=5)
                 connection.request('GET','/readyz',headers={'Host':urlsplit(options['origin']).netloc})
             else:
-                container = run(compose+['ps','-q','proxy'],env,capture=True)
-                if not container or '\n' in container:
-                    raise RuntimeError('proxy is not ready')
-                pem = run(docker()+['exec',container,'cat','/data/caddy/pki/authorities/local/root.crt'],capture=True)
-                tls = ssl.create_default_context(cadata=pem)
+                tls = ssl.create_default_context(cafile=str(state/'tls/fullchain.pem'))
                 # Direct connection: never use HTTP proxy environment or follow redirects.
                 connection = http.client.HTTPSConnection('localhost',port,context=tls,timeout=5)
                 connection.request('GET','/readyz')
@@ -244,6 +273,7 @@ def prepare(state, manifest):
     for image in manifest['images'].values():
         if run(docker()+['image','inspect','--format','{{.Id}}',image],capture=True) != image:
             raise ValueError('loaded image mismatch')
+    check_https(compose,env)
     run(compose+['run','--rm','--no-deps','init-secrets'],env)
     run(compose+['up','-d','--no-deps','--wait','db'],env)
     container = run(compose+['ps','-q','db'],env,capture=True)
@@ -253,7 +283,6 @@ def prepare(state, manifest):
     run(compose+['run','--rm','--no-deps','init-secrets'],env)
     run(compose+['run','--rm','--no-deps','migrate'],env)
     run(compose+['run','--rm','--no-deps','calendar'],env)
-    if https_options(state): check_https(compose,env)
     run(compose+['up','-d','--no-deps','api','worker','proxy'],env)
     wait_web(state,compose,env)
     origin=env.get('GMA_PUBLIC_ORIGIN','https://localhost:'+env['GMA_HTTPS_PORT'])
@@ -268,7 +297,7 @@ def prepare(state, manifest):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('command',choices=['init','prepare','start','stop','status','recover-admin','check-https','apply-https'])
+    p.add_argument('command',choices=['init','prepare','start','stop','status','recover-admin','check-https','apply-https','renew-local-tls'])
     p.add_argument('--state',type=Path,required=True,help='new private local data directory')
     p.add_argument('--username',help='administrator username for recover-admin')
     p.add_argument('--port',type=int,default=9443)
@@ -277,6 +306,11 @@ def main():
     if a.command=='init': initialize(state,a.port,a.subnet); return
     if a.command=='prepare': prepare(state,manifest); return
     compose,env=context(state,manifest)
+    if a.command=='renew-local-tls':
+        if https_options(state): raise ValueError('renew external certificates with your issuer')
+        local_tls(state,renew=True)
+        print('Local certificate renewed. Run apply-https to validate and activate it; update local browser trust if needed.')
+        return
     if a.command=='recover-admin':
         if not a.username: p.error('--username is required')
         container=run(compose+['ps','-q','api'],env,capture=True)
@@ -297,7 +331,7 @@ def main():
         wait_web(state,compose,env)
         print('HTTPS configuration applied and verified.')
         return
-    if a.command=='start' and https_options(state): check_https(compose,env)
+    if a.command=='start': check_https(compose,env)
     commands={'start':['up','-d','--no-deps','db','api','worker','proxy'],'stop':['stop'],'status':['ps']}
     run(compose+commands[a.command],env)
 

@@ -1,10 +1,5 @@
-# Add only for operator-managed PEM files, never for internal/ACME mode.
+# Operator-managed PEM is staged privately into the proxy certificate volume.
 services:
-  proxy:
+  init-secrets:
     volumes:
-      - type: bind
-        source: ${GMA_TLS_DIR:?set absolute private certificate directory}
-        target: /etc/caddy/certs
-        read_only: true
-        bind:
-          create_host_path: false
+      - ${GMA_TLS_DIR:?set absolute private certificate directory}:/tls-source:ro

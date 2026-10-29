@@ -3,7 +3,7 @@
 ## Requirements
 
 Use Linux amd64, or Linux inside WSL2 on Windows with Docker Desktop integration.
-You need Docker Engine with the Compose v2 plugin, Python 3.10+, and enough disk
+You need Docker Engine with the Compose v2 plugin, Python 3.10+, OpenSSL, and enough disk
 space for images and persistent database volumes. Source builds additionally need
 Go 1.27+, Node.js 22.12+ and npm. Dependency versions are pinned in lock files.
 The installer never installs Docker or changes your host trust store.
@@ -36,10 +36,10 @@ securely offline. Setup is closed after the first administrator is created.
 
 ## HTTPS and network access
 
-Default: https://localhost:9443, bound to loopback, with a private Caddy CA.
-The installer validates readiness against that CA. Browser trust must be configured
+Default: https://localhost:9443, bound to loopback, with a locally generated self-signed certificate.
+The installer validates readiness against that certificate. Browser trust must be configured
 by the operator, or use your own trusted certificate. See [HTTPS](https.md) for
-PEM certificates, corporate CAs, public-domain ACME, and explicit network binding.
+PEM certificates, corporate CAs, external public-domain ACME provisioning, and explicit network binding.
 Do not disable certificate, Host, Origin or CSRF validation to bypass errors.
 
 ## Operations

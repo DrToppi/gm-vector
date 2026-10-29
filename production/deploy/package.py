@@ -33,7 +33,7 @@ def main():
  for name in ('compose.https.yaml','compose.https.files.yaml'):
   regular_source(PRODUCTION/name);shutil.copyfile(PRODUCTION/name,out/name)
  (out/'tls').mkdir()
- for name in ('Caddyfile.files','Caddyfile.acme'):
+ for name in ('nginx.files.conf',):
   source=PRODUCTION/'tls'/name;regular_source(source);shutil.copyfile(source,out/'tls'/name)
  for name in ('database-roles.py','recover-admin.sh'):
   source=PRODUCTION/'scripts'/name

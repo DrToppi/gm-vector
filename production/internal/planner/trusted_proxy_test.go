@@ -1,6 +1,7 @@
 package planner
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -103,12 +104,12 @@ func TestTrustedProxyIntegration(t *testing.T) {
 		w.WriteHeader(200)
 	}))
 	defer backend.Close()
-	binary, e := filepath.Abs("../../bin/caddy")
-	if e != nil {
-		t.Fatal(e)
-	}
-	if _, e = os.Stat(binary); e != nil {
-		t.Fatal("build Caddy before required proxy integration test")
+	binary := os.Getenv("GMA_NGINX_BIN")
+	if binary == "" {
+		binary, e = exec.LookPath("nginx")
+		if e != nil {
+			t.Fatal("nginx is required for the real proxy integration test (PATH or GMA_NGINX_BIN)")
+		}
 	}
 	listener, e := net.Listen("tcp4", "127.0.0.1:0")
 	if e != nil {
@@ -117,25 +118,46 @@ func TestTrustedProxyIntegration(t *testing.T) {
 	address := listener.Addr().String()
 	listener.Close()
 	// Reuse the exact production header directive, so the test detects regressions there.
-	source, e := os.ReadFile("../../Caddyfile")
+	source, e := os.ReadFile("../../nginx.conf")
 	if e != nil {
 		t.Fatal(e)
 	}
-	if !strings.Contains(string(source), "header_up X-GMA-Client-IP {http.request.remote.host}") {
-		t.Fatal("production Caddy must overwrite client address")
+	directive := "proxy_set_header X-GMA-Client-IP $remote_addr;"
+	if !strings.Contains(string(source), directive) {
+		t.Fatal("production nginx must overwrite client address")
 	}
-	config := fmt.Sprintf("{\n admin off\n}\nhttp://%s {\n reverse_proxy %s {\n header_up X-GMA-Client-IP {http.request.remote.host}\n }\n}\n", address, strings.TrimPrefix(backend.URL, "http://"))
 	dir := t.TempDir()
-	path := filepath.Join(dir, "Caddyfile")
+	config := fmt.Sprintf(`pid %s/nginx.pid;
+error_log stderr error;
+worker_processes 1;
+events { worker_connections 64; }
+http {
+ access_log off;
+ client_body_temp_path %s/body;
+ proxy_temp_path %s/proxy;
+ fastcgi_temp_path %s/fastcgi;
+ uwsgi_temp_path %s/uwsgi;
+ scgi_temp_path %s/scgi;
+ server {
+  listen %s;
+  location / {
+   proxy_pass %s;
+   %s
+   proxy_set_header X-Forwarded-For $remote_addr;
+  }
+ }
+}
+`, dir, dir, dir, dir, dir, dir, address, backend.URL, directive)
+	path := filepath.Join(dir, "nginx.conf")
 	if e = os.WriteFile(path, []byte(config), 0600); e != nil {
 		t.Fatal(e)
 	}
-	cmd := exec.CommandContext(ctx, binary, "run", "--config", path, "--adapter", "caddyfile")
-	cmd.Env = append(os.Environ(), "HOME="+dir, "XDG_DATA_HOME="+dir)
+	cmd := exec.CommandContext(ctx, binary, "-p", dir+"/", "-c", path, "-g", "daemon off; master_process off;")
 	cmd.Stdout = io.Discard
-	cmd.Stderr = io.Discard
+	var proxyLog bytes.Buffer
+	cmd.Stderr = &proxyLog
 	if e = cmd.Start(); e != nil {
-		t.Fatal("test Caddy failed to start")
+		t.Fatal("test nginx failed to start")
 	}
 	defer func() { cmd.Process.Kill(); cmd.Wait() }()
 	for i := 0; i < 100; i++ {
@@ -145,7 +167,9 @@ func TestTrustedProxyIntegration(t *testing.T) {
 			break
 		}
 		if i == 99 {
-			t.Fatal("Caddy startup timeout")
+			cmd.Process.Kill()
+			cmd.Wait()
+			t.Fatal("nginx startup timeout: " + proxyLog.String())
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
@@ -177,7 +201,7 @@ func TestTrustedProxyIntegration(t *testing.T) {
 		t.Fatal("client limit bypassed by spoofed headers")
 	}
 	if request(second, "independent") != 200 {
-		t.Fatal("first client blocked second through Caddy")
+		t.Fatal("first client blocked second through nginx")
 	}
 	for i := 0; i < 10; i++ {
 		if request(second, "account-limit") != 200 {

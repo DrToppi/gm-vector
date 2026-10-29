@@ -45,7 +45,10 @@ services:
         chmod 700 /bug-reports
         chown 65532:65532 /bug-reports
         chown 70:70 /pgdata
-        chown 1000:1000 /caddy-data /caddy-config
+        cp /tls-source/fullchain.pem /tls-source/privkey.pem /proxy-certs/
+        chmod 700 /proxy-certs
+        chmod 600 /proxy-certs/*
+        chown -R 1000:1000 /proxy-certs
     volumes:
       - ${GMA_SECRETS_DIR:?set GMA_SECRETS_DIR}:/source:ro
       - app_secrets:/app-secrets
@@ -53,8 +56,8 @@ services:
       - migration_secrets:/migration-secrets
       - pgdata:/pgdata
       - bug_reports:/bug-reports
-      - caddy_data:/caddy-data
-      - caddy_config:/caddy-config
+      - ${GMA_TLS_DIR:?set private certificate directory}:/tls-source:ro
+      - proxy_certs:/proxy-certs
   db:
     image: ${GMA_DB_IMAGE:?missing package image}
     pull_policy: never
@@ -108,7 +111,7 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     ports: ["127.0.0.1:${GMA_HTTPS_PORT:-9443}:9443"]
-    volumes: ["${GMA_CADDYFILE:?missing local Caddyfile}:/etc/caddy/Caddyfile:ro", caddy_data:/data, caddy_config:/config]
+    volumes: ["${GMA_NGINX_CONFIG:?missing local nginx config}:/etc/nginx/nginx.conf:ro", proxy_certs:/etc/nginx/certs:ro]
     tmpfs: [/tmp:size=32m]
     networks:
       edge:
@@ -122,8 +125,7 @@ volumes:
   db_secrets:
   migration_secrets:
   pgdata:
-  caddy_data:
-  caddy_config:
+  proxy_certs:
 networks:
   backend: {internal: true}
   edge:

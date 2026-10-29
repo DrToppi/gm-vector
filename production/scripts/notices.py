@@ -10,7 +10,7 @@ def record(name,version,directory):
    text=p.read_text(errors='replace');files.append(p.name);texts.append('\n'+'='*72+'\n'+name+' @ '+version+' / '+p.name+'\n'+'='*72+'\n'+text)
  records.append({'name':name,'version':version,'notice_files':files})
 seen=set()
-for cwd in [root,root/'proxy']:
+for cwd in [root]:
  raw=subprocess.check_output([go,'list','-m','-json','all'],cwd=cwd).decode();decoder=json.JSONDecoder()
  while raw.strip():
   value,n=decoder.raw_decode(raw.lstrip());raw=raw.lstrip()[n:]
