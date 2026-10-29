@@ -26,6 +26,7 @@ See [Installation](docs/installation.md) for prerequisites, first-run setup,
 HTTPS, backups, and updates. The first administrator sets a password and
 confirms TOTP before the workspace becomes available.
 
+- [Documentation index](docs/README.md)
 - [API and integration guide](docs/api.md)
 - [Corporate directory](docs/directory.md)
 - [HTTPS configuration](docs/https.md)
@@ -42,7 +43,11 @@ Everyone can read, clone, and fork this repository. Direct writes to the officia
 repository are limited to maintainers. You may propose a change through a pull
 request; submitting a pull request does not grant write access.
 
-See [Contributing](CONTRIBUTING.md). Please do not include credentials, private
+See [Contributing](CONTRIBUTING.md), [development workflow](docs/development-workflow.md),
+and [agent instructions](AGENTS.md).
+The [remediation programme](docs/remediation/2026-10-30/README.md) records planned
+work and verification criteria; it is currently documentation only.
+Please do not include credentials, private
 project data, or unredacted diagnostics in issues or pull requests.
 
 ## Languages

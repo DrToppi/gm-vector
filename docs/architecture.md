@@ -32,7 +32,9 @@ Work calendars pause execution on nonworking days in both duration display modes
 
 ## Accounts and integrations
 
-First administrator setup requires a local one-use installation secret plus TOTP.
+First administrator setup opens at the normal URL without an installation key,
+then requires TOTP confirmation. Setup is permanently closed after completion;
+see [first-run setup](first-run.md).
 Recovery is a privileged local operation and revokes prior credentials. Corporate
 LDAP uses verified TLS and stable IDs; explicit disabled state revokes access,
 missing search results only require review. Local administrators remain independent.

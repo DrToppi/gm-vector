@@ -1,0 +1,57 @@
+# Decision register
+
+All selections below are **PROPOSED / NOT APPROVED** unless explicitly stated.
+The user approved the goals, documentation-only work and delivery to a separate
+branch; this does not approve implementation designs or numeric thresholds.
+Accepted intent: remove the single-year limitation; keep holidays, weekends,
+individual schedules and existing data compatible. Update-from-Git remains separate.
+
+Recommendations are proposals, not agent-made architectural decisions.
+Before implementation, record the human selection, date, rationale, rejected
+alternatives, affected contracts, migration and verification consequences.
+
+| ID | A — benefits; costs/risks | B — benefits; costs/risks | C — benefits; costs/risks | Recommendation / prerequisite |
+| --- | --- | --- | --- | --- |
+| D01 Multi-year calendar coverage | Explicit immutable calendar version per year: reproducible official dates; blocks if a required year is unavailable | Verified years plus clearly provisional weekday fallback: supports long-range plans; holidays/transfers unknown, requires visible provenance and reviewed replacement | Project-owned multi-year manual calendar: flexible; maintenance and versioning burden, risk of incorrect holidays | B for long-range planning, A for verified-only requirements; user choice pending |
+| D02 Scheduling bounds | Documented fixed multi-year horizon: predictable resource ceiling; still rejects longer legitimate work | Calendar-coverage-driven horizon with explicit operation/memory budget: accommodates multiple years; budget exhaustion/retry and sparse availability need defined semantics | Background calculation jobs with resource quotas: larger workloads; queues, cancellation, status and consistency significantly expand scope | B, after measuring baseline; no unlimited loop or silent truncation |
+| D03 Refresh correctness | Ordered/versioned polling with in-flight deduplication and visibility backoff: small change; bounded freshness delay remains | Conditional requests plus versioned cache: less transfer/work; validators/invalidation contracts must be correct | Server events plus catch-up reads: low update latency; persistent connections and reconnect ordering add complexity | A first unless measurements justify B; C outside minimal repair without explicit approval |
+| D04 Derived capacity/read path | Keep on-demand calculation, optimize queries and batch reads: simple consistency; repeated CPU cost | Cache by all input revisions: lower warm cost; invalidation across project/calendar/employee inputs is complex | Persist/materialize derived schedules on writes: cheap reads; larger transaction/migration and rebuild contract | A first after profiling; performance targets in WP02 require approval before implementation |
+| D05 Time history pagination | Offset with bounded page size and stable order: simple page numbers; deep offsets and concurrent inserts cause drift | Keyset cursor with stable composite ordering and documented snapshot/watermark semantics: efficient traversal; cursor lifecycle and updates/deletes need specification | Export job/snapshot-only history access: consistent large reports; asynchronous machinery and less convenient browsing | B; define updates/deletes consistency and full export snapshot before coding |
+| D06 Timezone ownership | Installation timezone with explicit compatibility default: simplest; multinational projects share one zone | Project IANA timezone, user zone only for timestamp display: clearer project dates; needs migration and cross-project allocation-day definition | Employee-specific scheduling timezone: flexible global teams; complex overlaps/DST/cross-project capacity | B only after defining cross-project daily-ceiling semantics; A is lower-risk if one planning zone suffices |
+| D07 Frontend test tooling | Vitest + Testing Library + ESLint + Prettier: fits Vite and component tests; new dependencies/configuration to maintain | Existing Node/CDP harness plus ESLint/Prettier: fewer new runtime tools; component isolation needs manual harnesses | Playwright component tests plus lint/format: real browser rendering; heavier/slower setup and experimental surface must be assessed | A proposed; verify current compatibility/licensing/security before accepting dependency versions |
+| D08 Refactor boundaries | Extract approved hooks/pure domain helpers in existing tree: minimal changes; some coupling remains | Introduce feature folders incrementally: clear ownership; wider import/move diff | Replace state management/framework: broad redesign, high migration risk | A; do not bundle mass formatting with behavioural fixes |
+| D09 Browser regression | Playwright Chromium/Firefox/WebKit required subset plus existing CDP coverage: shared API; engine/tool versions and native dependencies need pinning | Separate WebDriver harnesses: standards-based coverage; duplicate fixtures/driver maintenance | External browser service: broad environments; cost, credential handling and data-transfer boundary | A; WebKit engine coverage is not a claim of testing actual Safari/iOS |
+| D10 Vulnerability/release policy | Block all HIGH/CRITICAL findings: simple rule; upstream unfixable advisories can stop releases | Block HIGH/CRITICAL with time-limited human-reviewed exceptions: explicit ownership/expiry; acceptance discipline required | Reachability-only gating: fewer false alarms; static analysis can miss exploitation paths | B proposed; no implementer-created exceptions, no silent ignore-unfixed |
+
+## Open acceptance parameters
+
+- D02: supported year range, maximum per-task duration, calendar coverage cap,
+  maximum calculation operations, load-array size and cancellation deadline.
+- D04: test machine resources, number of projects/employees, read/write mix,
+  p95/p99/throughput/error budgets and soak duration. Historical envelope is up to
+  10 concurrent users and 300 tasks/project; other numbers are still proposals.
+- D05: cursor expiry, response envelope/backward compatibility, snapshot consistency,
+  export completeness and UI pagination controls.
+- D06: semantics of date-only work_date, overdue/today, audit instants, exports,
+  cross-project capacity day, default for existing records and zone-change effects.
+- D10: mandatory severity/source coverage, exception approver, expiry, recheck cadence,
+  restore RPO/RTO, supported upgrade origins and browser versions.
+
+## Source verification requirements
+
+Runtime versions/features must be checked against current primary documentation
+when making the implementation decision; these links are research entry points,
+not evidence that an unselected tool is installed or suitable:
+
+- [PostgreSQL isolation](https://www.postgresql.org/docs/current/transaction-iso.html)
+- [React effects and cleanup](https://react.dev/reference/react/useEffect)
+- [IANA time-zone database](https://www.iana.org/time-zones)
+- [ESLint documentation](https://eslint.org/docs/latest/)
+- [Prettier documentation](https://prettier.io/docs/)
+- [Vitest guide](https://vitest.dev/guide/)
+- [Testing Library principles](https://testing-library.com/docs/guiding-principles/)
+- [Playwright browsers](https://playwright.dev/docs/browsers)
+- [Trivy vulnerability scanning](https://trivy.dev/latest/docs/scanner/vulnerability/)
+
+No package version is selected by this plan. Current accepted runtime contracts
+remain effective until a replacement decision is approved.
