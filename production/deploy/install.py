@@ -227,8 +227,10 @@ def check_https(compose, env):
     if env.get('GMA_TLS_CA_FILE'): command+=['-CAfile',env['GMA_TLS_CA_FILE']]
     checked=subprocess.run(command+[pem],stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=30)
     if checked.returncode: raise ValueError('certificate trust, validity or hostname verification failed')
-    # Validation failure aborts before touching a running proxy. No port publish.
-    run(docker()+['run','--rm','--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges:true','--tmpfs','/tmp:rw,nosuid,nodev,size=32m','--volume',env['GMA_TLS_DIR']+':/etc/nginx/certs:ro','--volume',env['GMA_NGINX_CONFIG']+':/etc/nginx/nginx.conf:ro','--user','0:0',env['GMA_PROXY_IMAGE'],'nginx','-t','-g','user root;','-c','/etc/nginx/nginx.conf'],env,capture=True)
+    # Rootful Docker needs DAC_OVERRIDE to read host-owned 0600 PEM. This only
+    # validates syntax: no network, read-only mounts/rootfs, no running workers.
+    # The actual proxy remains UID1000 with all capabilities dropped.
+    run(docker()+['run','--rm','--network','none','--read-only','--cap-drop','ALL','--cap-add','DAC_OVERRIDE','--security-opt','no-new-privileges:true','--tmpfs','/tmp:rw,nosuid,nodev,size=32m','--volume',env['GMA_TLS_DIR']+':/etc/nginx/certs:ro','--volume',env['GMA_NGINX_CONFIG']+':/etc/nginx/nginx.conf:ro','--user','0:0',env['GMA_PROXY_IMAGE'],'nginx','-t','-g','user root;','-c','/etc/nginx/nginx.conf'],env,capture=True)
 
 
 def wait_web(state, compose, env, timeout=120):

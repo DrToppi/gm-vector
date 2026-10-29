@@ -74,6 +74,9 @@ class HTTPSConfiguration(unittest.TestCase):
    self.assertNotIn('compose',command)
    self.assertEqual(command[command.index('--network')+1],'none')
    self.assertNotIn('--publish',command)
+   self.assertEqual(command[command.index('--cap-drop')+1],'ALL')
+   self.assertEqual(command[command.index('--cap-add')+1],'DAC_OVERRIDE')
+   self.assertIn('--read-only',command)
  def test_apply_checks_before_recreate_and_refreshes_origin(self):
   with tempfile.TemporaryDirectory() as temp:
    state=self.state(temp);self.options(state)

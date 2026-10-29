@@ -69,7 +69,10 @@ python3 production/deploy/install.py apply-https --state /absolute/state
 ```
 
 In a distribution archive, use `install.py` instead. Validation precedes service
-recreation. Apply refreshes the staged configuration/certificates and checks
+recreation. The one-shot syntax validator has no network and read-only mounts;
+it temporarily uses root with only DAC_OVERRIDE to read host-owned 0600 PEM
+under rootful Docker. The running proxy remains UID1000 with all capabilities
+dropped. Apply refreshes the staged configuration/certificates and checks
 readiness with verified TLS. Allow a maintenance window. A successful syntax
 check is not proof of public DNS reachability or external certificate issuance.
 
