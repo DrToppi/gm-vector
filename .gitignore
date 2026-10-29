@@ -15,6 +15,7 @@ ldap.json
 *.pfx
 *.sqlite*
 *.db
+!/production/Dockerfile.db
 *.log
 *.jsonl
 *.tar
