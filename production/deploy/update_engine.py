@@ -220,7 +220,7 @@ class Engine:
             else: raise RuntimeError('clone_unavailable')
             b.run(['exec','-i',name,'pg_restore','-U','planner','-d','planner','--no-owner','--no-acl','--exit-on-error'], values['database.dump'])
             b.run(['cp',str(Path(self.record['source'])/'production/bin/planner'),name+':/tmp/planner'])
-            b.run(['exec',name,'chmod','755','/tmp/planner'])
+            b.run(['exec','--user','0:0',name,'chmod','755','/tmp/planner'])
             config=json.dumps({'database_url':'postgres://planner@127.0.0.1:5432/planner?sslmode=disable'})
             b.run(['exec','-i',name,'sh','-c','umask 077; cat > /tmp/migration.json'],config.encode())
             b.run(['exec',name,'/tmp/planner','migrate','--config','/tmp/migration.json'])

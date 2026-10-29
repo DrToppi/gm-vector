@@ -160,10 +160,10 @@ def runtime_smoke(args,name,values):
  with tarfile.open(fileobj=buf,mode='w') as tar:
   for filename,data in copied.items():
    item=tarfile.TarInfo(filename);item.size=len(data);item.mode=0o600;item.uid=65532;item.gid=65532;tar.addfile(item,io.BytesIO(data))
- run(['exec',name,'mkdir','-p','/tmp/gma-restore/web'])
- run(['exec','-i',name,'tar','-xf','-','-C','/tmp/gma-restore'],buf.getvalue())
+ run(['exec','--user','0:0',name,'mkdir','-p','/tmp/gma-restore/web'])
+ run(['exec','-i','--user','0:0',name,'tar','-xf','-','-C','/tmp/gma-restore'],buf.getvalue())
  run(['cp',str(binary),name+':/tmp/gma-restore/planner'])
- run(['exec',name,'chmod','755','/tmp/gma-restore/planner'])
+ run(['exec','--user','0:0',name,'chmod','755','/tmp/gma-restore/planner'])
  run(['exec','-d','--user','65532:65532',name,'/tmp/gma-restore/planner','api','--config','/tmp/gma-restore/config.json','--listen','127.0.0.1:18080'])
  for _ in range(30):
   try:

@@ -13,7 +13,7 @@ def write(path,data):
 with tempfile.TemporaryDirectory(prefix='gma-recovery-regression-') as directory:
  root=Path(directory);cfg=root/'config';cfg.mkdir(mode=0o700);dest=root/'copied';dest.mkdir(mode=0o700)
  for n in b.CORE:write(cfg/n,b'S'*32 if n=='encryption.key' else b'Z'*48)
- runtime={'database_url':'postgres://planner@127.0.0.1:5432/planner?sslmode=disable','origin':'https://localhost:9443','web_dir':'/app/web',**{field:'/run/secrets/'+name for field,name in b.RUNTIME_FILES.items() if field!='report_public_key_file'}}
+ runtime={'database_url':'postgres://planner@127.0.0.1:5432/planner?sslmode=disable','origin':'https://localhost:9443','web_dir':'/app/web',**{field:'/run/secrets/'+name for field,name in b.RUNTIME_FILES.items() if field not in ('report_public_key_file','updater_token_file')}}
  write(cfg/'config.json',json.dumps(runtime));write(cfg/'ldap.json','{"enabled":false}')
  ca_key=rsa.generate_private_key(public_exponent=65537,key_size=2048);subject=x509.Name([x509.NameAttribute(NameOID.COMMON_NAME,'synthetic-recovery')]);now=datetime.datetime.now(datetime.timezone.utc)
  ca=x509.CertificateBuilder().subject_name(subject).issuer_name(subject).public_key(ca_key.public_key()).serial_number(x509.random_serial_number()).not_valid_before(now-datetime.timedelta(days=1)).not_valid_after(now+datetime.timedelta(days=1)).add_extension(x509.BasicConstraints(ca=True,path_length=None),critical=True).sign(ca_key,hashes.SHA256())
