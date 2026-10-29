@@ -94,3 +94,9 @@ and empty Docker installation with repeated preparation and local recovery.
 The new archive contains 36 OCI layers; no forbidden private files or complete
 private keys were detected. GitHub CI is an independent publication gate.
 No vulnerability alerts are dismissed.
+
+The nginx 1.30.6 Alpine base required updates to brotli-libs, curl and libcurl.
+The Dockerfile applies those available security updates. A fresh Trivy scan of
+the resulting proxy image found zero known vulnerabilities on 2026-10-30; the
+HTTPS regression passed again. CI now rejects HIGH/CRITICAL proxy-image findings.
+This is a dated scan result, not a guarantee against future advisories.

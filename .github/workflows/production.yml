@@ -48,6 +48,11 @@ jobs:
         run: |
           docker build -f production/Dockerfile.db -t gm-vector-db:18.6 production
           docker build -f production/Dockerfile.proxy -t gm-vector-proxy:local production
+      - name: Proxy image vulnerability gate
+        run: |
+          mkdir -p /tmp/gm-vector-image-scan
+          docker save -o /tmp/gm-vector-image-scan/proxy.tar gm-vector-proxy:local
+          docker run --rm -v /tmp/gm-vector-image-scan:/scan:ro aquasec/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c image --input /scan/proxy.tar --scanners vuln --severity HIGH,CRITICAL --exit-code 1
       - name: HTTPS proxy regression
         run: /usr/bin/python3 production/scripts/https-check.py
       - name: Empty installation smoke
