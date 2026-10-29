@@ -1,0 +1,54 @@
+name: GM Vector checks
+on:
+  push:
+    branches: [main, 'feature/**', 'security/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        env:
+          POSTGRES_DB: gma_planner_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: ci-disposable-only
+        ports: ['15432:5432']
+        options: --health-cmd "pg_isready -U test" --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: '1.27.3'
+          cache-dependency-path: production/go.sum
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: production/web/package-lock.json
+      - name: Offline diagnostic crypto dependency
+        run: sudo apt-get update && sudo apt-get install -y python3-cryptography
+      - run: python3 production/scripts/build.py
+      - name: Unit, integration and isolated browser E2E
+        run: /usr/bin/python3 production/scripts/verify.py all
+        env:
+          GMA_TEST_DSN: postgres://test:ci-disposable-only@127.0.0.1:15432/gma_planner_test?sslmode=disable
+          GMA_CHROME_BIN: /usr/bin/google-chrome
+      - run: git diff --exit-code -- docs/contracts/openapi.json
+      - run: npm audit --audit-level=high
+        working-directory: production/web
+      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+      - run: govulncheck ./...
+        working-directory: production
+      - run: govulncheck ./...
+        working-directory: production/proxy
+      - run: docker build -t gm-vector:local production
+      - name: Container dependencies
+        run: |
+          docker build -f production/Dockerfile.db -t gm-vector-db:18.6 production
+          docker build -f production/Dockerfile.proxy -t gm-vector-proxy:local production
+      - name: Empty installation smoke
+        run: /usr/bin/python3 production/scripts/install-check.py

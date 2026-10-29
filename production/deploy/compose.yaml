@@ -1,0 +1,132 @@
+name: ${GMA_PROJECT:?initialize demo}
+x-app: &app
+  image: ${GMA_APP_IMAGE:?missing package image}
+  pull_policy: never
+  environment:
+    GMA_TRUSTED_PROXY_CIDRS: "${GMA_PROXY_IP:-172.30.90.2}/32"
+  user: "65532:65532"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: ["/tmp:size=32m,mode=1777"]
+  volumes: [app_secrets:/run/secrets:ro]
+  networks: [backend]
+  mem_limit: 768m
+  cpus: 2
+  logging:
+    driver: json-file
+    options: {max-size: 10m, max-file: "3"}
+services:
+  init-secrets:
+    image: ${GMA_PROXY_IMAGE:?missing package image}
+    pull_policy: never
+    user: "0:0"
+    network_mode: none
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        cp /source/config.json /source/encryption.key /source/bootstrap.token /app-secrets/
+        if [ -f /source/report-public-key.json ]; then cp /source/report-public-key.json /app-secrets/report-public-key.json; else rm -f /app-secrets/report-public-key.json; fi
+        if [ -f /source/smtp.json ]; then cp /source/smtp.json /app-secrets/smtp.json; else rm -f /app-secrets/smtp.json; fi
+        if [ -f /source/smtp-ca.pem ]; then cp /source/smtp-ca.pem /app-secrets/smtp-ca.pem; else rm -f /app-secrets/smtp-ca.pem; fi
+        if [ -f /source/ldap.json ]; then cp /source/ldap.json /app-secrets/ldap.json; else rm -f /app-secrets/ldap.json; fi
+        if [ -f /source/ldap-ca.pem ]; then cp /source/ldap-ca.pem /app-secrets/ldap-ca.pem; else rm -f /app-secrets/ldap-ca.pem; fi
+        chmod 700 /app-secrets
+        chmod 600 /app-secrets/*
+        chown -R 65532:65532 /app-secrets
+        cp /source/migration-config.json /migration-secrets/migration-config.json
+        chmod 700 /migration-secrets
+        chmod 600 /migration-secrets/migration-config.json
+        chown -R 65532:65532 /migration-secrets
+        cp /source/database.password /db-secrets/password
+        chmod 700 /db-secrets
+        chmod 600 /db-secrets/password
+        chown -R 70:70 /db-secrets
+        chmod 700 /bug-reports
+        chown 65532:65532 /bug-reports
+        chown 70:70 /pgdata
+        chown 1000:1000 /caddy-data /caddy-config
+    volumes:
+      - ${GMA_SECRETS_DIR:?set GMA_SECRETS_DIR}:/source:ro
+      - app_secrets:/app-secrets
+      - db_secrets:/db-secrets
+      - migration_secrets:/migration-secrets
+      - pgdata:/pgdata
+      - bug_reports:/bug-reports
+      - caddy_data:/caddy-data
+      - caddy_config:/caddy-config
+  db:
+    image: ${GMA_DB_IMAGE:?missing package image}
+    pull_policy: never
+    user: "70:70"
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      POSTGRES_USER: planner
+      POSTGRES_DB: planner
+      POSTGRES_PASSWORD_FILE: /run/db-secrets/password
+    volumes: [pgdata:/var/lib/postgresql, db_secrets:/run/db-secrets:ro]
+    tmpfs: ["/tmp:size=64m", "/var/run/postgresql:uid=70,gid=70,mode=0775"]
+    networks: [backend]
+    mem_limit: 1g
+    cpus: 2
+    depends_on: {init-secrets: {condition: service_completed_successfully}}
+    healthcheck: {test: [CMD-SHELL, "pg_isready -U planner -d planner"], interval: 5s, timeout: 3s, retries: 20}
+    logging: {driver: json-file, options: {max-size: 10m, max-file: "3"}}
+  migrate:
+    <<: *app
+    command: [migrate]
+    volumes: [migration_secrets:/run/migration:ro]
+    depends_on: {db: {condition: service_healthy}}
+  calendar:
+    <<: *app
+    command: [seed-calendar, --file, /app/calendars/ru-2026.json]
+    depends_on: {migrate: {condition: service_completed_successfully}}
+  api:
+    <<: *app
+    command: [api]
+    volumes: [app_secrets:/run/secrets:ro, bug_reports:/var/lib/planner-reports]
+    restart: unless-stopped
+    networks:
+      backend: {}
+      edge:
+        ipv4_address: ${GMA_API_IP:-172.30.90.3}
+    depends_on: {calendar: {condition: service_completed_successfully}}
+  worker:
+    <<: *app
+    command: [worker]
+    restart: unless-stopped
+    depends_on: {calendar: {condition: service_completed_successfully}}
+  proxy:
+    image: ${GMA_PROXY_IMAGE:?missing package image}
+    pull_policy: never
+    user: "1000:1000"
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    ports: ["127.0.0.1:${GMA_HTTPS_PORT:-9443}:9443"]
+    volumes: ["${GMA_CADDYFILE:?missing local Caddyfile}:/etc/caddy/Caddyfile:ro", caddy_data:/data, caddy_config:/config]
+    tmpfs: [/tmp:size=32m]
+    networks:
+      edge:
+        ipv4_address: ${GMA_PROXY_IP:-172.30.90.2}
+    mem_limit: 128m
+    depends_on: [api]
+    logging: {driver: json-file, options: {max-size: 10m, max-file: "3"}}
+volumes:
+  bug_reports:
+  app_secrets:
+  db_secrets:
+  migration_secrets:
+  pgdata:
+  caddy_data:
+  caddy_config:
+networks:
+  backend: {internal: true}
+  edge:
+    ipam:
+      config:
+        - subnet: ${GMA_EDGE_SUBNET:-172.30.90.0/29}

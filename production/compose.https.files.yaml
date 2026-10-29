@@ -1,0 +1,10 @@
+# Add only for operator-managed PEM files, never for internal/ACME mode.
+services:
+  proxy:
+    volumes:
+      - type: bind
+        source: ${GMA_TLS_DIR:?set absolute private certificate directory}
+        target: /etc/caddy/certs
+        read_only: true
+        bind:
+          create_host_path: false

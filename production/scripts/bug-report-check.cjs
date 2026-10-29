@@ -1,0 +1,27 @@
+const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('assert/strict');
+const ts=require('../web/node_modules/typescript');
+const source=fs.readFileSync(path.join(__dirname,'../web/src/diagnostics.ts'),'utf8');
+const sandbox={exports:{},URL,Date,Intl,window:{},navigator:{}};
+vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,sandbox);
+const d=sandbox.exports,now=Date.now();
+const secret='DO_NOT_EXPORT_SECRET',project='customer-secret-project';
+for(const route of ['/projects/'+project+'?token='+secret,'/api/v1/projects/'+project+'#setup='+secret])assert.equal(d.safeRoute(route),'/api/v1/projects/{id}');
+assert.equal(d.safeRoute('/projects/'+project+'/tasks/secret-task/comments'),'/api/v1/projects/{id}/tasks/{task}/comments');
+for(const route of ['https://internal-host/secret','//internal-host/secret','/not-known/'+secret])assert.equal(d.safeRoute(route),'unknown');
+d.recordRequest({path:'/projects/'+project+'?token='+secret,method:'POST',status:500,duration_ms:12.5,request_id:'abcdefghijklmnop',body:secret,headers:{cookie:secret},message:secret},d.diagnosticEpoch(),now);
+d.recordScript('error','https://internal-host/assets/index-AbCd1234.js?token='+secret,17,4,'https://internal-host',now);
+d.recordScript('error','https://other-host/'+secret+'.js',17,4,'https://internal-host',now);
+let json=JSON.stringify(d.diagnosticSnapshot(now));assert(!json.includes(secret));assert(!json.includes(project));assert(!json.includes('internal-host'));assert(!json.includes('other-host'));assert(json.includes('index-AbCd1234.js'));assert(!json.includes('message'));assert(!json.includes('body'));
+const snap=d.diagnosticSnapshot(now);snap[0].route='mutated';assert.notEqual(d.diagnosticSnapshot(now)[0].route,'mutated');
+for(let i=0;i<150;i++)d.recordRequest({path:'/employees',method:'GET',status:200,duration_ms:i},d.diagnosticEpoch(),now);assert.equal(d.diagnosticSnapshot(now).length,100);
+assert.equal(d.diagnosticSnapshot(now+15*60*1000+1).length,0);
+d.setDiagnosticIdentity('first-user');const oldEpoch=d.diagnosticEpoch();d.recordRequest({path:'/projects',method:'GET',status:200,duration_ms:1},oldEpoch,now);assert.equal(d.diagnosticSnapshot(now).length,1);d.setDiagnosticIdentity('second-user');assert.equal(d.diagnosticSnapshot(now).length,0);d.recordRequest({path:'/projects',method:'GET',status:200,duration_ms:1},oldEpoch,now);assert.equal(d.diagnosticSnapshot(now).length,0);d.recordRequest({path:'/projects',method:'GET',status:200,duration_ms:1},d.diagnosticEpoch(),now);d.setDiagnosticIdentity('');assert.equal(d.diagnosticSnapshot(now).length,0);
+const safe=d.safeServerEvents({events:[{time:new Date(now).toISOString(),method:'GET',route:'/api/v1/projects/{id}',request_id:'abcdefghijklmnop',duration_ms:15,status:500,owner:secret,headers:{cookie:secret},message:secret,host:secret},{time:secret}]});assert.equal(safe.length,1);assert.equal(safe[0].route,'/api/v1/projects/{id}');assert(!JSON.stringify(safe).includes(secret));
+assert(!JSON.stringify(d.safeServerState({version:'0.1.0',database:'ready',backup:secret,timezone:secret,paused_events:999})).includes(secret));assert.equal(d.safeServerState({version:secret}).version,'unknown');assert.equal(d.safeView(secret),'other');assert.equal(d.browserFamily('Chrome/1 '+secret),'Chrome');
+const invalid=d.safeServerEvents({events:[{time:new Date(now).toISOString(),method:secret,route:secret,request_id:'bad id '+secret,duration_ms:Infinity,status:-7}]})[0];assert.equal(invalid.method,'unknown');assert.equal(invalid.route,'unknown');assert.equal(invalid.request_id,'');assert.equal(invalid.duration_ms,0);assert.equal(invalid.status,0);
+console.log('Bug report: secret/body/URL exclusion, allowlists, bounded/expired memory, identity and in-flight isolation passed.');
+(async()=>{
+ const apiSandbox={exports:{},require:name=>{if(name==='./i18n')return require('./test-i18n.cjs');assert.equal(name,'./diagnostics');return d},performance,AbortController,fetch:async(_url,options)=>new Promise((_resolve,reject)=>{assert(options.signal);options.signal.addEventListener('abort',()=>reject(new DOMException('Synthetic sensitive reason','AbortError')),{once:true})})};
+ vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'../web/src/api.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,apiSandbox);
+ const controller=new AbortController();const pending=apiSandbox.exports.api('/diagnostics/events','GET',undefined,controller.signal);controller.abort();await assert.rejects(pending,{name:'AbortError'});const latest=d.diagnosticSnapshot().at(-1);assert.equal(latest.status,0);assert(!JSON.stringify(latest).includes('sensitive'));console.log('Bug report: AbortSignal reaches fetch, cancellation records metadata only.');
+})().catch(e=>{console.error(e);process.exitCode=1});

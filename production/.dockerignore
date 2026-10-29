@@ -1,0 +1,17 @@
+**
+!Dockerfile
+!Dockerfile.proxy
+!bin
+bin/*
+!bin/planner
+!bin/caddy
+!web
+web/*
+!web/dist
+!web/dist/**
+!calendars
+calendars/*
+!calendars/*.json
+
+!notices
+!notices/**

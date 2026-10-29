@@ -1,0 +1,24 @@
+{
+  "name": "gm-vector-web",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b && vite build",
+    "check": "tsc -b",
+    "test:i18n": "node scripts/i18n-check.cjs"
+  },
+  "dependencies": {
+    "i18next": "26.5.11",
+    "qrcode.react": "4.2.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-i18next": "17.1.9"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0"
+  }
+}

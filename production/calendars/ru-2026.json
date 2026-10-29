@@ -1,0 +1,1469 @@
+{
+  "id": "ru-2026-federal-v1",
+  "year": 2026,
+  "title": "Россия · 2026 · пятидневная неделя",
+  "source": "Постановление Правительства РФ 24.09.2025 №1466; https://объясняем.рф/articles/news/opublikovan-kalendar-prazdnichnykh-i-vykhodnykh-dney-v-2026-godu/ ; сокращённые дни: https://pavl23.ru/item/2355653 ; проверено 2026-10-21",
+  "checksum": "988b419035cb0b966fa077b1d6af95abbab0c12d5345de74bc785f326fb16fcc",
+  "days": {
+    "2026-01-01": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-01-02": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-01-03": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-01-04": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-01-05": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-01-06": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-01-07": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-01-08": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-01-09": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-01-10": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-01-11": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-01-12": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-01-13": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-01-14": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-01-15": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-01-16": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-01-17": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-01-18": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-01-19": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-01-20": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-01-21": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-01-22": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-01-23": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-01-24": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-01-25": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-01-26": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-01-27": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-01-28": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-01-29": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-01-30": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-01-31": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-02-01": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-02-02": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-03": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-04": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-05": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-06": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-07": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-02-08": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-02-09": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-10": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-11": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-12": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-13": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-14": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-02-15": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-02-16": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-17": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-18": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-19": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-20": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-21": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-02-22": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-02-23": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-02-24": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-25": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-26": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-27": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-02-28": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-03-01": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-03-02": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-03": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-04": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-05": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-06": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-07": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-03-08": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-03-09": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-03-10": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-11": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-12": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-13": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-14": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-03-15": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-03-16": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-17": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-18": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-19": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-20": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-21": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-03-22": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-03-23": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-24": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-25": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-26": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-27": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-28": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-03-29": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-03-30": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-03-31": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-01": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-02": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-03": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-04": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-04-05": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-04-06": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-07": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-08": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-09": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-10": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-11": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-04-12": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-04-13": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-14": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-15": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-16": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-17": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-18": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-04-19": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-04-20": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-21": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-22": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-23": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-24": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-25": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-04-26": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-04-27": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-28": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-29": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-04-30": {
+      "working": true,
+      "shortened": true
+    },
+    "2026-05-01": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-05-02": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-05-03": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-05-04": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-05-05": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-05-06": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-05-07": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-05-08": {
+      "working": true,
+      "shortened": true
+    },
+    "2026-05-09": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-05-10": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-05-11": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-05-12": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-05-13": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-05-14": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-05-15": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-05-16": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-05-17": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-05-18": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-05-19": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-05-20": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-05-21": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-05-22": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-05-23": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-05-24": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-05-25": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-05-26": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-05-27": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-05-28": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-05-29": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-05-30": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-05-31": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-06-01": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-02": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-03": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-04": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-05": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-06": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-06-07": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-06-08": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-09": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-10": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-11": {
+      "working": true,
+      "shortened": true
+    },
+    "2026-06-12": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-06-13": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-06-14": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-06-15": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-16": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-17": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-18": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-19": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-20": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-06-21": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-06-22": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-23": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-24": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-25": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-26": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-27": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-06-28": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-06-29": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-06-30": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-01": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-02": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-03": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-04": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-07-05": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-07-06": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-07": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-08": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-09": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-10": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-11": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-07-12": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-07-13": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-14": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-15": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-16": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-17": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-18": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-07-19": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-07-20": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-21": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-22": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-23": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-24": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-25": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-07-26": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-07-27": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-28": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-29": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-30": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-07-31": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-01": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-08-02": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-08-03": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-04": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-05": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-06": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-07": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-08": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-08-09": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-08-10": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-11": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-12": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-13": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-14": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-15": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-08-16": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-08-17": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-18": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-19": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-20": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-21": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-22": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-08-23": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-08-24": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-25": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-26": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-27": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-28": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-08-29": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-08-30": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-08-31": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-01": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-02": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-03": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-04": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-05": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-09-06": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-09-07": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-08": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-09": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-10": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-11": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-12": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-09-13": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-09-14": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-15": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-16": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-17": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-18": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-19": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-09-20": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-09-21": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-22": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-23": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-24": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-25": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-26": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-09-27": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-09-28": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-29": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-09-30": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-01": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-02": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-03": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-10-04": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-10-05": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-06": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-07": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-08": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-09": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-10": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-10-11": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-10-12": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-13": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-14": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-15": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-16": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-17": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-10-18": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-10-19": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-20": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-21": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-22": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-23": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-24": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-10-25": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-10-26": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-27": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-28": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-29": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-30": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-10-31": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-11-01": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-11-02": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-11-03": {
+      "working": true,
+      "shortened": true
+    },
+    "2026-11-04": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-11-05": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-11-06": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-11-07": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-11-08": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-11-09": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-11-10": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-11-11": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-11-12": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-11-13": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-11-14": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-11-15": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-11-16": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-11-17": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-11-18": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-11-19": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-11-20": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-11-21": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-11-22": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-11-23": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-11-24": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-11-25": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-11-26": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-11-27": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-11-28": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-11-29": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-11-30": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-01": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-02": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-03": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-04": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-05": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-12-06": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-12-07": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-08": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-09": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-10": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-11": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-12": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-12-13": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-12-14": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-15": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-16": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-17": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-18": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-19": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-12-20": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-12-21": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-22": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-23": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-24": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-25": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-26": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-12-27": {
+      "working": false,
+      "shortened": false
+    },
+    "2026-12-28": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-29": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-30": {
+      "working": true,
+      "shortened": false
+    },
+    "2026-12-31": {
+      "working": false,
+      "shortened": false
+    }
+  }
+}

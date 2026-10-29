@@ -1,0 +1,18 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const ts=require('../web/node_modules/typescript');
+const source=fs.readFileSync(require.resolve('../web/src/mapLinks.ts'),'utf8');
+const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const sandbox={exports:{},require:name=>{assert.equal(name,'./i18n');return require('./test-i18n.cjs')}};vm.runInNewContext(compiled,sandbox);const {mapLinks}=sandbox.exports;
+const tasks=[{id:'prep',parent:''},{id:'p1',parent:'prep'},{id:'p2',parent:'prep'},{id:'core',parent:''},{id:'c1',parent:'core'},{id:'c2',parent:'core'}];
+const links=[{from:'prep',to:'core',mode:'after',days:0}];
+const project={tasks,links}, expanded=['p1','p2'].flatMap(from=>['c1','c2'].map(to=>({...links[0],from,to,index:0})));
+const visible=new Set(['prep','core','c1','c2']);
+let shown=mapLinks(project,expanded,visible,'c1',false);
+assert.equal(shown.length,1);assert.equal(shown[0].from,'prep');assert.equal(shown[0].to,'c1');assert.equal(shown[0].index,0);
+shown=mapLinks(project,expanded,new Set(['prep','core']),'core',false);assert.equal(shown.length,1);assert.equal(shown[0].from,'prep');assert.equal(shown[0].to,'core');
+shown=mapLinks(project,expanded,new Set(tasks.map(t=>t.id)),'c1',false);assert.equal(shown.length,2);assert(shown.every(l=>l.to==='c1'));
+assert.equal(mapLinks(project,expanded,visible,'',true).length,2);
+const direct={tasks,links:[{from:'p1',to:'c1',mode:'after',days:0}]};shown=mapLinks(direct,[{...direct.links[0],index:0}],visible,'c1',false);assert.equal(shown[0].from,'prep');
+const internal={tasks,links:[{from:'p1',to:'p2',mode:'after',days:0}]};assert.equal(mapLinks(internal,[{...internal.links[0],index:0}],visible,'prep',false).length,0);
+assert.equal(links[0].from,'prep');assert.equal(links[0].to,'core');
+console.log('Map links: inherited edges, hidden endpoints, deduplication, original index and collapsed internal edges passed.');
