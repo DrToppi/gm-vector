@@ -1,4 +1,4 @@
-module github.com/GM-Access/gm-vector/production
+module github.com/DrToppi/gm-vector/production
 
 go 1.27.0
 

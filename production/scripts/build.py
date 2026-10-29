@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build GM Vector from source. Publisher-signed metadata is optional provenance."""
+"""Build gmVector from source. Publisher-signed metadata is optional provenance."""
 import argparse, base64, datetime, json, os, shutil, subprocess, tempfile
 from pathlib import Path
 root = Path(__file__).resolve().parents[1]
@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory(prefix='gm-vector-build-') as temp:
   release('sign-release','--key',keydir/'signing.key','--key-id','synthetic-ci','--version','0.1.0-synthetic','--date',datetime.datetime.now(datetime.timezone.utc).date().isoformat(),'--commit',commit,'--channel','synthetic','--out',a.release)
  elif a.synthetic_key_dir: p.error('--synthetic-key-dir requires --synthetic')
  if bool(a.publisher_keys)!=bool(a.release): p.error('--publisher-keys and --release are required together')
- package='github.com/GM-Access/gm-vector/production/internal/planner.'
+ package='github.com/DrToppi/gm-vector/production/internal/planner.'
  values={'embeddedGitCommit':commit}
  if a.release:
   metadata=json.loads(release('verify-release','--keys',a.publisher_keys,'--file',a.release,*(['--allow-synthetic'] if a.synthetic else []),capture_output=True,text=True).stdout)

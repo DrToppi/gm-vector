@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"github.com/GM-Access/gm-vector/production/internal/planner"
+	"github.com/DrToppi/gm-vector/production/internal/planner"
 	"io"
 	"log/slog"
 	"net/http"

@@ -1,4 +1,4 @@
-module github.com/GM-Access/gm-vector/proxy
+module github.com/DrToppi/gm-vector/proxy
 
 go 1.27.0
 
