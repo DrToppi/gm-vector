@@ -3,7 +3,7 @@
 import argparse, base64, hashlib, hmac, http.cookiejar, importlib.util, json, os, secrets, socket, ssl, struct, subprocess, sys, tempfile, time
 from pathlib import Path
 from urllib.request import Request, build_opener, HTTPSHandler, HTTPCookieProcessor
-parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--fetch-ref');args=parser.parse_args()
+parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--fetch-ref');parser.add_argument('--baseline-source',type=Path);args=parser.parse_args()
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'deploy'))
 import update_engine as ue
 import install as m
@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory(prefix='gm-vector-updater-fixture-') as temp:
  try:
   m.prepare(state,manifest)
   # Exercise documented configuration, including restrictive service umask.
-  subprocess.run([sys.executable,str(ROOT/'deploy/configure-updater.py'),'--state',str(state),'--source',str(ROOT.parent),'--unit-dir',str(Path(temp)/'units')],check=True,capture_output=True,umask=0o077)
+  subprocess.run([sys.executable,str(ROOT/'deploy/configure-updater.py'),'--state',str(state),'--source',str(args.baseline_source or ROOT.parent),'--unit-dir',str(Path(temp)/'units')],check=True,capture_output=True,umask=0o077)
   assert (state/'updater/shared').stat().st_mode&0o777==0o755
   m.prepare(state,manifest);compose,env=m.context(state,manifest)
   db=m.run(compose+['ps','-q','db'],env,capture=True)
@@ -48,9 +48,13 @@ with tempfile.TemporaryDirectory(prefix='gm-vector-updater-fixture-') as temp:
    engine.record={'state':'checking','id':secrets.token_hex(16),'ref':args.fetch_ref}
    engine.check()
    assert engine.status()['state']=='ready'
+   if args.baseline_source:
+    assert engine.record['previous']['commit']!=engine.record['commit'],'forward upgrade requires different commits'
+    assert engine.record['previous']['images']['app']!=engine.record['images']['app'],'forward upgrade requires image replacement'
   else:
    engine.snapshot('rehearsal');engine.rehearse()
   engine.apply()
+  manifest={'images':engine.record['images']}
   assert engine.status()['state']=='succeeded';assert query("SELECT title FROM projects WHERE id='update-fixture'")==before
   # Inject an actual post-migration DB change, then fail activation. Recovery must
   # restore the stopped-writer snapshot, not run an old image on the modified DB.

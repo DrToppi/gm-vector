@@ -63,7 +63,12 @@ class UpdaterHTTPTests(unittest.TestCase):
         try:
             value = {'Authorization': 'Bearer ' + self.server.token}
             value.update(headers or {})
-            client.request(method, path, body=raw, headers=value)
+            try:
+                client.request(method, path, body=raw, headers=value)
+            except BrokenPipeError:
+                # Early header rejection may close the write side before the body
+                # is sent. The actual HTTP error response must still be asserted.
+                pass
             response = client.getresponse()
             return response.status, response.read()
         finally:
