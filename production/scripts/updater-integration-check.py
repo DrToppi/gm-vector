@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Real host IPC, maintenance and DB rollback using a disposable installation."""
-import base64, hashlib, hmac, http.cookiejar, importlib.util, json, os, secrets, socket, ssl, struct, subprocess, sys, tempfile, time
+import argparse, base64, hashlib, hmac, http.cookiejar, importlib.util, json, os, secrets, socket, ssl, struct, subprocess, sys, tempfile, time
 from pathlib import Path
 from urllib.request import Request, build_opener, HTTPSHandler, HTTPCookieProcessor
+parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--fetch-ref');args=parser.parse_args()
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'deploy'))
 import update_engine as ue
 import install as m
@@ -43,11 +44,17 @@ with tempfile.TemporaryDirectory(prefix='gm-vector-updater-fixture-') as temp:
   engine=ue.Engine(state,ROOT.parent)
   previous=engine.manifest();sha=previous['commit']
   engine.record={'state':'ready','id':secrets.token_hex(16),'commit':sha,'source':str(ROOT.parent),'previous_source':str(ROOT.parent),'previous':previous,'images':manifest['images']}
-  engine.snapshot('rehearsal');engine.rehearse();engine.apply()
+  if args.fetch_ref:
+   engine.record={'state':'checking','id':secrets.token_hex(16),'ref':args.fetch_ref}
+   engine.check()
+   assert engine.status()['state']=='ready'
+  else:
+   engine.snapshot('rehearsal');engine.rehearse()
+  engine.apply()
   assert engine.status()['state']=='succeeded';assert query("SELECT title FROM projects WHERE id='update-fixture'")==before
   # Inject an actual post-migration DB change, then fail activation. Recovery must
   # restore the stopped-writer snapshot, not run an old image on the modified DB.
-  previous=engine.manifest();engine.record={'state':'updating','id':secrets.token_hex(16),'commit':sha,'source':str(ROOT.parent),'previous_source':str(ROOT.parent),'previous':previous,'images':manifest['images']}
+  previous=engine.manifest();sha=previous['commit'];engine.record={'state':'updating','id':secrets.token_hex(16),'commit':sha,'source':str(ROOT.parent),'previous_source':str(ROOT.parent),'previous':previous,'images':manifest['images']}
   normal_activate=engine.activate
   def broken_activate():
    query("CREATE TABLE updater_failed_migration(value text); UPDATE projects SET title='Changed by failed migration' WHERE id='update-fixture';")

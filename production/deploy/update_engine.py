@@ -221,7 +221,8 @@ class Engine:
             b.run(['exec','-i',name,'pg_restore','-U','planner','-d','planner','--no-owner','--no-acl','--exit-on-error'], values['database.dump'])
             b.run(['cp',str(Path(self.record['source'])/'production/bin/planner'),name+':/tmp/planner'])
             b.run(['exec','--user','0:0',name,'chmod','755','/tmp/planner'])
-            config=json.dumps({'database_url':'postgres://planner@127.0.0.1:5432/planner?sslmode=disable'})
+            b.run(['exec',name,'psql','-U','planner','-d','planner','-v','ON_ERROR_STOP=1','-c','CREATE ROLE rehearsal_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;'])
+            config=json.dumps({'database_url':'postgres://planner@127.0.0.1:5432/planner?sslmode=disable','runtime_role':'rehearsal_runtime'})
             b.run(['exec','-i',name,'sh','-c','umask 077; cat > /tmp/migration.json'],config.encode())
             b.run(['exec',name,'/tmp/planner','migrate','--config','/tmp/migration.json'])
             # Readiness through a least-privileged fixture role; no outbound network.
