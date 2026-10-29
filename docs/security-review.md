@@ -59,3 +59,31 @@ but live calendar OAuth/synchronization is not enabled. See the corresponding gu
 
 New installations use the neutral schema. Never point this release directly at an
 older private installation; migrate via reviewed exports into a new workspace.
+
+## Proxy dependency follow-up — 2026-10-30
+
+Updated chi/v5 from 5.3.2 to 5.4.0 (GHSA-j6qf-3m9c-vwj3) and
+go-jose/v4 from 4.1.5 to 4.1.6 (GHSA-mgcc-cww5-fp2q).
+
+Three advisories remain open for go-jose/v3 3.0.5: GHSA-mgcc-cww5-fp2q,
+GHSA-4w3g-jfj2-cw2q and GHSA-vvm8-gf78-28g4. Upstream lists no patched
+v3 release. This dependency is compiled into Caddy through its internal PKI,
+smallstep/certificates and go.step.sm/crypto/jose; it is not merely a test
+dependency. The latest crypto 0.91.1 still requires v3.0.5. A passing
+call-graph scan does not remove these package-level findings.
+
+References: [RSA JWK advisory](https://github.com/advisories/GHSA-mgcc-cww5-fp2q),
+[CBC-HMAC advisory](https://github.com/advisories/GHSA-4w3g-jfj2-cw2q),
+[JSON advisory](https://github.com/advisories/GHSA-vvm8-gf78-28g4),
+[crypto release](https://github.com/smallstep/crypto/releases/tag/v0.91.1).
+
+### Remaining decision (not yet accepted)
+
+| Option | Benefits | Costs and risks |
+| --- | --- | --- |
+| A: retain Caddy pending an upstream fix | No deployment change; retains internal TLS, supplied certificates and ACME. | Vulnerable code remains in the binary; requires exposure analysis and continuing monitoring. Do not present this as fixed. |
+| B: replace the bundled proxy with maintained nginx, supplying certificates separately | Removes this dependency chain without owning a cryptographic fork. | Changes packaging, header handling and certificate lifecycle; internal CA and automatic ACME need separate provisioning and regression tests. |
+| C: maintain a reviewed patch/backport of the affected dependency chain | Can preserve Caddy behavior while addressing the vulnerable operations. | Own security-critical fork, provenance and update burden; a module-path replacement alone is unsafe because v3/v4 APIs differ. |
+
+Recommendation: B if removal of the vulnerable dependency is required immediately;
+implement only after approval of the deployment change. No alerts are dismissed.
