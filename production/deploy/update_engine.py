@@ -229,7 +229,7 @@ class Engine:
                    '-e','POSTGRES_HOST_AUTH_METHOD=trust','-e','POSTGRES_USER=planner','-e','POSTGRES_DB=planner',self.record['previous']['images']['db']])
             import time
             for attempt in range(60):
-                try: b.run(['exec',name,'pg_isready','-U','planner']); break
+                try: b.run(['exec',name,'pg_isready','-h','127.0.0.1','-U','planner']); break
                 except RuntimeError: time.sleep(.25)
             else: raise RuntimeError('clone_unavailable')
             b.run(['exec','-i',name,'pg_restore','-U','planner','-d','planner','--no-owner','--no-acl','--exit-on-error'], values['database.dump'])
