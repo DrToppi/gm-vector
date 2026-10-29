@@ -105,7 +105,7 @@ func (a *App) deliverInvitation(ctx context.Context, id string) error {
 	if authProvider == "ldap" {
 		instruction = "Use your corporate password and configure TOTP using the one-time link:"
 	}
-	body := "GM Vector\nLogin: " + inv.Username + "\n" + instruction + "\n" + a.Config.Origin + "/#setup=" + url.QueryEscape(string(secret)) + "&login=" + url.QueryEscape(inv.Username) + "\nСсылка действует до: " + inv.ExpiresAt.String() + "\nНе пересылайте приглашение. Доступ к системе открывается только после подтверждения TOTP. Права на проекты выдаёт руководитель отдельно.\n"
-	state, reason := sendSMTPMessage(ctx, a.Config.SMTP, inv.Email, smtpMessage(a.Config.SMTP, inv.ID, inv.Email, "GM Vector invitation", body))
+	body := "gmVector\nLogin: " + inv.Username + "\n" + instruction + "\n" + a.Config.Origin + "/#setup=" + url.QueryEscape(string(secret)) + "&login=" + url.QueryEscape(inv.Username) + "\nСсылка действует до: " + inv.ExpiresAt.String() + "\nНе пересылайте приглашение. Доступ к системе открывается только после подтверждения TOTP. Права на проекты выдаёт руководитель отдельно.\n"
+	state, reason := sendSMTPMessage(ctx, a.Config.SMTP, inv.Email, smtpMessage(a.Config.SMTP, inv.ID, inv.Email, "gmVector invitation", body))
 	return finish(state, reason)
 }

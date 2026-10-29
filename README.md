@@ -1,8 +1,8 @@
-# GM Vector
+# gmVector
 
 **Plan together. See the connections.**
 
-GM Vector is a self-hosted project planner with an interactive Gantt chart,
+gmVector is a self-hosted project planner with an interactive Gantt chart,
 a dependency map, team capacity planning, and planned versus actual effort.
 It is free and open-source software under the Apache License 2.0.
 
@@ -53,6 +53,6 @@ coverage and known limitations; translated user content is not sent to a service
 
 ## License
 
-GM Vector's own code is licensed under [Apache-2.0](LICENSE). Third-party components
+gmVector's own code is licensed under [Apache-2.0](LICENSE). Third-party components
 retain their own licenses and notices. Official release signatures establish
 provenance; they do not restrict your ability to build or modify the source.

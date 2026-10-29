@@ -1,6 +1,6 @@
 # Integration API
 
-GM Vector exposes versioned JSON endpoints under `/api/v1`. The complete contract
+gmVector exposes versioned JSON endpoints under `/api/v1`. The complete contract
 is [OpenAPI](contracts/openapi.json), also available to an authenticated user at
 `GET /api/v1/openapi.json`. Generate it with
 `python3 production/scripts/openapi.py`; route discovery fails if a mutation lacks

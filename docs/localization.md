@@ -1,6 +1,6 @@
 # Languages and localization
 
-GM Vector includes English (`en`), Russian (`ru`), German (`de`), French (`fr`), Spanish (`es`), Brazilian Portuguese (`pt-BR`) and Simplified Chinese (`zh-Hans`). English is the fallback language. These translations were prepared with AI assistance; they have not been reviewed by native-language professional translators.
+gmVector includes English (`en`), Russian (`ru`), German (`de`), French (`fr`), Spanish (`es`), Brazilian Portuguese (`pt-BR`) and Simplified Chinese (`zh-Hans`). English is the fallback language. These translations were prepared with AI assistance; they have not been reviewed by native-language professional translators.
 
 The language selector is available before and after sign-in. Before sign-in, the selected language is stored only in this browser (`gm-vector.locale`); a new browser starts in English. After sign-in, the account preference takes precedence. Changing language saves the preference through `PUT /api/v1/auth/preferences` using the authenticated cookie session and CSRF protection. Existing accounts default to Russian. Language changes do not remount the workspace or discard unsaved task forms.
 

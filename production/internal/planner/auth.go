@@ -122,7 +122,7 @@ func (a *App) beginEnrollment(w http.ResponseWriter, r *http.Request, u Principa
 	if e = tx.Commit(ctx); e != nil {
 		return e
 	}
-	uri := "otpauth://totp/" + url.PathEscape("GM Vector:"+payload.Username) + "?secret=" + payload.Secret + "&issuer=GM%20Vector&algorithm=SHA1&digits=6&period=30"
+	uri := "otpauth://totp/" + url.PathEscape("gmVector:"+payload.Username) + "?secret=" + payload.Secret + "&issuer=gmVector&algorithm=SHA1&digits=6&period=30"
 	jsonResponse(w, 200, map[string]string{"secret": payload.Secret, "otpauth_uri": uri})
 	return nil
 }
@@ -180,7 +180,7 @@ func (a *App) confirmEnrollment(w http.ResponseWriter, r *http.Request, u Princi
 	}
 	step := totpStep(p.Secret, in.Code, -1, time.Now())
 	if step < 0 {
-		return appError{401, "invalid_code", "Код не подошёл. Введите 6 цифр из записи GM Vector в аутентификаторе; проверьте автоматические дату и время на телефоне."}
+		return appError{401, "invalid_code", "Код не подошёл. Введите 6 цифр из записи gmVector в аутентификаторе; проверьте автоматические дату и время на телефоне."}
 	}
 	available, e := setupAvailable(ctx, tx)
 	if e != nil {
@@ -552,7 +552,7 @@ func (a *App) resumeEnrollment(w http.ResponseWriter, r *http.Request, u Princip
 	if json.Unmarshal(plain, &p) != nil {
 		return denied()
 	}
-	uri := "otpauth://totp/" + url.PathEscape("GM Vector:"+p.Username) + "?secret=" + p.Secret + "&issuer=GM%20Vector&algorithm=SHA1&digits=6&period=30"
+	uri := "otpauth://totp/" + url.PathEscape("gmVector:"+p.Username) + "?secret=" + p.Secret + "&issuer=gmVector&algorithm=SHA1&digits=6&period=30"
 	jsonResponse(w, 200, map[string]string{"secret": p.Secret, "otpauth_uri": uri, "username": p.Username})
 	return nil
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GM Vector local installation and HTTPS management."""
+"""gmVector local installation and HTTPS management."""
 import argparse, base64, hashlib, http.client, ipaddress, json, os, re, secrets, socket, ssl, subprocess, sys, time, uuid
 from urllib.parse import urlsplit
 from pathlib import Path

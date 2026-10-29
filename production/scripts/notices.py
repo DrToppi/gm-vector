@@ -21,6 +21,6 @@ lock=json.loads((root/'web/package-lock.json').read_text())
 for name,v in lock['packages'].items():
  d=root/'web'/name
  if name and d.is_dir():record(v.get('name') or name.split('node_modules/')[-1],v.get('version',''),d)
-(out/'THIRD-PARTY-NOTICES.txt').write_text('GM Vector — upstream notices. Third-party components retain their own licenses.\n'+''.join(texts))
+(out/'THIRD-PARTY-NOTICES.txt').write_text('gmVector — upstream notices. Third-party components retain their own licenses.\n'+''.join(texts))
 (out/'inventory.json').write_text(json.dumps(records,indent=2)+'\n')
 missing=[r['name'] for r in records if not r['notice_files']];print(json.dumps({'components':len(records),'missing_root_notice':missing}))

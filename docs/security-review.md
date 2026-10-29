@@ -1,6 +1,6 @@
 # Initial public snapshot review
 
-Date: 2026-10-29. Scope: the initial GM Vector source snapshot and its locally built
+Date: 2026-10-29. Scope: the initial gmVector source snapshot and its locally built
 container/offline distribution. This is a publication-readiness review, not a
 claim that every possible application vulnerability has been eliminated.
 

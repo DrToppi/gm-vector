@@ -1,6 +1,6 @@
 # Directory and external-reference contract
 
-GM Vector provides provider-neutral REST integration, scoped API tokens and
+gmVector provides provider-neutral REST integration, scoped API tokens and
 direct LDAP login with explicit synchronization. An explicitly inactive identity
 disables bound accounts and revokes sessions and tokens; missing records are
 reported without changing access.

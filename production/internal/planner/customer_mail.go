@@ -72,8 +72,8 @@ func loadSMTP(path string) (SMTPConfig, error) {
 	return c, nil
 }
 func mailMessage(c SMTPConfig, m TaskComment) string {
-	body := fmt.Sprintf("GM Vector\nProject: %s\nTask: %s\nAuthor: %s\n\n%s\n", m.ProjectID, m.TaskID, m.AuthorName, m.Text)
-	return smtpMessage(c, m.ID, m.Recipient, "GM Vector task comment", body)
+	body := fmt.Sprintf("gmVector\nProject: %s\nTask: %s\nAuthor: %s\n\n%s\n", m.ProjectID, m.TaskID, m.AuthorName, m.Text)
+	return smtpMessage(c, m.ID, m.Recipient, "gmVector task comment", body)
 }
 func smtpMessage(c SMTPConfig, id, recipient, subject, body string) string {
 	encoded := base64.StdEncoding.EncodeToString([]byte(body))

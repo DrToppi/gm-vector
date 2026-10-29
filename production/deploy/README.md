@@ -1,4 +1,4 @@
-# GM Vector installer
+# gmVector installer
 
 Linux amd64 or Windows with WSL2 and Docker Desktop integration. Install Docker
 Engine/Desktop, the Compose plugin, and Python 3.10+ first. The installer does not

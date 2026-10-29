@@ -60,6 +60,8 @@ async function main() {
   const read = suffix => evaluate(`fetch('/api/v1'+${JSON.stringify(suffix)}).then(async r=>{if(!r.ok)throw Error('read failed');return r.json()})`);
   await send('Network.enable');await send('Runtime.enable');await send('Page.enable');await send('Page.addScriptToEvaluateOnNewDocument',{source:`try{localStorage.setItem('gm-vector.locale','ru')}catch{}`});await send('Page.addScriptToEvaluateOnNewDocument',{source:`{const originalFetch=window.fetch.bind(window);let release;const gate=new Promise(resolve=>release=resolve);window.releaseCalendarFixture=release;window.fetch=async(...args)=>{if(String(args[0]).endsWith('/api/v1/calendars'))await gate;return originalFetch(...args)};}`});await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});await send('Page.navigate',{url:config.origin+'/#setup='+encodeURIComponent(config.bootstrap)});
   await wait(`!!document.querySelector('input[autocomplete="username"]')`, 'login screen');
+  assert.equal(await evaluate('document.title'),'gmVector','application tab name');
+  assert.equal(await evaluate("document.querySelector('.brand').textContent"),'gmVector','login branding');
   assert(await evaluate(`!!document.querySelector('[data-bug-report="open"]')`),'Bug Report available before login');
   const setLanguage=async locale=>{await wait(`!!document.querySelector('.language-picker select') && !document.querySelector('.language-picker select').disabled`,'language picker');await evaluate(`(()=>{const x=document.querySelector('.language-picker select');Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(x,${JSON.stringify(locale)});x.dispatchEvent(new Event('change',{bubbles:true}));})()`);await wait(`document.documentElement.lang===${JSON.stringify(locale)}`,'selected language');};
   for(const locale of ['en','de','fr','es','pt-BR','zh-Hans','ru']){
@@ -84,6 +86,7 @@ async function main() {
   config.code=await evaluate(`document.querySelector('.auth-card pre').textContent.trim().split(/\\s+/)[0]`);
   assert(config.code.length>=20,'recovery code shown only after MFA');
   await click('Коды сохранены — открыть планировщик');await wait(`!!document.querySelector('.sidebar-new')`,'new administrator workspace');
+  assert.equal(await evaluate("document.querySelector('.brand').textContent"),'gmVector','workspace branding');
   const bootstrapStatus=await read('/auth/status');assert.equal(bootstrapStatus.setup_required,false,'first-run consumed');
   await click('＋ Новый проект');await field('dialog form input','E2E synthetic project');await field('dialog input[type=date]','2026-10-23');
   // deliberately open the form before calendar data is available.
@@ -335,7 +338,7 @@ async function main() {
   assert(!(await evaluate(`!!document.querySelector('[data-bug-report="issue-open"]')`)),'public consent required');
   await evaluate(`document.querySelector('[data-bug-report="issue-reviewed"]').click()`);
   const issueLink=await evaluate(`(()=>{const a=document.querySelector('[data-bug-report="issue-open"]');return {href:a.href,rel:a.rel,target:a.target}})()`);
-  const issueURL=new URL(issueLink.href);assert.equal(issueURL.hostname,'github.com');assert.equal(issueURL.pathname,'/GM-Access/gm-vector/issues/new');assert.equal(issueURL.searchParams.get('body'),publicText);assert(issueLink.rel.includes('noopener') && issueLink.rel.includes('noreferrer'));assert.equal(issueLink.target,'_blank');
+  const issueURL=new URL(issueLink.href);assert.equal(issueURL.hostname,'github.com');assert.equal(issueURL.pathname,'/DrToppi/gm-vector/issues/new');assert.equal(issueURL.searchParams.get('body'),publicText);assert(issueLink.rel.includes('noopener') && issueLink.rel.includes('noreferrer'));assert.equal(issueLink.target,'_blank');
   await click('Подготовить и посмотреть');
   await wait(`!!document.querySelector('[data-bug-report="preview"]')`,'diagnostic preview');
   const shot=await send('Page.captureScreenshot',{format:'png'});await fs.writeFile('/tmp/gma-bug-report-preview.png',Buffer.from(shot.data,'base64'));

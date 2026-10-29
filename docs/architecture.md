@@ -1,6 +1,6 @@
 # Architecture and decisions
 
-GM Vector is a self-hosted application: React/TypeScript in the browser, a Go HTTP
+gmVector is a self-hosted application: React/TypeScript in the browser, a Go HTTP
 API and worker, PostgreSQL, and a Caddy HTTPS reverse proxy. Docker Compose keeps
 state in persistent volumes and secrets in a separate protected directory.
 

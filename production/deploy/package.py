@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a portable GM Vector offline archive directory from locally built images."""
+"""Build a portable gmVector offline archive directory from locally built images."""
 import argparse,hashlib,importlib.util,json,os,shutil,subprocess
 from pathlib import Path
 HERE=Path(__file__).resolve().parent

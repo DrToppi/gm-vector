@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.2",
   "info": {
-    "title": "GM Vector API",
+    "title": "gmVector API",
     "version": "0.2.0",
     "description": "REST v1. Browser cookie + CSRF; scoped Bearer tokens for integrations. Permissions and project boundaries enforced server-side. Optional integrations are disabled until configured. Maximum JSON: 5 MiB. Revision conflict: 409; fetch the current project before retrying."
   },
