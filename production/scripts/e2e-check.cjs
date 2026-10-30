@@ -3,6 +3,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const {spawn} = require('node:child_process');
 const assert = require('node:assert/strict');
+const vm = require('node:vm');
 const {createHmac,privateDecrypt,createDecipheriv,constants} = require('node:crypto');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 let chrome, socket;
@@ -18,8 +19,32 @@ function evaluationFailure(site,details,index){
   // Never include expression, CDP exception text/description, input/config or DOM.
   return Error('Browser evaluation failed; phase='+phase+'; evaluation='+index+'; at='+site+'; exception='+exception);
 }
+// getRandomValues also works in temporary about:blank/non-secure documents;
+// randomUUID is secure-context-only. The marker contains no application data.
+const fixtureDocumentMarker='Object.defineProperty(window,"__gmVectorE2EDocument",{value:Array.from(crypto.getRandomValues(new Uint32Array(4))).join("-")})';
+function freshDocumentPredicate(previous,persistence){
+  return 'typeof window.__gmVectorE2EDocument==="string"&&window.__gmVectorE2EDocument!=='+JSON.stringify(previous)+'&&!!document.documentElement&&(document.readyState==="interactive"||document.readyState==="complete")&&('+persistence+')';
+}
+function reloadPredicateUnit(){
+  let nonce=0;
+  const markerCrypto={getRandomValues:values=>{values.fill(++nonce);return values}};
+  const marker=()=>{const window={};vm.runInNewContext(fixtureDocumentMarker,{window,crypto:markerCrypto});return window.__gmVectorE2EDocument};
+  assert.notEqual(marker(),marker(),'fresh per-document markers work when randomUUID is unavailable');
+  const persistence='document.documentElement.lang==="en"&&!!document.querySelector(".project-header")';
+  const check=(marker,root,ready,header)=>vm.runInNewContext(freshDocumentPredicate('synthetic-old',persistence),{window:{__gmVectorE2EDocument:marker},document:{documentElement:root,readyState:ready,querySelector:()=>header?{}:null}});
+  assert.equal(check('synthetic-old',{lang:'en'},'complete',true),false,'old matching DOM is not reload persistence');
+  assert.equal(check(undefined,{lang:'en'},'complete',true),false,'unmarked document is not fresh');
+  assert.equal(check('synthetic-new',null,'loading',false),false,'new rootless document is safe and not ready');
+  assert.equal(check('synthetic-new',{lang:'en'},'loading',true),false,'new loading document is not ready');
+  assert.equal(check('synthetic-new',{lang:'ru'},'complete',true),false,'specific language persistence predicate remains required');
+  assert.equal(check('synthetic-new',{lang:'en'},'interactive',false),false,'specific project persistence predicate remains required');
+  assert.equal(check('synthetic-new',{lang:'en'},'interactive',true),true);
+  assert.equal(check('synthetic-new',{lang:'en'},'complete',true),true);
+  console.log('E2E reload predicate PASS: old/missing marker, rootless/loading and failed persistence rejected; fresh ready persisted document accepted.');
+}
 const deadline = setTimeout(() => { console.error('E2E exceeded 120 seconds'); chrome?.kill('SIGKILL'); process.exit(1); }, 120000);
 async function main() {
+  reloadPredicateUnit();if(process.argv.includes('--reload-predicate-unit'))return;
   setPhase('browser-start');
   let input = ''; for await (const chunk of process.stdin) input += chunk;
   const config = JSON.parse(input);
@@ -64,17 +89,23 @@ async function main() {
   const send = (method, params={}) => new Promise((resolve,reject)=>{const id=++sequence;const timer=setTimeout(()=>{pending.delete(id);reject(Error('CDP command timeout'))},15000);pending.set(id,{resolve,reject,timer,method});socket.send(JSON.stringify({id,method,params}))});
   const evaluate = async expression => {const site=evaluationSite(),index=++evaluationCount;const r=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw evaluationFailure(site,r.exceptionDetails,index);return r.result.value};
   const wait = async (expression, _label) => {for(let i=0;i<150;i++){try{if(await evaluate(expression))return}catch(e){if(!e.message.includes('Runtime.evaluate (-32000)'))throw e}await sleep(100)}throw Error('Timed out; phase='+phase+'; evaluation='+evaluationCount+'; at='+evaluationSite())};
+  const reload = async (persistence,label) => {
+    const previous=await evaluate('window.__gmVectorE2EDocument');
+    assert.equal(typeof previous,'string','reload requires the current fixture document marker');
+    await send('Page.reload');
+    await wait(freshDocumentPredicate(previous,persistence),label);
+  };
   const selectButton = text => `[...document.querySelectorAll('button')].find(x=>x.textContent.trim()===${JSON.stringify(text)})`;
   const click = async text => {await wait(`!!(${selectButton(text)}) && !(${selectButton(text)}).disabled`,text);await evaluate(`(${selectButton(text)}).click()`)};
   const field = async (selector,value) => {await wait(`!!document.querySelector(${JSON.stringify(selector)})`, 'input exists');await evaluate(`(()=>{const x=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(x,${JSON.stringify(value)});x.dispatchEvent(new Event('input',{bubbles:true}));return new Promise(resolve=>requestAnimationFrame(()=>resolve(true)));})()`)};
   const read = suffix => evaluate(`fetch('/api/v1'+${JSON.stringify(suffix)}).then(async r=>{if(!r.ok)throw Error('read failed');return r.json()})`);
-  await send('Network.enable');await send('Runtime.enable');await send('Page.enable');await send('Page.addScriptToEvaluateOnNewDocument',{source:`try{localStorage.setItem('gm-vector.locale','ru')}catch{}`});await send('Page.addScriptToEvaluateOnNewDocument',{source:`{const originalFetch=window.fetch.bind(window);let release;const gate=new Promise(resolve=>release=resolve);window.releaseCalendarFixture=release;window.fetch=async(...args)=>{if(String(args[0]).endsWith('/api/v1/calendars'))await gate;return originalFetch(...args)};}`});await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});await send('Page.navigate',{url:config.origin});
+  await send('Network.enable');await send('Runtime.enable');await send('Page.enable');await send('Page.addScriptToEvaluateOnNewDocument',{source:fixtureDocumentMarker});await send('Page.addScriptToEvaluateOnNewDocument',{source:`try{localStorage.setItem('gm-vector.locale','ru')}catch{}`});await send('Page.addScriptToEvaluateOnNewDocument',{source:`{const originalFetch=window.fetch.bind(window);let release;const gate=new Promise(resolve=>release=resolve);window.releaseCalendarFixture=release;window.fetch=async(...args)=>{if(String(args[0]).endsWith('/api/v1/calendars'))await gate;return originalFetch(...args)};}`});await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});await send('Page.navigate',{url:config.origin});
   setPhase('first-run-locales');
   await wait(`!!document.querySelector('input[autocomplete="username"]')`, 'login screen');
   assert.equal(await evaluate('document.title'),'gmVector','application tab name');
   assert.equal(await evaluate("document.querySelector('.brand').textContent"),'gmVector','login branding');
   assert(await evaluate(`!!document.querySelector('[data-bug-report="open"]')`),'Bug Report available before login');
-  const setLanguage=async locale=>{await wait(`!!document.querySelector('.language-picker select') && !document.querySelector('.language-picker select').disabled`,'language picker');await evaluate(`(()=>{const x=document.querySelector('.language-picker select');Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(x,${JSON.stringify(locale)});x.dispatchEvent(new Event('change',{bubbles:true}));})()`);await wait(`document.documentElement.lang===${JSON.stringify(locale)}`,'selected language');};
+  const setLanguage=async locale=>{await wait(`!!document.querySelector('.language-picker select') && !document.querySelector('.language-picker select').disabled`,'language picker');await evaluate(`(()=>{const x=document.querySelector('.language-picker select');Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(x,${JSON.stringify(locale)});x.dispatchEvent(new Event('change',{bubbles:true}));})()`);await wait(`document.documentElement?.lang===${JSON.stringify(locale)}`,'selected language');};
   for(const locale of ['en','de','fr','es','pt-BR','zh-Hans','ru']){
    await setLanguage(locale);const catalog=JSON.parse(await fs.readFile(path.join(__dirname,'../web/src/locales',locale+'.json'),'utf8'));
    await wait(`document.querySelector('.auth-card h2')?.textContent===${JSON.stringify(catalog.md74489dc8f)}`,'localized first-run heading '+locale);
@@ -114,7 +145,7 @@ async function main() {
   await wait(`document.querySelector('.project-header h1')?.textContent==='E2E synthetic project'`,'project created');
   setPhase('profile-language');
   await setLanguage('en');assert.equal((await read('/auth/me')).user.locale,'en','profile language saved');
-  await send('Page.reload');await wait(`document.documentElement.lang==='en' && !!document.querySelector('.project-header')`,'profile language survives reload');
+  await reload(`document.documentElement.lang==='en' && !!document.querySelector('.project-header')`,'profile language survives reload');
   assert.equal((await read('/auth/me')).user.locale,'en');await setLanguage('ru');assert.equal((await read('/auth/me')).user.locale,'ru');
 
   setPhase('task-hierarchy');
@@ -129,7 +160,7 @@ async function main() {
   saved=(await read('/projects/'+id)).project;
   assert.equal(saved.tasks.length,2);const parent=saved.tasks.find(t=>t.id===parentID),child=saved.tasks.find(t=>t.parent===parentID);
   assert(parent.summary,'first subtask creates summary milestone');assert.equal(child.planned_minutes,195);assert.equal(parent.planned_minutes,195,'summary rolls up child hours');
-  await send('Page.reload');await wait(`document.querySelector('.project-header h1')?.textContent==='E2E synthetic project'`,'project persists after reload');
+  await reload(`document.querySelector('.project-header h1')?.textContent==='E2E synthetic project'`,'project persists after reload');
   await click('Задачи');await wait(`document.body.innerText.includes('E2E child')`,'child persists in UI');
   saved=(await read('/projects/'+id)).project;assert.equal(saved.tasks.find(t=>t.id===parentID).planned_minutes,195);
   // project-start changes move existing tasks and their summary,
@@ -156,7 +187,7 @@ async function main() {
     assert.equal(after.tasks.find(t=>t.id===child.id).duration_days,2,'project shift preserves manual duration');
   };
   await shiftProject('2026-10-30','2026-11-02');
-  await send('Page.reload');await wait(`document.querySelector('.project-header h1')?.textContent==='E2E synthetic project'`,'shifted project reload');
+  await reload(`document.querySelector('.project-header h1')?.textContent==='E2E synthetic project'`,'shifted project reload');
   await click('Задачи');await wait(`document.body.innerText.includes('2026-10-30') && document.body.innerText.includes('2026-11-02')`,'shifted dates persist in UI');
   saved=(await read('/projects/'+id)).project;assert.equal(saved.tasks.find(t=>t.id===child.id).start,'2026-10-30');assert.equal(saved.tasks.find(t=>t.id===child.id).end,'2026-11-02');
   await shiftProject('2026-10-23','2026-10-26');
@@ -257,7 +288,7 @@ async function main() {
   await evaluate(`[...document.querySelector('[data-employee-admin="${employee.id}"]').querySelectorAll('button')].find(b=>b.textContent==='Сохранить общий максимум').click()`);
   await wait(`fetch('/api/v1/employees').then(r=>r.json()).then(rows=>rows.find(e=>e.id===${JSON.stringify(employee.id)})?.daily_minutes===240)`,'global maximum saved through administration');
   await evaluate(`document.querySelector('nav button').click()`);
-  await send('Page.reload');await wait(`document.querySelector('.project-header h1')?.textContent==='E2E synthetic project'`,'project reopens with refreshed global limit');
+  await reload(`document.querySelector('.project-header h1')?.textContent==='E2E synthetic project'`,'project reopens with refreshed global limit');
   await click('Задачи');await click('E2E child');
   await field('dialog input[type=number]','16');
   await toggle(`[aria-label="Назначить ${employeeName}"]`);
@@ -268,7 +299,7 @@ async function main() {
   assert.equal(allocated.calculation_state,'ready');assert.equal(work.planned_minutes,960);assert.equal(work.duration_days,2,'manual minimum retained');assert.equal(work.start,'2026-10-23');assert.equal(work.end,'2026-10-29','actual duration extends to fit weekly quotas');
   assert.equal(allocated.loads.reduce((n,l)=>n+l.minutes,0),960);
   for(const l of allocated.loads)assert(l.minutes<=(l.date==='2026-10-26'?120:240),'allocation respects employee/project day maximum');
-  await send('Page.reload');await wait(`document.querySelector('.project-header h1')?.textContent==='E2E synthetic project'`,'capacity plan reload');
+  await reload(`document.querySelector('.project-header h1')?.textContent==='E2E synthetic project'`,'capacity plan reload');
   await click('Сотрудники');await wait(`document.querySelector('[data-participant="${employee.id}"]')?.textContent.includes('10:00–12:00')`,'weekly schedule persists');
   const write=async(suffix,method,body)=>evaluate(`(async()=>{const me=await fetch('/api/v1/auth/me').then(r=>r.json());const r=await fetch('/api/v1'+${JSON.stringify(suffix)},{method:${JSON.stringify(method)},headers:{'Content-Type':'application/json','X-CSRF-Token':me.csrf},body:JSON.stringify(${JSON.stringify(body)})});if(!r.ok)throw Error('fixture write failed');return r.json()})()`);
   // A second synthetic project makes actual daily totals exceed the global cap.
@@ -326,7 +357,7 @@ async function main() {
   await commentField('Draft must not send when task is saved');
   await click('Проверить и сохранить');await click('Применить изменения');await wait(`!document.querySelector('dialog[open]')`,'task saved without sending draft');
   discussion=await read('/projects/'+id+'/tasks/'+child.id+'/comments');assert.equal(discussion.comments.length,1,'task save does not submit draft comment');
-  await send('Page.reload');await wait(`document.querySelector('.project-header h1')?.textContent==='E2E synthetic project'`,'comments reload');
+  await reload(`document.querySelector('.project-header h1')?.textContent==='E2E synthetic project'`,'comments reload');
   await click('Задачи');await click('E2E child');
   await wait(`document.querySelector('.task-comment-text')?.textContent===${JSON.stringify(commentText)}`,'comment persists after reload');
   assert.equal(await evaluate(`document.querySelector('[aria-label="Почта заказчика"]').value`),'customer@example.test');
