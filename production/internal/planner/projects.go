@@ -54,7 +54,7 @@ func (a *App) getProject(w http.ResponseWriter, r *http.Request, u Principal) er
 	if e != nil {
 		return e
 	}
-	if e = a.Store.prepare(ctx, tx, &p); e != nil {
+	if e = a.prepareProject(ctx, tx, &p); e != nil {
 		if errors.Is(e, context.Canceled) || errors.Is(e, context.DeadlineExceeded) {
 			return e
 		}
@@ -186,7 +186,7 @@ func (a *App) previewProject(w http.ResponseWriter, r *http.Request, u Principal
 	if e = memberChange(u, role, old, in.Project); e != nil {
 		return e
 	}
-	if e = a.Store.normalizeMemberDates(ctx, tx, role, old, &in.Project); e != nil {
+	if e = a.normalizeMemberDates(ctx, tx, role, old, &in.Project); e != nil {
 		return e
 	}
 	if e = validateNewParticipation(old, in.Project); e != nil {
@@ -195,7 +195,7 @@ func (a *App) previewProject(w http.ResponseWriter, r *http.Request, u Principal
 	if e = shiftProjectStart(old, &in.Project); e != nil {
 		return bad(e.Error())
 	}
-	if e = a.Store.prepare(ctx, tx, &in.Project); e != nil {
+	if e = a.prepareProject(ctx, tx, &in.Project); e != nil {
 		return calculationFailure(e)
 	}
 	raw, e := materializeProjectRead(ctx, tx, in.Project)
@@ -302,7 +302,7 @@ func (a *App) commitProject(w http.ResponseWriter, r *http.Request, u Principal,
 	if e = memberChange(u, role, old, p); e != nil {
 		return e
 	}
-	if e = a.Store.normalizeMemberDates(ctx, tx, role, old, &p); e != nil {
+	if e = a.normalizeMemberDates(ctx, tx, role, old, &p); e != nil {
 		return e
 	}
 	if !undo {
@@ -333,7 +333,7 @@ func (a *App) commitProject(w http.ResponseWriter, r *http.Request, u Principal,
 			return bad(e.Error())
 		}
 	}
-	if e = a.Store.prepare(ctx, tx, &p); e != nil {
+	if e = a.prepareProject(ctx, tx, &p); e != nil {
 		return calculationFailure(e)
 	}
 	for _, t := range p.Tasks {

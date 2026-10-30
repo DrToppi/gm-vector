@@ -21,25 +21,27 @@ var Version = "0.1.0"
 var ReleaseDate = time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC)
 
 type Config struct {
-	UpdaterSocket   string
-	UpdaterToken    string
-	TrustedProxies  []netip.Prefix
-	ReportPublicKey *ReportPublicKey
-	ReportDirectory string
-	Origin          string
-	WebDir          string
-	Secret          []byte
-	Bootstrap       string // Deprecated: ignored; first-run setup no longer uses an installation key.
-	LDAP            *LDAPConfig
-	SMTP            SMTPConfig
+	PlanningTimezone string
+	UpdaterSocket    string
+	UpdaterToken     string
+	TrustedProxies   []netip.Prefix
+	ReportPublicKey  *ReportPublicKey
+	ReportDirectory  string
+	Origin           string
+	WebDir           string
+	Secret           []byte
+	Bootstrap        string // Deprecated: ignored; first-run setup no longer uses an installation key.
+	LDAP             *LDAPConfig
+	SMTP             SMTPConfig
 }
 type App struct {
-	diagnosticEvents diagnosticBuffer
-	Store            *Store
-	Config           Config
-	dummyHash        string
-	passwordSlots    chan struct{}
-	directoryLookup  func(context.Context, Employee) (DirectoryPerson, error)
+	diagnosticEvents  diagnosticBuffer
+	Store             *Store
+	Config            Config
+	dummyHash         string
+	passwordSlots     chan struct{}
+	directoryLookup   func(context.Context, Employee) (DirectoryPerson, error)
+	historyExportSlot chan struct{}
 }
 type appError struct {
 	Status        int
@@ -87,10 +89,16 @@ func NewApp(s *Store, c Config) (*App, error) {
 	if e := validateSMTP(c.SMTP); e != nil {
 		return nil, e
 	}
-	a := &App{Store: s, Config: c, dummyHash: passwordHash(token()), passwordSlots: make(chan struct{}, 4)}
+	zone, _, e := resolvePlanningTimezone(c.PlanningTimezone)
+	if e != nil {
+		return nil, e
+	}
+	c.PlanningTimezone = zone
+	a := &App{Store: s, Config: c, dummyHash: passwordHash(token()), passwordSlots: make(chan struct{}, 4), historyExportSlot: make(chan struct{}, 1)}
 	return a, nil
 }
 func (a *App) Handler() http.Handler {
+	zone, location, clockErr := resolvePlanningTimezone(a.Config.PlanningTimezone)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { jsonResponse(w, 200, map[string]bool{"ok": true}) })
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
@@ -114,7 +122,11 @@ func (a *App) Handler() http.Handler {
 		"GET /api/v1/users":                           a.users, "POST /api/v1/users": a.inviteUser, "PATCH /api/v1/users/{id}": a.updateUser,
 		"GET /api/v1/projects/{id}/members": a.members, "PUT /api/v1/projects/{id}/members": a.setMember,
 		"GET /api/v1/projects/{id}/time-entries": a.timeEntries, "POST /api/v1/projects/{id}/time-entries": a.addTimeEntry, "DELETE /api/v1/projects/{id}/time-entries/{entry}": a.deleteTimeEntry,
-		"GET /api/v1/projects/{id}/export": a.exportProject, "POST /api/v1/import": a.importProject,
+		"GET /api/v1/projects/{id}/time-history":        a.timeHistory,
+		"GET /api/v1/projects/{id}/time-history/export": a.exportTimeHistory,
+		"GET /api/v1/projects/{id}/portable/export":     a.exportPortableProject,
+		"POST /api/v1/import/portable":                  a.importPortableProject,
+		"GET /api/v1/projects/{id}/export":              a.exportProject, "POST /api/v1/import": a.importProject,
 		"GET /api/v1/tokens": a.tokens, "POST /api/v1/tokens": a.createToken, "DELETE /api/v1/tokens/{id}": a.revokeToken,
 		"GET /api/v1/directory/people": a.directoryPeople, "POST /api/v1/directory/sync": a.syncDirectory, "GET /api/v1/directory/status": a.directoryStatus, "POST /api/v1/directory/ldap/sync": a.syncLDAPDirectory, "GET /api/v1/openapi.json": a.apiDocs,
 	}
@@ -151,6 +163,11 @@ func (a *App) Handler() http.Handler {
 	origin, _ := url.Parse(a.Config.Origin)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		started := time.Now()
+		if clockErr != nil {
+			jsonResponse(w, 503, map[string]any{"error": map[string]string{"code": "planning_timezone_unavailable", "message": "Planning timezone is unavailable"}})
+			return
+		}
+		r = r.WithContext(context.WithValue(r.Context(), planningClockKey{}, planningClock{now: started.In(location), zone: zone}))
 		state := &diagnosticRequest{}
 		r = r.WithContext(context.WithValue(r.Context(), diagnosticContextKey{}, state))
 		response := &diagnosticResponse{ResponseWriter: w}
@@ -324,7 +341,7 @@ func (a *App) me(w http.ResponseWriter, r *http.Request, u Principal) error {
 	jsonResponse(w, 200, map[string]any{"user": struct {
 		User
 		Locale string `json:"locale"`
-	}{u.User, locale}, "csrf": u.CSRF, "version": Version})
+	}{u.User, locale}, "csrf": u.CSRF, "version": Version, "planning_timezone": a.planningTimezone()})
 	return nil
 }
 func (a *App) authStatus(w http.ResponseWriter, r *http.Request, u Principal) error {

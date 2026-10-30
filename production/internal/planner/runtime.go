@@ -14,6 +14,7 @@ import (
 )
 
 type RuntimeConfig struct {
+	PlanningTimezone    string   `json:"planning_timezone,omitempty"`
 	UpdaterSocket       string   `json:"updater_socket,omitempty"`
 	UpdaterTokenFile    string   `json:"updater_token_file,omitempty"`
 	ReportDirectory     string   `json:"report_directory,omitempty"`
@@ -51,7 +52,12 @@ func LoadRuntime(path string) (RuntimeConfig, Config, error) {
 	if e != nil {
 		return r, c, e
 	}
-	c = Config{ReportDirectory: r.ReportDirectory, Origin: r.Origin, WebDir: r.WebDir, Secret: key}
+	zone, _, e := resolvePlanningTimezone(r.PlanningTimezone)
+	if e != nil {
+		return r, c, e
+	}
+	r.PlanningTimezone = zone
+	c = Config{PlanningTimezone: zone, ReportDirectory: r.ReportDirectory, Origin: r.Origin, WebDir: r.WebDir, Secret: key}
 	c.UpdaterSocket, c.UpdaterToken, e = loadUpdater(r.UpdaterSocket, r.UpdaterTokenFile)
 	if e != nil {
 		return r, c, e

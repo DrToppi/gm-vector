@@ -239,7 +239,7 @@ func (a *App) diagnostics(w http.ResponseWriter, r *http.Request, u Principal) e
 	if e := a.Store.DB.QueryRow(r.Context(), "SELECT count(*) FROM outbox WHERE state='paused'").Scan(&jobs); e != nil {
 		return e
 	}
-	jsonResponse(w, 200, map[string]any{"version": Version, "database": "ready", "paused_events": jobs, "teams_enabled": false, "timezone": "Europe/Moscow", "backup": "См. локальный журнал резервирования"})
+	jsonResponse(w, 200, map[string]any{"version": Version, "database": "ready", "paused_events": jobs, "teams_enabled": false, "timezone": a.planningTimezone(), "backup": "См. локальный журнал резервирования"})
 	return nil
 }
 func (a *App) auditLog(w http.ResponseWriter, r *http.Request, u Principal) error {
@@ -268,7 +268,7 @@ func (a *App) auditLog(w http.ResponseWriter, r *http.Request, u Principal) erro
 		if e = rows.Scan(&id, &actor, &pid, &action, &raw, &at); e != nil {
 			return e
 		}
-		out = append(out, map[string]any{"id": id, "actor": actor, "project_id": pid, "action": action, "details": raw, "created_at": at})
+		out = append(out, map[string]any{"id": id, "actor": actor, "project_id": pid, "action": action, "details": raw, "created_at": at.UTC()})
 	}
 	if e = rows.Err(); e != nil {
 		return e

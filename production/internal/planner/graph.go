@@ -82,11 +82,61 @@ func (g *GraphAdapter) call(ctx context.Context, method, path string, body any, 
 	}
 	return io.ReadAll(io.LimitReader(res.Body, 2<<20))
 }
-func (g *GraphAdapter) ReadBusy(ctx context.Context, email, start, end string) (json.RawMessage, error) {
-	return g.call(ctx, "POST", "/me/calendar/getSchedule", map[string]any{"schedules": []string{email}, "startTime": map[string]string{"dateTime": start, "timeZone": "Russian Standard Time"}, "endTime": map[string]string{"dateTime": end, "timeZone": "Russian Standard Time"}, "availabilityViewInterval": 30}, "")
+func (g *GraphAdapter) providerTimezone(ctx context.Context, zone string) (string, error) {
+	if !g.Enabled {
+		return "", ErrIntegrationDisabled
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	zone, _, err := resolvePlanningTimezone(zone)
+	if err != nil {
+		return "", err
+	}
+	// Mailbox/server support is authoritative; IANA validity alone does not
+	// establish that the provider accepts that particular alias.
+	raw, err := g.call(ctx, "GET", "/me/outlook/supportedTimeZones(TimeZoneStandard=microsoft.graph.timeZoneStandard'Iana')", nil, "")
+	if err != nil {
+		return "", err
+	}
+	var supported struct {
+		Value []struct {
+			Alias string `json:"alias"`
+		} `json:"value"`
+	}
+	if json.Unmarshal(raw, &supported) != nil {
+		return "", errors.New("invalid provider timezone response")
+	}
+	for _, v := range supported.Value {
+		if v.Alias == zone {
+			return zone, nil
+		}
+	}
+	return "", errors.New("planning timezone is not supported by the calendar provider")
+}
+func (g *GraphAdapter) ReadBusy(ctx context.Context, email, start, end string, zones ...string) (json.RawMessage, error) {
+	zone := ""
+	if len(zones) > 0 {
+		zone = zones[0]
+	}
+	zone, err := g.providerTimezone(ctx, zone)
+	if err != nil {
+		return nil, err
+	}
+	return g.call(ctx, "POST", "/me/calendar/getSchedule", map[string]any{"schedules": []string{email}, "startTime": map[string]string{"dateTime": start, "timeZone": zone}, "endTime": map[string]string{"dateTime": end, "timeZone": zone}, "availabilityViewInterval": 30}, "")
 }
 func (g *GraphAdapter) Publish(ctx context.Context, b BusyBlock, remoteID, etag string) (json.RawMessage, error) {
-	payload := map[string]any{"subject": "Занято — GMA Planner", "showAs": "busy", "isReminderOn": false, "sensitivity": "private", "start": map[string]string{"dateTime": b.Date + "T" + b.Start + ":00", "timeZone": "Russian Standard Time"}, "end": map[string]string{"dateTime": b.Date + "T" + b.End + ":00", "timeZone": "Russian Standard Time"}}
+	if !g.Enabled {
+		return nil, ErrIntegrationDisabled
+	}
+	if err := validateWallWindow(b.Date, b.Start, b.End, b.Timezone); err != nil {
+		return nil, err
+	}
+	zone, err := g.providerTimezone(ctx, b.Timezone)
+	if err != nil {
+		return nil, err
+	}
+	payload := map[string]any{"subject": "Занято — gmVector", "showAs": "busy", "isReminderOn": false, "sensitivity": "private", "start": map[string]string{"dateTime": b.Date + "T" + b.Start + ":00", "timeZone": zone}, "end": map[string]string{"dateTime": b.Date + "T" + b.End + ":00", "timeZone": zone}}
 	if remoteID == "" {
 		payload["transactionId"] = b.ID
 		payload["extensions"] = []any{map[string]string{"@odata.type": "microsoft.graph.openTypeExtension", "extensionName": "com.gma.planner", "operationId": b.ID}}
@@ -107,9 +157,17 @@ func (g *GraphAdapter) DeleteOwned(ctx context.Context, remoteID, etag, storedOp
 	_, e := g.call(ctx, "DELETE", "/me/events/"+url.PathEscape(remoteID), nil, etag)
 	return e
 }
-func BuildBusyBlocks(projects []Project) ([]BusyBlock, []string) {
+func BuildBusyBlocks(projects []Project, zones ...string) ([]BusyBlock, []string) {
 	blocks := []BusyBlock{}
 	warnings := []string{}
+	zone := ""
+	if len(zones) > 0 {
+		zone = zones[0]
+	}
+	zone, _, err := resolvePlanningTimezone(zone)
+	if err != nil {
+		return blocks, []string{err.Error()}
+	}
 	for _, p := range projects {
 		if p.CalculationState != "ready" {
 			warnings = append(warnings, "Расчёт проекта не готов: публикация занятости отключена")
@@ -138,7 +196,12 @@ func BuildBusyBlocks(projects []Project) ([]BusyBlock, []string) {
 				continue
 			}
 			t, _ := time.Parse("15:04", start)
-			blocks = append(blocks, BusyBlock{ID: hash(p.ID + "/" + key), EmployeeID: parts[0], ProjectID: p.ID, Date: parts[1], Start: start, End: t.Add(time.Duration(n) * time.Minute).Format("15:04"), Timezone: "Europe/Moscow"})
+			end := t.Add(time.Duration(n) * time.Minute).Format("15:04")
+			if err := validateWallWindow(parts[1], start, end, zone); err != nil {
+				warnings = append(warnings, key+": "+err.Error())
+				continue
+			}
+			blocks = append(blocks, BusyBlock{ID: hash(p.ID + "/" + key), EmployeeID: parts[0], ProjectID: p.ID, Date: parts[1], Start: start, End: end, Timezone: zone})
 		}
 	}
 	invalid := map[string]bool{}

@@ -12,7 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"sort"
-	"time"
 )
 
 //go:embed schema.sql schema-002.sql schema-003.sql schema-004.sql schema-005.sql schema-006.sql schema-007.sql schema-008.sql
@@ -337,8 +336,10 @@ func (s *Store) prepare(ctx context.Context, q DBTX, p *Project) (result error) 
 	if e != nil {
 		return e
 	}
-	loc, _ := time.LoadLocation("Europe/Moscow")
-	now := time.Now().In(loc)
+	now, e := planningNow(ctx)
+	if e != nil {
+		return e
+	}
 	if e = calculate(p, c, people, now, budget); e != nil {
 		return e
 	}

@@ -1,30 +1,69 @@
 package planner
 
 import (
+	"errors"
+	"github.com/jackc/pgx/v5"
 	"net/http"
+	"net/url"
+	"strconv"
 )
 
 func (a *App) timeEntries(w http.ResponseWriter, r *http.Request, u Principal) error {
 	if _, e := a.requireProject(r, u, false); e != nil {
 		return e
 	}
-	rows, e := a.Store.DB.Query(r.Context(), "SELECT id,task_id,employee_id,work_date::text,minutes,comment FROM time_entries WHERE project_id=$1 ORDER BY work_date DESC,id LIMIT 1000", r.PathValue("id"))
+	ctx := r.Context()
+	tx, e := a.Store.DB.Begin(ctx)
 	if e != nil {
 		return e
 	}
-	defer rows.Close()
+	defer tx.Rollback(ctx)
+	if e = capacityLock(ctx, tx, true); e != nil {
+		return e
+	}
+	var allowed bool
+	if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users u WHERE u.id=$2 AND u.active AND(u.admin OR EXISTS(SELECT 1 FROM memberships m WHERE m.project_id=$1 AND m.user_id=u.id)))`, r.PathValue("id"), u.ID).Scan(&allowed); e != nil {
+		return e
+	}
+	if !allowed {
+		return notFoundHistory()
+	}
+	var revision, total int64
+	e = tx.QueryRow(ctx, "SELECT revision FROM projects WHERE id=$1", r.PathValue("id")).Scan(&revision)
+	if e != nil && !errors.Is(e, pgx.ErrNoRows) {
+		return e
+	}
+	if e = tx.QueryRow(ctx, "SELECT count(*) FROM time_entries WHERE project_id=$1", r.PathValue("id")).Scan(&total); e != nil {
+		return e
+	}
+	rows, e := tx.Query(ctx, "SELECT id,task_id,coalesce(employee_id,''),work_date::text,minutes,comment FROM time_entries WHERE project_id=$1 ORDER BY work_date DESC,id LIMIT 1000", r.PathValue("id"))
+	if e != nil {
+		return e
+	}
 	out := []TimeEntry{}
 	for rows.Next() {
 		var v TimeEntry
 		if e = rows.Scan(&v.ID, &v.TaskID, &v.EmployeeID, &v.Date, &v.Minutes, &v.Comment); e != nil {
+			rows.Close()
 			return e
 		}
 		out = append(out, v)
 	}
-	if e = rows.Err(); e != nil {
+	e = rows.Err()
+	rows.Close()
+	if e != nil {
 		return e
 	}
-	jsonResponse(w, 200, out)
+	raw, e := materializeProjectRead(ctx, tx, out)
+	if e != nil {
+		return e
+	}
+	w.Header().Set("X-History-Total-Count", strconv.FormatInt(total, 10))
+	w.Header().Set("X-History-Returned-Count", strconv.Itoa(len(out)))
+	w.Header().Set("X-History-Truncated", strconv.FormatBool(total > int64(len(out))))
+	w.Header().Set("X-History-Revision", strconv.FormatInt(revision, 10))
+	w.Header().Set("Link", "</api/v1/projects/"+url.PathEscape(r.PathValue("id"))+"/time-history>; rel=\"alternate\"")
+	writeMaterializedJSON(w, raw)
 	return nil
 }
 func (a *App) addTimeEntry(w http.ResponseWriter, r *http.Request, u Principal) error {
@@ -109,11 +148,11 @@ func (a *App) deleteTimeEntry(w http.ResponseWriter, r *http.Request, u Principa
 		return e
 	}
 	var employee string
-	e = tx.QueryRow(ctx, "SELECT employee_id FROM time_entries WHERE id=$1 AND project_id=$2 FOR UPDATE", r.PathValue("entry"), r.PathValue("id")).Scan(&employee)
+	e = tx.QueryRow(ctx, "SELECT coalesce(employee_id,'') FROM time_entries WHERE id=$1 AND project_id=$2 FOR UPDATE", r.PathValue("entry"), r.PathValue("id")).Scan(&employee)
 	if e != nil {
 		return e
 	}
-	if role != "manager" && employee != u.EmployeeID {
+	if role != "manager" && (employee == "" || u.EmployeeID == "" || employee != u.EmployeeID) {
 		return denied()
 	}
 	if _, e = tx.Exec(ctx, "DELETE FROM time_entries WHERE id=$1", r.PathValue("entry")); e != nil {

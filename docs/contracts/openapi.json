@@ -915,9 +915,18 @@
                     },
                     "version": {
                       "type": "string"
+                    },
+                    "planning_timezone": {
+                      "type": "string"
                     }
                   },
-                  "additionalProperties": false
+                  "additionalProperties": false,
+                  "required": [
+                    "user",
+                    "csrf",
+                    "version",
+                    "planning_timezone"
+                  ]
                 }
               }
             }
@@ -3514,6 +3523,122 @@
         }
       }
     },
+    "/projects/{id}/portable/export": {
+      "get": {
+        "operationId": "get_projects_id_portable_export",
+        "summary": "GET /projects/{id}/portable/export",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "serviceToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortableProject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or hidden by permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "External service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/projects/{id}/tasks/{task}/comments": {
       "get": {
         "operationId": "get_projects_id_tasks_task_comments",
@@ -3869,6 +3994,37 @@
                   }
                 }
               }
+            },
+            "headers": {
+              "X-History-Total-Count": {
+                "schema": {
+                  "type": "integer",
+                  "description": "Computed by the server."
+                }
+              },
+              "X-History-Returned-Count": {
+                "schema": {
+                  "type": "integer",
+                  "description": "Computed by the server."
+                }
+              },
+              "X-History-Truncated": {
+                "schema": {
+                  "type": "boolean",
+                  "description": "Computed by the server."
+                }
+              },
+              "X-History-Revision": {
+                "schema": {
+                  "type": "integer",
+                  "description": "Computed by the server."
+                }
+              },
+              "Link": {
+                "schema": {
+                  "type": "string"
+                }
+              }
             }
           },
           "401": {
@@ -3951,7 +4107,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Legacy bare array, at most1000 records. Explicit metadata reports truncation; new clients use time-history. Legacy existence/archive behaviour remains compatible."
       },
       "post": {
         "operationId": "post_projects_id_time_entries",
@@ -4085,6 +4242,337 @@
             }
           }
         }
+      }
+    },
+    "/projects/{id}/time-history": {
+      "get": {
+        "operationId": "get_projects_id_time_history",
+        "summary": "GET /projects/{id}/time-history",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "serviceToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task root includes its own history and descendants."
+          },
+          {
+            "name": "employee_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Retained facts only; current assignment is not required."
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Inclusive date bound; empty means unbounded."
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Inclusive date bound; empty means unbounded."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "minimum": 1,
+              "maximum": 500
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 4096
+            },
+            "description": "Purpose-signed context, fixed15-minute UTC expiry. Repeat filters and limit. Not an authorization token."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or hidden by permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "External service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Revision-guarded keyset traversal, date DESC/id ASC. 409 history_changed;422 invalid_cursor/cursor_expired. Viewers retain read access; each request checks current access. Legacy minutes are raw task-scope sums and have no employee/date attribution."
+      }
+    },
+    "/projects/{id}/time-history/export": {
+      "get": {
+        "operationId": "get_projects_id_time_history_export",
+        "summary": "GET /projects/{id}/time-history/export",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "serviceToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task root includes its own history and descendants."
+          },
+          {
+            "name": "employee_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Retained facts only; current assignment is not required."
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Inclusive date bound; empty means unbounded."
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Inclusive date bound; empty means unbounded."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryExport"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or hidden by permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "External service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Materialization deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Manager/export scope. Complete separate history JSON, not an importable Project. One export per API process through download lifetime; at most100000 rows/64MiB,20-second build deadline. Locks end before output. 429 history_export_busy;422 history_export_limit;504 history_export_timeout. No silent truncation."
       }
     },
     "/tokens": {
@@ -6694,6 +7182,141 @@
         }
       }
     },
+    "/import/portable": {
+      "post": {
+        "operationId": "post_import_portable",
+        "summary": "POST /import/portable",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required for cookie mutations; not for Bearer tokens. Browser writes require the exact deployment Origin."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or hidden by permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "External service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Portable preview; no persistence",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortableImportPreview"
+                }
+              }
+            }
+          }
+        },
+        "description": "Administrator cookie only; strict nested portable document within5MiB. Preserves legacy identity restrictions. Preview may report a mismatch without persistence; actual mismatch needs exact source/target acknowledgement, which is checked even during preview when supplied. Date labels remain unchanged.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortableImportRequest"
+              }
+            }
+          }
+        }
+      }
+    },
     "/projects/{id}/preview": {
       "post": {
         "operationId": "post_projects_id_preview",
@@ -7755,6 +8378,376 @@
         },
         "additionalProperties": false
       },
+      "HistoryFilters": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string"
+          },
+          "employee_id": {
+            "type": "string"
+          },
+          "date_from": {
+            "type": "string"
+          },
+          "date_to": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "task_id",
+          "employee_id",
+          "date_from",
+          "date_to"
+        ]
+      },
+      "HistoryItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "employee_id": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "minutes": {
+            "type": "integer",
+            "description": "Computed by the server."
+          },
+          "comment": {
+            "type": "string"
+          },
+          "task_title": {
+            "type": "string"
+          },
+          "employee_name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "task_id",
+          "employee_id",
+          "date",
+          "minutes",
+          "comment",
+          "task_title",
+          "employee_name"
+        ]
+      },
+      "HistoryLegacy": {
+        "type": "object",
+        "properties": {
+          "minutes": {
+            "type": "integer",
+            "description": "Computed by the server."
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "project",
+              "task_subtree"
+            ]
+          },
+          "employee_date_attribution": {
+            "type": "string",
+            "const": "unavailable"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "minutes",
+          "scope",
+          "employee_date_attribution"
+        ]
+      },
+      "HistoryCommon": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "project_title": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "description": "Computed by the server."
+          },
+          "planning_timezone": {
+            "type": "string"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/HistoryFilters"
+          },
+          "order": {
+            "type": "string",
+            "const": "work_date_desc_id_asc"
+          },
+          "total_count": {
+            "type": "integer",
+            "description": "Computed by the server."
+          },
+          "recorded_minutes": {
+            "type": "integer",
+            "description": "Computed by the server."
+          },
+          "legacy_unattributed": {
+            "$ref": "#/components/schemas/HistoryLegacy"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "project_id",
+          "project_title",
+          "revision",
+          "planning_timezone",
+          "filters",
+          "order",
+          "total_count",
+          "recorded_minutes",
+          "legacy_unattributed"
+        ]
+      },
+      "HistoryPage": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "project_title": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "description": "Computed by the server."
+          },
+          "planning_timezone": {
+            "type": "string"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/HistoryFilters"
+          },
+          "order": {
+            "type": "string",
+            "const": "work_date_desc_id_asc"
+          },
+          "total_count": {
+            "type": "integer",
+            "description": "Computed by the server."
+          },
+          "recorded_minutes": {
+            "type": "integer",
+            "description": "Computed by the server."
+          },
+          "legacy_unattributed": {
+            "$ref": "#/components/schemas/HistoryLegacy"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistoryItem"
+            },
+            "maxItems": 500
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4096
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "project_id",
+          "project_title",
+          "revision",
+          "planning_timezone",
+          "filters",
+          "order",
+          "total_count",
+          "recorded_minutes",
+          "legacy_unattributed",
+          "limit",
+          "items",
+          "next_cursor"
+        ]
+      },
+      "HistoryExport": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "project_title": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "description": "Computed by the server."
+          },
+          "planning_timezone": {
+            "type": "string"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/HistoryFilters"
+          },
+          "order": {
+            "type": "string",
+            "const": "work_date_desc_id_asc"
+          },
+          "total_count": {
+            "type": "integer",
+            "description": "Computed by the server."
+          },
+          "recorded_minutes": {
+            "type": "integer",
+            "description": "Computed by the server."
+          },
+          "legacy_unattributed": {
+            "$ref": "#/components/schemas/HistoryLegacy"
+          },
+          "format": {
+            "type": "string",
+            "const": "gm-vector-time-history"
+          },
+          "schema_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistoryItem"
+            },
+            "maxItems": 100000
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "project_id",
+          "project_title",
+          "revision",
+          "planning_timezone",
+          "filters",
+          "order",
+          "total_count",
+          "recorded_minutes",
+          "legacy_unattributed",
+          "format",
+          "schema_version",
+          "generated_at",
+          "items"
+        ]
+      },
+      "PortableMetadata": {
+        "type": "object",
+        "properties": {
+          "planning_timezone": {
+            "type": "string"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "planning_timezone",
+          "generated_at"
+        ]
+      },
+      "PortableProject": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "const": "gm-vector-project"
+          },
+          "schema_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/PortableMetadata"
+          },
+          "project": {
+            "$ref": "#/components/schemas/Project"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "format",
+          "schema_version",
+          "metadata",
+          "project"
+        ]
+      },
+      "TimezoneAcknowledgement": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "target"
+        ]
+      },
+      "PortableImportRequest": {
+        "type": "object",
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/PortableProject"
+          },
+          "preview": {
+            "type": "boolean",
+            "description": "Computed by the server."
+          },
+          "timezone_acknowledgement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TimezoneAcknowledgement"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "document",
+          "preview"
+        ]
+      },
       "Error": {
         "type": "object",
         "properties": {
@@ -7796,6 +8789,35 @@
         "additionalProperties": false,
         "required": [
           "project"
+        ]
+      },
+      "PortableImportPreview": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/Project"
+          },
+          "message": {
+            "type": "string"
+          },
+          "source_planning_timezone": {
+            "type": "string"
+          },
+          "target_planning_timezone": {
+            "type": "string"
+          },
+          "timezone_acknowledgement_required": {
+            "type": "boolean",
+            "description": "Computed by the server."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "project",
+          "message",
+          "source_planning_timezone",
+          "target_planning_timezone",
+          "timezone_acknowledgement_required"
         ]
       },
       "EmployeeInvitation": {

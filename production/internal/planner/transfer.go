@@ -32,7 +32,7 @@ func (a *App) exportProject(w http.ResponseWriter, r *http.Request, u Principal)
 	if e != nil {
 		return e
 	}
-	if e = a.Store.prepare(ctx, tx, &p); e != nil {
+	if e = a.prepareProject(ctx, tx, &p); e != nil {
 		return e
 	}
 	if e = audit(ctx, tx, u.ID, p.ID, "project.exported", requestID(r), nil); e != nil {
@@ -59,41 +59,9 @@ func (a *App) importProject(w http.ResponseWriter, r *http.Request, u Principal)
 	if e := decode(r, &in); e != nil {
 		return e
 	}
-	p := in.Project
-	p.ID = newID()
-	p.Revision = 0
-	p.ExternalReference = ""
-	p.Warnings = nil
-	p.Loads = nil
-	if _, e := validateProject(&p); e != nil {
-		return bad(e.Error())
-	}
-	if len(p.People) > 0 {
-		return bad("Для переноса назначений используйте миграцию с сопоставлением сотрудников; обычный импорт не создаёт людей")
-	}
-	for i := range p.Tasks {
-		p.Tasks[i].Assignments = []Assignment{}
-		p.Tasks[i].Actual = p.Tasks[i].LegacyActual
-	}
-	if p.CalendarVersions == nil {
-		p.CalendarVersions = map[string]string{}
-	}
-	if _, e := readProjectCalendar(r.Context(), a.Store.DB, &p); e != nil {
-		return calculationFailure(e)
-	}
-	// Ignore caller-supplied computed state and never echo stale imported dates.
-	if e := func() error {
-		tx, e := a.Store.DB.Begin(r.Context())
-		if e != nil {
-			return e
-		}
-		defer tx.Rollback(r.Context())
-		if e = capacityLock(r.Context(), tx, true); e != nil {
-			return e
-		}
-		return a.Store.prepare(r.Context(), tx, &p)
-	}(); e != nil {
-		return calculationFailure(e)
+	p, e := a.normalizedImport(r.Context(), in.Project)
+	if e != nil {
+		return e
 	}
 	if in.Preview {
 		jsonResponse(w, 200, map[string]any{"project": p, "message": "Будет создан новый проект без внешней привязки; доступы и внешняя отправка не импортируются"})
@@ -105,7 +73,55 @@ func (a *App) importProject(w http.ResponseWriter, r *http.Request, u Principal)
 	jsonResponse(w, 201, p)
 	return nil
 }
+func (a *App) normalizedImport(ctx context.Context, p Project) (Project, error) {
+	var err error
+	ctx, err = a.withPlanningClock(ctx)
+	if err != nil {
+		return p, err
+	}
+	p.ID = newID()
+	p.Revision = 0
+	p.ExternalReference = ""
+	p.Warnings = nil
+	p.Loads = nil
+	if _, e := validateProject(&p); e != nil {
+		return p, bad(e.Error())
+	}
+	if len(p.People) > 0 {
+		return p, bad("Для переноса назначений используйте миграцию с сопоставлением сотрудников; обычный импорт не создаёт людей")
+	}
+	for i := range p.Tasks {
+		p.Tasks[i].Assignments = []Assignment{}
+		p.Tasks[i].Actual = p.Tasks[i].LegacyActual
+	}
+	if p.CalendarVersions == nil {
+		p.CalendarVersions = map[string]string{}
+	}
+	if _, e := readProjectCalendar(ctx, a.Store.DB, &p); e != nil {
+		return p, calculationFailure(e)
+	}
+	// Ignore caller-supplied computed state and never echo stale imported dates.
+	if e := func() error {
+		tx, e := a.Store.DB.Begin(ctx)
+		if e != nil {
+			return e
+		}
+		defer tx.Rollback(ctx)
+		if e = capacityLock(ctx, tx, true); e != nil {
+			return e
+		}
+		return a.prepareProject(ctx, tx, &p)
+	}(); e != nil {
+		return p, calculationFailure(e)
+	}
+	return p, nil
+}
 func (a *App) Import(ctx context.Context, p Project, actor, req string) error {
+	var err error
+	ctx, err = a.withPlanningClock(ctx)
+	if err != nil {
+		return err
+	}
 	if _, e := validateProject(&p); e != nil {
 		return bad(e.Error())
 	}
@@ -130,7 +146,7 @@ func (a *App) Import(ctx context.Context, p Project, actor, req string) error {
 	if _, e = tx.Exec(ctx, "INSERT INTO projects(id,title,start_date,duration_mode,calendar_id,external_reference,calendar_versions) VALUES($1,$2,$3,$4,$5,$6,$7)", p.ID, p.Title, p.Start, p.Mode, p.CalendarID, p.ExternalReference, pins); e != nil {
 		return e
 	}
-	if e = a.Store.prepare(ctx, tx, &p); e != nil {
+	if e = a.prepareProject(ctx, tx, &p); e != nil {
 		return e
 	}
 	if e = writeProject(ctx, tx, p); e != nil {
