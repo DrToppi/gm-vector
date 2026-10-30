@@ -10,6 +10,11 @@ import sys
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
+FOCUSED_HISTORY_TESTS = (
+    'TestTimeHistoryLegacyMetadataRegression', 'TestTimeHistoryPaginationIntegration',
+    'TestTimeHistoryRevisionAccessIntegration', 'TestTimeHistoryExportIntegration',
+    'TestPortableProjectIntegration', 'TestPlanningTimezoneIntegration',
+)
 
 
 def require_go_test(stdout, expected_test):
@@ -30,7 +35,20 @@ def main():
     parser.add_argument('suite', choices=('unit', 'integration', 'e2e', 'all'))
     parser.add_argument('--dsn-file', type=Path,
                         help='explicit file with disposable gma_planner_test DSN; otherwise GMA_TEST_DSN')
+    parser.add_argument('--only-test', choices=FOCUSED_HISTORY_TESTS,
+                        help='run one named history integration check; never a full-suite acceptance')
+    parser.add_argument('--evidence-file', type=Path,
+                        help='new private log file for all child output; existing files are refused')
     args = parser.parse_args()
+    if args.only_test and args.suite != 'integration':
+        parser.error('--only-test requires the integration suite; all/unit/e2e stay complete')
+    if args.evidence_file:
+        fd = os.open(args.evidence_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            os.dup2(fd, 1)
+            os.dup2(fd, 2)
+        finally:
+            os.close(fd)
     env = os.environ.copy()
     for name in ('GMA_TEST_DSN', 'GMA_E2E', 'GMA_PERFORMANCE'):
         env.pop(name, None)
@@ -65,6 +83,13 @@ def main():
         result.check_returncode()
         print(f'PASS: {label}', flush=True)
 
+    if args.only_test:
+        print('Focused check only; this is not full integration acceptance.', flush=True)
+        run(args.only_test + ' (race)',
+            [go, 'test', '-race', '-count=1', '-json', '-run', '^' + args.only_test + '$', './internal/planner'],
+            extra={'GMA_TEST_DSN': dsn}, expected_test=args.only_test)
+        return 0
+
     if args.suite in ('unit', 'all'):
         run('Verification gate unit', [sys.executable, '-m', 'unittest', 'discover',
                                       '-s', str(ROOT / 'scripts'), '-p', 'test_verify.py'])
@@ -78,6 +103,7 @@ def main():
         run('Map links unit', ['node', str(ROOT / 'scripts/map-links-check.cjs')])
         run('Avatar initials unit', ['node', str(ROOT / 'scripts/initials-check.cjs')])
         run('Task workspace unit', ['node', str(ROOT / 'scripts/task-workspace-check.cjs')])
+        run('History export and planning clock unit', ['node', str(ROOT / 'scripts/history-clock-check.cjs')])
         run('Bug Report metadata unit', ['node', str(ROOT / 'scripts/bug-report-check.cjs')])
         run('Bug Report encryption roundtrip', ['node', str(ROOT / 'scripts/report-crypto-check.cjs')], extra={'GMA_PYTHON_BIN': sys.executable})
     if args.suite in ('integration', 'all'):
@@ -95,6 +121,10 @@ def main():
             run(test + ' (race)',
                 [go, 'test', '-race', '-count=1', '-json', '-run', '^' + test + '$', './internal/planner'],
                 extra={'GMA_TEST_DSN': dsn}, expected_test=test)
+        for test in FOCUSED_HISTORY_TESTS:
+            run(test + ' (race)',
+                [go, 'test', '-race', '-count=1', '-json', '-run', '^' + test + '$', './internal/planner'],
+                extra={'GMA_TEST_DSN': dsn}, expected_test=test)
         run('Community backend build',
             [sys.executable, str(ROOT / 'scripts/build.py'), '--backend-only'])
         run('Signed release tamper regression', [sys.executable, str(ROOT / 'scripts/release-check.py')])
@@ -103,6 +133,7 @@ def main():
     if args.suite in ('e2e', 'all'):
         run('Frontend build for E2E', ['npm', 'run', 'build'], ROOT / 'web')
         run('Workspace refresh browser regression', ['node', str(ROOT / 'scripts/workspace-refresh-check.cjs')])
+        run('History and planning timezone browser regression', ['node', str(ROOT / 'scripts/history-ui-check.cjs')])
         run('Multi-year browser regression', ['node', str(ROOT / 'scripts/multiyear-ui-check.cjs')])
         run('Updater browser regression', ['node', str(ROOT / 'scripts/updater-ui-check.cjs')])
         run('Session identity browser regression', ['node', str(ROOT / 'scripts/security-identity-regression.cjs')])
