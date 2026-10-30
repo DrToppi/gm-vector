@@ -8301,6 +8301,18 @@
           },
           "employee_id": {
             "type": "string"
+          },
+          "locale": {
+            "type": "string",
+            "enum": [
+              "en",
+              "ru",
+              "de",
+              "fr",
+              "es",
+              "pt-BR",
+              "zh-Hans"
+            ]
           }
         },
         "additionalProperties": false

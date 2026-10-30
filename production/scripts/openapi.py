@@ -18,6 +18,7 @@ for name,body in re.findall(r'type (\w+) struct \{(.*?)\n\}',dto_source,re.S):
  if props:schemas[name]=obj(props)
 schemas['Error']=obj({'error':obj({'code':string,'message':string},['code','message']),'request_id':string},['error'])
 schemas['SaveProject']=obj({'project':ref('Project'),'override_reason':string},['project'])
+schemas['User']['properties']['locale']={'type':'string','enum':['en','ru','de','fr','es','pt-BR','zh-Hans']}
 for name,base in [('HistoryItem','TimeEntry'),('HistoryPage','HistoryCommon'),('HistoryExport','HistoryCommon')]:
  schemas[name]=obj({**schemas[base]['properties'],**schemas[name]['properties']})
 for name in ['HistoryFilters','HistoryLegacy','HistoryCommon','HistoryItem','HistoryPage','HistoryExport','PortableMetadata','PortableProject','TimezoneAcknowledgement','PortableImportRequest']:
