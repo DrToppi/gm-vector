@@ -50,7 +50,9 @@ Proposed shared packet for human selection:
   existing actual/summary billing semantics to make history totals appear equal.
 - Full history export uses a separate schema/download, with HTML/CSV/JSON and
   browser PDF like the existing export workflow. Importable Project JSON remains
-  unchanged. Preserve manager/export-scope checks, escaping and formula protection.
+  the compatible project schema with no embedded time facts; additive timezone
+  provenance must not weaken its identity/import protections. Preserve manager/
+  export-scope checks, escaping and formula protection.
   Export consistency/resource bounds must be frozen in the implementation plan;
   never hold a transaction across a slow download or silently truncate a file.
 
@@ -68,9 +70,11 @@ If B/C is chosen, resolve the stated extra restrictions/conversion contracts bef
 implementation; do not silently change accepted employee-allocation semantics.
 
 For A, propose an installation configuration setting with a compatible Moscow
-default, checked at startup and carried in relevant backup/export metadata. A
-zone change must be explicit and documented; no historical DATE or effort values
-are rewritten. Planned minutes remain nominal window minutes. UTC audit instants,
+default, checked at startup and carried in relevant backup/export metadata. Imports
+with a different declared planning zone require explicit acknowledgement, preserving
+date labels rather than converting them; legacy files without metadata are identified
+as the former Moscow policy. A zone change must be explicit and documented; no
+historical DATE or effort values are rewritten. Planned minutes remain nominal window minutes. UTC audit instants,
 TOTP/session expiry and elapsed security durations remain independent. Nonexistent/
 ambiguous wall-clock windows must be detected before any future calendar publication,
 with a visible warning instead of a guessed instant. Keep the live calendar module
