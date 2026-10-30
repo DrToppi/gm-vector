@@ -139,6 +139,14 @@ func testMultiYearAPI(t *testing.T, store *Store, request multiYearRequest, admi
 	if _, err := store.DB.Exec(ctx, "UPDATE calendars SET days=$2 WHERE id=$1", calendars[2027].ID, days); err != nil {
 		t.Fatal(err)
 	}
+	// Include a real dependency in the importable, employee-free round trip.
+	p.Tasks = append(p.Tasks, Task{ID: "round-trip-successor", Title: "Round-trip dependent", Status: "todo", Responsibility: "internal", RequestedStart: "2026-12-31", DurationDays: 2, Assignments: []Assignment{}})
+	p.Links = []Link{{From: p.Tasks[0].ID, To: "round-trip-successor", Mode: "after"}}
+	p.ExternalReference = "synthetic-external-reference"
+	p = decode(call(200, "PUT", path, saveRequest{Project: p}, admin))
+	if p.Tasks[0].End != "2027-01-04" || p.Tasks[1].Start != "2027-01-05" || p.Tasks[1].End != "2027-01-06" {
+		t.Fatal("round-trip dependency date oracle", p.Tasks)
+	}
 	exported := call(200, "GET", path+"/export", nil, admin)
 	var export map[string]json.RawMessage
 	json.Unmarshal(exported, &export)
@@ -150,7 +158,22 @@ func testMultiYearAPI(t *testing.T, store *Store, request multiYearRequest, admi
 	if _, ok := export["calendar_versions"]; !ok {
 		t.Fatal("export lost annual pins")
 	}
-	call(201, "POST", "/import", map[string]any{"project": json.RawMessage(exported)}, admin)
+	exportedProject := decode(exported)
+	imported := decode(call(201, "POST", "/import", map[string]any{"project": json.RawMessage(exported)}, admin))
+	if imported.ID == exportedProject.ID || imported.ExternalReference != "" || imported.Revision != 0 || len(imported.People) != 0 {
+		t.Fatal("import identity, external-link or employee policy changed", imported.ID, imported.ExternalReference, imported.Revision, imported.People)
+	}
+	if imported.CalendarID != exportedProject.CalendarID || !reflect.DeepEqual(imported.CalendarVersions, exportedProject.CalendarVersions) ||
+		!reflect.DeepEqual(imported.Tasks, exportedProject.Tasks) || !reflect.DeepEqual(imported.Links, exportedProject.Links) || imported.Start != exportedProject.Start || imported.Mode != exportedProject.Mode {
+		t.Fatal("export/import changed annual selections, task fields, dependency links or calculated dates", exportedProject, imported)
+	}
+	// Read the imported database record through export again, rather than only
+	// trusting the POST response. IDs/revisions and external links intentionally differ.
+	reexported := decode(call(200, "GET", "/projects/"+imported.ID+"/export", nil, admin))
+	if reexported.CalendarID != exportedProject.CalendarID || !reflect.DeepEqual(reexported.CalendarVersions, exportedProject.CalendarVersions) ||
+		!reflect.DeepEqual(reexported.Tasks, exportedProject.Tasks) || !reflect.DeepEqual(reexported.Links, exportedProject.Links) || reexported.Start != exportedProject.Start || reexported.Mode != exportedProject.Mode || reexported.ExternalReference != "" {
+		t.Fatal("persisted import/re-export lost the multi-year round trip", exportedProject, reexported)
+	}
 	var snapshots int
 	if err := store.DB.QueryRow(ctx, "SELECT count(*) FROM snapshots WHERE project_id=$1 AND (payload ? 'loads' OR payload ? 'warnings' OR payload ? 'provisional_years' OR payload ? 'calculation_state')", p.ID).Scan(&snapshots); err != nil || snapshots != 0 {
 		t.Fatal("snapshot derived payload", snapshots, err)
@@ -160,6 +183,7 @@ func testMultiYearAPI(t *testing.T, store *Store, request multiYearRequest, admi
 		t.Fatal("empty map snapshot omitted", emptyPinSnapshot, err)
 	}
 	testMultiYearLegacyAnchorChanges(t, call, admin, calendars[2027])
+	testMultiYearSharedCapacityAPI(t, store, call, admin, calendars[2026], calendars[2027])
 	testMultiYearBudgetGET(t, store, call, admin, calendars[2026].ID)
 }
 
