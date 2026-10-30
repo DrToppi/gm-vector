@@ -68,7 +68,12 @@ employees, ten distinct concurrent users; read p95 ≤500 ms, preview/save p95
 ≤2 seconds and zero unexpected errors; ten minutes of mixed load plus fifteen
 minutes of soak. The sixty-minute soak remains in final WP-05. The short baseline
 above is not proof that these duration/mixed-write acceptance criteria passed.
-Coherence and slow-response hypotheses still require controlled reproduction.
+The coherence and slow-response hypotheses were then actually reproduced with
+barriers under race: GET returned old revision 0 with newly committed 15 minutes
+(stored revision 1), and a capacity writer waited on a database Lock while a
+fully materialized response was held. See the
+[D11 options and required decision](wp-02-consistency.md). No production correction
+to locking/isolation is claimed yet.
 
 ## Remaining work
 
