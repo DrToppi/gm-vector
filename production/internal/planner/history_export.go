@@ -150,6 +150,9 @@ func (a *App) exportTimeHistory(w http.ResponseWriter, r *http.Request, u Princi
 	}
 	cancel()
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	// Preserve backpressure through nginx so the single export slot cannot be
+	// released merely because the proxy buffered a slow client's document.
+	w.Header().Set("X-Accel-Buffering", "no")
 	w.Header().Set("Content-Disposition", `attachment; filename="gm-vector-time-history.json"`)
 	w.Header().Set("Content-Length", strconv.Itoa(buffer.Len()))
 	w.WriteHeader(http.StatusOK)
