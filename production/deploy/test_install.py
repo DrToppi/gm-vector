@@ -16,6 +16,7 @@ class Installation(unittest.TestCase):
      if p.is_file():self.assertEqual(p.stat().st_mode&0o777,0o644 if p.name=='nginx.conf' else 0o600)
     config=json.loads((s/'config/config.json').read_text())
     self.assertEqual(config['origin'],'https://localhost:19443')
+    self.assertEqual(config['planning_timezone'],'Europe/Moscow')
     self.assertEqual(len((s/'config/encryption.key').read_bytes()),32)
     self.assertNotIn('bootstrap_file',config)
     self.assertFalse((s/'config/bootstrap.token').exists())

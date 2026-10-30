@@ -121,7 +121,7 @@ def initialize(state, port, subnet):
     for name, value in {'database.password': bootstrap.encode(), 'encryption.key': secrets.token_bytes(32), 'instance.id': instance.encode()}.items():
         private(cfg/name, value)
     if support_key is not None: private(cfg/'report-public-key.json', support_key)
-    private(cfg/'config.json', {'report_directory': '/var/lib/planner-reports', **({'report_public_key_file': '/run/secrets/report-public-key.json'} if support_key is not None else {}), 'database_url': f'postgres://planner_runtime:{runtime}@db:5432/planner?sslmode=disable', 'origin': f'https://localhost:{port}', 'web_dir': '/app/web', 'secret_file': '/run/secrets/encryption.key'})
+    private(cfg/'config.json', {'report_directory': '/var/lib/planner-reports', **({'report_public_key_file': '/run/secrets/report-public-key.json'} if support_key is not None else {}), 'database_url': f'postgres://planner_runtime:{runtime}@db:5432/planner?sslmode=disable', 'origin': f'https://localhost:{port}', 'web_dir': '/app/web', 'secret_file': '/run/secrets/encryption.key', 'planning_timezone': 'Europe/Moscow'})
     private(cfg/'migration-config.json', {'database_url': f'postgres://planner_migrator:{migration}@db:5432/planner?sslmode=disable', 'runtime_role': 'planner_runtime'})
     private(state/'installation.json', {'project': 'gm-vector-'+instance[:12], 'port': port, 'subnet': str(network), 'proxy_ip': str(network.network_address+2), 'api_ip': str(network.network_address+3)})
     local_tls(state)
