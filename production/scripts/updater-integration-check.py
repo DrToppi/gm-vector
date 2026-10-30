@@ -58,6 +58,7 @@ with tempfile.TemporaryDirectory(prefix='gm-vector-updater-fixture-') as temp:
   engine.apply()
   manifest={'images':engine.record['images']}
   assert engine.status()['state']=='succeeded';assert query("SELECT title FROM projects WHERE id='update-fixture'")==before
+  print(json.dumps({'upgrade_previous_commit':previous['commit'],'upgrade_candidate_commit':engine.record['commit'],'multiyear_fixture':args.multiyear}),flush=True)
   if args.multiyear:
    migrated=call('/projects/update-fixture')['project']
    task=migrated['tasks'][0]

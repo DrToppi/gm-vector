@@ -6,7 +6,6 @@ import importlib.util
 import ipaddress
 import json
 import os
-import socket
 import ssl
 import subprocess
 import tempfile
@@ -22,12 +21,6 @@ spec.loader.exec_module(m)
 
 def run(args):
     return subprocess.run(args, capture_output=True, text=True, timeout=60)
-
-
-def port():
-    with socket.socket() as s:
-        s.bind(('127.0.0.1', 0))
-        return s.getsockname()[1]
 
 
 def main():
@@ -53,8 +46,10 @@ def main():
         (bundle/'wrong.key').write_bytes((d/'ca.key').read_bytes())
         for f in bundle.iterdir():
             f.chmod(0o644)
-        https, http_port = port(), port()
-        origin = 'https://planner.example.test:' + str(https)
+        # Docker reserves both published ports atomically. Asking the kernel for
+        # a free port and closing that socket before docker run is a TOCTOU race.
+        # The configured canonical origin is independent of fixture transport.
+        origin = 'https://planner.example.test'
         template = (ROOT/'tls/nginx.files.conf').read_text().replace('__HOST__', 'planner.example.test').replace('__ORIGIN__', origin).replace('api:8080', '127.0.0.1:18080')
         upstream = '''
     server {
@@ -81,8 +76,19 @@ def main():
         assert invalid.returncode != 0 and ('mismatch' in invalid.stderr or 'key values' in invalid.stderr), 'mismatched certificate/key not rejected specifically'
         name = 'gm-vector-https-check-' + uuid.uuid4().hex[:12]
         try:
-            started = run(docker+['run', '-d', '--name', name, *container_options(config), '-p', f'127.0.0.1:{https}:9443', '-p', f'127.0.0.1:{http_port}:9080', args.image])
+            started = run(docker+['run', '-d', '--name', name, *container_options(config), '-p', '127.0.0.1::9443', '-p', '127.0.0.1::9080', args.image])
             assert started.returncode == 0, 'synthetic nginx failed to start: '+started.stderr
+            mapped = run(docker+['inspect', '--format', '{{json .NetworkSettings.Ports}}', name])
+            assert mapped.returncode == 0, 'cannot inspect fixture port mappings'
+            bindings = json.loads(mapped.stdout)
+            def published_port(target):
+                entries = bindings[str(target)+'/tcp']
+                assert len(entries) == 1 and entries[0]['HostIp'] == '127.0.0.1', 'fixture must remain loopback-only'
+                value = int(entries[0]['HostPort'])
+                assert 1 <= value <= 65535
+                return value
+            https, http_port = published_port(9443), published_port(9080)
+            assert https != http_port, 'fixture ports must be distinct'
             trust = ssl.create_default_context(cafile=str(d/'ca.pem'))
             for _ in range(100):
                 conn = m.LocalTLSConnection('planner.example.test', https, '127.0.0.1', context=trust, timeout=1)

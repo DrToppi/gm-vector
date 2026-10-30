@@ -7,6 +7,26 @@ const root=baselineIndex<0?currentRoot:path.resolve(process.argv[baselineIndex+1
 const baseline=baselineIndex>=0,sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 let server,chrome,socket,profile,seq=0;const heldCalendars=[];
 const pending=new Map(),exceptions=[];
+function chromeDiagnostic(stderr){return stderr.replace(/\x1b\[[0-9;]*[A-Za-z]/g,'').replace(/[\x00-\x08\x0b-\x1f\x7f]/g,'').replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi,'<url>').replace(/\b[A-Z]:\\[^\s"'<>]+/gi,'<path>').replace(/\/[^\s"'<>\])]+/g,'<path>').replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,'<email>').replace(/\b(token|password|secret|credential|authorization)\s*[:=]\s*[^\s,;]+/gi,'$1=<redacted>').trim().slice(-4096)}
+async function chromePort(child,dir){
+ let stderr='',spawnCode='';
+ // Bound capture before redaction; never dump environment, arguments or the
+ // fixture bundle. The fresh synthetic profile contains no user application data.
+ child.stderr.on('data',chunk=>{stderr=(stderr+chunk.toString('utf8')).slice(-8192)});
+ child.on('error',error=>{spawnCode=/^[A-Z0-9_]+$/.test(error.code||'')?error.code:'SPAWN_ERROR'});
+ const failure=reason=>Error('Chrome startup failed: '+reason+'; exit='+String(child.exitCode)+'; signal='+String(child.signalCode)+'; spawn='+(spawnCode||'none')+'; stderr='+(chromeDiagnostic(stderr)||'<empty>'));
+ for(let i=0;i<150;i++){
+  if(spawnCode)throw failure('spawn error');
+  if(child.exitCode!==null||child.signalCode!==null)throw failure('process exited before DevTools became ready');
+  try{const value=(await fs.readFile(path.join(dir,'DevToolsActivePort'),'utf8')).split('\n')[0];if(/^\d+$/.test(value)&&Number(value)>0&&Number(value)<=65535)return Number(value)}catch{}
+  await sleep(40);
+ }
+ throw failure('DevTools port unavailable after 6000ms');
+}
+async function stopChrome(){
+ if(!chrome?.pid||chrome.exitCode!==null||chrome.signalCode!==null)return;
+ await new Promise((resolve,reject)=>{const force=setTimeout(()=>chrome.kill('SIGKILL'),4000),deadline=setTimeout(()=>{chrome.removeListener('close',closed);clearTimeout(force);reject(Error('Chrome cleanup timeout'))},8000);function closed(){clearTimeout(force);clearTimeout(deadline);resolve()}chrome.once('close',closed);chrome.kill('SIGTERM')});
+}
 const dayNumber=s=>Date.parse(s+'T00:00:00Z')/86400000;
 const iso=n=>new Date(n*86400000).toISOString().slice(0,10);
 function annual(year,id){const days={};for(let n=dayNumber(year+'-01-01');n<dayNumber((year+1)+'-01-01');n++){const date=iso(n),weekday=new Date(n*86400000).getUTCDay();days[date]={working:weekday!==0&&weekday!==6,shortened:false}}return {id,year,title:'Synthetic calendar '+id,source:'synthetic fixture',checksum:'fixture',days}}
@@ -17,6 +37,10 @@ calendars[1].days['2026-01-01'].working=false;
 const task={duration_days:730,id:'synthetic-task',parent:'',title:'Synthetic multi-year task',description:'Synthetic retained detail',result:'Synthetic result',brief:'Synthetic status',status:'todo',requested_start:'2025-01-01',start:'2025-01-01',end:'2026-12-31',planned_minutes:960,actual_minutes:0,legacy_actual_minutes:0,responsibility:'internal',customer_owner:'',customer_due:'',owner_legacy:'',legacy_start:'',legacy_end:'',assignments:[],summary:false,blocked:false};
 const project={calculation_state:'ready',id:'synthetic-project',title:'Synthetic multi-year project',brief:'',start:'2025-01-01',duration_mode:'calendar',calendar_id:'test-2025',calendar_versions:{'2025':'test-2025'},provisional_years:[2026,2027],revision:1,external_reference:'',tasks:[task],links:[],people:[],warnings:[],loads:[]};
 function unit(){
+ const diagnostic=chromeDiagnostic('\x1b[31mSandbox unavailable\x1b[0m /home/synthetic/private-profile https://synthetic.invalid/private?token=private-value person@example.invalid token=private-value password:private-password');
+ assert(diagnostic.includes('Sandbox unavailable'),'useful Chrome error retained');
+ for(const privateValue of ['synthetic','private-profile','private-value','person@','private-password'])assert(!diagnostic.includes(privateValue),'Chrome diagnostic redacts '+privateValue);
+ assert.equal(chromeDiagnostic('x'.repeat(10000)).length,4096,'Chrome diagnostic output bounded');
  const entry=`export * from './src/planningCalendar';export * from './src/projectPayload';`;
  const bundle=buildSync({stdin:{contents:entry,resolveDir:currentRoot,loader:'ts'},bundle:true,platform:'node',format:'cjs',write:false});
  const sandbox={module:{exports:{}},exports:{},console,setTimeout,clearTimeout,Intl,Date,URLSearchParams,require};vm.runInNewContext(bundle.outputFiles[0].text,sandbox);const app=sandbox.module.exports;
@@ -65,9 +89,8 @@ async function main(){
  server=http.createServer((req,res)=>{res.setHeader('Cache-Control','no-store');if(req.url==='/fixture.js'){res.setHeader('Content-Type','application/javascript');return res.end(bundle)}if(req.url==='/api/v1/calendars'){res.setHeader('Content-Type','application/json');res.flushHeaders();heldCalendars.push(()=>res.end(JSON.stringify(calendars)));return}if(req.url.startsWith('/api/')){res.setHeader('Content-Type','application/json');return res.end(req.url.endsWith('/comments')?JSON.stringify({comments:[],email_enabled:false,can_comment:false,customer_email:'',customer:false}):'[]')}res.setHeader('Content-Type','text/html');res.end('<style>body{margin:0}.chart-scroll{width:900px;height:420px;overflow:auto}dialog{max-height:90vh;overflow:auto}</style><div id="root"></div><script src="/fixture.js"></script>')});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='http://127.0.0.1:'+server.address().port;
  profile=await fs.mkdtemp(path.join(os.tmpdir(),'gm-vector-multiyear-ui-'));
- chrome=spawn(process.env.GMA_CHROME_BIN||'google-chrome',['--headless=new','--no-first-run','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-background-networking','--disable-component-update','--disable-sync','--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--user-data-dir='+profile,'about:blank'],{stdio:'ignore'});
- let launchError=false;chrome.on('error',()=>launchError=true);let port;
- for(let i=0;i<150;i++){try{port=(await fs.readFile(path.join(profile,'DevToolsActivePort'),'utf8')).split('\n')[0];break}catch{}if(launchError)throw Error('Chrome unavailable');await sleep(40)}assert(port,'Chrome startup');
+ chrome=spawn(process.env.GMA_CHROME_BIN||'google-chrome',['--headless=new','--no-first-run','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-background-networking','--disable-component-update','--disable-sync','--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--user-data-dir='+profile,'about:blank'],{stdio:['ignore','ignore','pipe']});
+ const port=await chromePort(chrome,profile);
  const pages=await(await fetch('http://127.0.0.1:'+port+'/json')).json();socket=new WebSocket(pages.find(p=>p.type==='page').webSocketDebuggerUrl);await new Promise(resolve=>socket.onopen=resolve);
  socket.onmessage=event=>{const message=JSON.parse(event.data);if(message.id){const item=pending.get(message.id);if(item){pending.delete(message.id);clearTimeout(item.timer);message.error?item.reject(Error('CDP failed')):item.resolve(message.result)}}else if(message.method==='Runtime.exceptionThrown')exceptions.push('browser exception')};
  const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++seq,timer=setTimeout(()=>{pending.delete(id);reject(Error('CDP timeout'))},10000);pending.set(id,{resolve,reject,timer});socket.send(JSON.stringify({id,method,params}))});
@@ -126,4 +149,4 @@ async function main(){
  assert.equal(exceptions.length,0,'no browser exception');
  console.log('Multi-year browser PASS:731-day editor and Gantt resize, full year3 navigation with bounded columns, annual pins/anchor/cancel and visible provisional warning, held calendar readiness and safe gestures.');
 }
-main().catch(error=>{console.error(error.message);process.exitCode=1}).finally(async()=>{if(socket)socket.close();if(chrome){chrome.kill();await new Promise(resolve=>chrome.once('exit',resolve))}if(server)await new Promise(resolve=>server.close(resolve));if(profile)await fs.rm(profile,{recursive:true,force:true,maxRetries:5,retryDelay:100});for(const value of pending.values())clearTimeout(value.timer)});
+main().catch(error=>{console.error(error.message);process.exitCode=1}).finally(async()=>{for(const value of pending.values())clearTimeout(value.timer);for(const release of heldCalendars.splice(0))release();socket?.close();server?.closeAllConnections();server?.close();await stopChrome();if(profile)await fs.rm(profile,{recursive:true,force:true,maxRetries:5,retryDelay:100})}).catch(error=>{console.error('Multi-year UI cleanup failed:',error.message);process.exitCode=1});
