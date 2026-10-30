@@ -2,6 +2,7 @@
 // This harness never reads credentials or connects to a deployed application.
 const assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),http=require('node:http'),{spawn}=require('node:child_process'),vm=require('node:vm');
 const {build,buildSync}=require('../web/node_modules/esbuild');
+const {instrumentWorkspace,checkInstrumentation}=require('./workspace-fixture-source.cjs');
 const web=path.resolve(__dirname,'../web'),sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 let server,chrome,socket,profile,sequence=0,delivery=0,scenario='',employeeName='Old synthetic employee',states={},gates=[],held=[],requests=[];
 const pending=new Map(),browserErrors=[];
@@ -23,6 +24,7 @@ function project(id,change={}){return {id,title:'Project '+id,brief:'',start:'20
 function employee(){return {id:'e',name:employeeName,daily_minutes:480,user_id:'',provider:'',external_id:''}}
 const calendar={id:'synthetic-calendar',year:2026,title:'Synthetic calendar',days:Object.fromEntries(Array.from({length:365},(_,n)=>{const d=new Date(Date.UTC(2026,0,n+1));return [d.toISOString().slice(0,10),{working:d.getUTCDay()!==0&&d.getUTCDay()!==6}]}))};
 async function unit(){
+ checkInstrumentation();
  const code=buildSync({stdin:{contents:"export * from './src/workspaceRefresh';",resolveDir:web,loader:'ts'},bundle:true,platform:'node',format:'cjs',write:false}).outputFiles[0].text;
  let timer=0,hidden=false,online=true,modal=false,session=true;
  const timers=new Map(),events=new Map(),document={get hidden(){return hidden},querySelector:()=>modal?{}:null,body:{},addEventListener:(name,fn)=>events.set(name,fn),removeEventListener:name=>events.delete(name)};
@@ -62,7 +64,7 @@ async function reset(){
 }
 async function main(){
  await unit();
- const bundle=(await build({entryPoints:[path.join(web,'src/main.tsx')],bundle:true,platform:'browser',format:'iife',write:false,loader:{'.css':'empty'},plugins:[{name:'synthetic-read-entrypoints',setup(build){build.onLoad({filter:/\/main\.tsx$/},async args=>({contents:(await fs.readFile(args.path,'utf8')).replace(' const leaves=',' window.__fixtureRefreshLists=refreshLists;window.__fixtureLoadProject=()=>loadProject(refresh.projectID);\n const leaves='),loader:'tsx',resolveDir:path.dirname(args.path)}))}}]})).outputFiles[0].text;
+ const bundle=(await build({entryPoints:[path.join(web,'src/main.tsx')],bundle:true,platform:'browser',format:'iife',write:false,loader:{'.css':'empty'},plugins:[{name:'synthetic-read-entrypoints',setup(build){let targets=0;build.onLoad({filter:/\/(main\.tsx|useWorkspaceController\.ts)$/},async args=>{const result=instrumentWorkspace(await fs.readFile(args.path,'utf8'),args.path);targets+=result.count;return{contents:result.contents,loader:args.path.endsWith('.tsx')?'tsx':'ts',resolveDir:path.dirname(args.path)}});build.onEnd(()=>{assert.equal(targets,1,'exactly one bundled workspace controller instrumented')})}}]})).outputFiles[0].text;
  server=http.createServer(async(req,res)=>{
   const route=new URL(req.url,'http://localhost').pathname;res.setHeader('Cache-Control','no-store');
   if(route==='/fixture.js'){res.setHeader('Content-Type','application/javascript');return res.end(bundle)}
