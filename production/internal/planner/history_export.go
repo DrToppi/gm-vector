@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -40,7 +41,11 @@ func (b *historyBuffer) append(raw []byte) error {
 	return err
 }
 func (a *App) exportTimeHistory(w http.ResponseWriter, r *http.Request, u Principal) error {
-	f, _, e := parseHistoryFilters(r.URL.Query(), false)
+	query, e := url.ParseQuery(r.URL.RawQuery)
+	if e != nil {
+		return bad("Invalid history query")
+	}
+	f, _, e := parseHistoryFilters(query, false)
 	if e != nil {
 		return e
 	}

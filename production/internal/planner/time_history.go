@@ -177,7 +177,11 @@ func scanHistoryItem(rows pgx.Rows) (HistoryItem, error) {
 	return v, e
 }
 func (a *App) timeHistory(w http.ResponseWriter, r *http.Request, u Principal) error {
-	f, limit, e := parseHistoryFilters(r.URL.Query(), true)
+	query, e := url.ParseQuery(r.URL.RawQuery)
+	if e != nil {
+		return bad("Invalid history query")
+	}
+	f, limit, e := parseHistoryFilters(query, true)
 	if e != nil {
 		return e
 	}
@@ -196,7 +200,7 @@ func (a *App) timeHistory(w http.ResponseWriter, r *http.Request, u Principal) e
 	}
 	now := time.Now().UTC()
 	cursor := historyCursor{Issued: now.Unix(), Expires: now.Add(historyCursorTTL).Unix()}
-	if raw := r.URL.Query().Get("cursor"); raw != "" {
+	if raw := query.Get("cursor"); raw != "" {
 		cursor, e = decodeHistoryCursor(raw, a.Config.Secret, h.ProjectID, u, f, limit, now)
 		if e != nil {
 			return e
