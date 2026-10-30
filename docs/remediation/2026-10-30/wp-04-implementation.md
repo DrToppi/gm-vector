@@ -1,6 +1,9 @@
 # WP-04 bounded implementation contract
 
-Status: **PLAN PREPARATION; WP-02 ACCEPTED AT 400ae188**.
+Status: **BOUNDED PLAN FROZEN; IMPLEMENTATION AUTHORIZED**.
+WP-02 is independently accepted at400ae188. A different READ-ONLY reviewer found
+no remaining blocking plan contradiction after the documented refinements below.
+This is a plan gate, not WP-04 implementation acceptance.
 The user accepted D05 B, D06 A and D12 A in the
 [decision packet](wp-04-decisions.md). No deployment or main merge is implied.
 
@@ -64,6 +67,9 @@ summary Actual minus recorded minutes or roll up parent/child values a second ti
 Keep the existing TimeEntry shape unchanged. Valid retained rows can have NULL
 employee_id: preserve them with LEFT JOIN/COALESCE, empty employee_id/name fields
 and a localized unknown-employee label, without inventing an identity.
+Two empty employee IDs never imply ownership: nonmanager delete controls and
+server checks require a nonempty linked employee matching the record. Managers
+retain their existing ability to remove project records, including unattributed ones.
 
 Return a documented envelope with items, next_cursor, current revision, exact
 filtered total_count and recorded_minutes. Totals exclude the cursor position and
@@ -87,6 +93,13 @@ Expiry is 15 minutes, never sliding. No secrets/comments in the cursor or logs;
 signing provides integrity, not confidentiality. Key rotation invalidates cursors.
 Malformed/tampered/expired/foreign cursors fail explicitly; changed revision returns
 409 history_changed. It is revision-guarded traversal, not a retained snapshot.
+Use 422 invalid_cursor for malformed/tampered/foreign/context-mismatched cursors
+and 422 cursor_expired for valid signed expired cursors. Authorization precedes
+cursor/data details; revision invalidation precedes current subtree lookup.
+Malformed filters/limits or reversed inclusive date ranges return 422 validation,
+with no clamping. A fresh hidden/inactive project or unknown task root returns 404.
+Repeat normalized filters and limit on continuation requests. An employee ID with
+no retained matches produces an empty result without a global-directory lookup.
 
 The legacy `GET /projects/{id}/time-entries` stays a bare array with its 1000-row
 compatibility limit. Add explicit total/returned/truncated/revision/paging headers;
@@ -103,6 +116,13 @@ UTC instant, exact recorded totals and all matching entries/source labels.
 The UI derives standalone HTML, CSV and browser PDF using the established workflow.
 It must escape text and protect spreadsheet formulas; never embed time facts in
 ordinary Project JSON or create identities through import.
+Browser conversion is bounded too: at most 64 MiB encoded HTML/CSV/JSON output,
+with incremental byte accounting before concatenation; browser PDF additionally
+limits print HTML to 8 MiB and 10000 rows before creating the print document.
+Reject oversized conversion with filter guidance, never silently truncate or
+render all history in the main page. Verify ordinary 10000-row short-comment PDF
+and escaping expansion limits. Browser memory observations are diagnostic;
+do not claim control over all browser/process allocations from a byte guard.
 
 Read metadata and entries coherently in one protected operation, not by traversing
 public cursors and pretending those requests are an atomic export. Materialize before
@@ -131,10 +151,15 @@ values; reject host-dependent Local fallback. Bind one immutable resolved policy
 to a request/calculation, including related projects. Do not mutate a shared Store
 clock from unrelated App instances. Ensure packaged runtime timezone data works.
 
-Publish planning_timezone through authenticated `/auth/me` metadata. Backend today, UI defaults/overdue,
+Publish top-level planning_timezone through authenticated `/auth/me` metadata;
+it belongs to the installation, not User. Backend today, UI defaults/overdue,
 reports and labelled timestamp presentation use that same zone. Preserve UTC
 instants/security elapsed durations and ISO DATE strings/nominal minute arithmetic.
 Guard timezone metadata against stale/session-crossing responses like other state.
+Calculate today from the current instant when needed, rather than caching one day
+indefinitely across midnight.
+If browser Intl rejects a server-valid zone, surface the incompatibility explicitly;
+do not silently fall back to the host zone or Moscow for planning decisions.
 Configuration changes require explicit restart/reload instructions and describe
 their today/future-calendar effect without rewriting history. Backups retain config.
 
@@ -143,6 +168,8 @@ and detect nonexistent/ambiguous DST wall-clock windows before publication, warn
 instead of silently choosing an instant. Keep live calendar/OAuth disabled; use fake
 providers only. Do not blindly replace every Windows timezone with an arbitrary IANA
 string or change allocation to elapsed DST minutes.
+Check transitions inside a busy window as well as endpoint gaps/folds; valid
+New_York01:00–04:00 endpoints can still cross a spring transition.
 
 ## D12 compatible project formats
 
@@ -178,6 +205,12 @@ Bind mismatch acknowledgement to both source and current target zone using
 `timezone_acknowledgement: {source: string, target: string}`. Recheck it on import
 so an earlier confirmation cannot silently survive a target-zone configuration
 change. Do not require fictitious acknowledgement for a matching zone.
+Preview has no persistence: with no acknowledgement it may return a mismatching
+source zone and the fields source_planning_timezone, target_planning_timezone and
+timezone_acknowledgement_required alongside the existing project/message fields.
+Actual import requires the exact acknowledgement for a mismatch. An explicitly
+supplied incorrect acknowledgement fails even on preview; it is never ignored.
+The full nested request, including metadata, remains within the existing 5 MiB cap.
 
 ## Evidence and file ownership
 
@@ -190,6 +223,7 @@ midnight/leap/year/DST gaps/folds, different browser/server TZ and backup/import
 without date or effort rewrites. Every supported locale must remain complete.
 
 Backend owns Go/config/OpenAPI and backend fixtures; frontend owns web and relevant
-browser/unit fixtures; root owns documentation, runner/CI coordination and evidence.
+browser/unit fixtures; root owns installer/backup Python, documentation, runner/CI
+coordination, packaged-runtime verification and evidence.
 Keep one writer per file. Independent read-only plan/code/exact-SHA review and final
 CI are required; skipped tests or unrun provider connections are not passes.

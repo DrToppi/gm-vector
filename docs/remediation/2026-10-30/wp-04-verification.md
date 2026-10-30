@@ -1,6 +1,6 @@
 # WP-04 verification record
 
-Status: **PLAN PREPARATION — NO WP-04 IMPLEMENTATION ACCEPTANCE**.
+Status: **IMPLEMENTATION STARTING — NO WP-04 IMPLEMENTATION ACCEPTANCE**.
 Baseline: `d656d65`, containing independently accepted WP-02 implementation
 `400ae188b6c059170dacfba7b3c8aec4a8af13af` and its documentation closure.
 Task branch: `feature/history-and-timezones`.
@@ -9,6 +9,16 @@ The [bounded plan](wp-04-implementation.md), accepted
 [D05 B/D06 A/D12 A](wp-04-decisions.md) and matrix 04-01–09 govern this package.
 No new history, timezone or portable-import check is claimed as executed below.
 Main and the running updater installation remain outside this work.
+
+## Independent plan gate
+
+A separate READ-ONLY reviewer checked accepted choices against current code and
+found no architectural blocker. Before coding, the plan was refined to retain
+NULL-employee facts, define raw distinct-task legacy sums, bound the export slot
+through network-buffer lifetime, and specify zone-acknowledgement preview behaviour.
+Browser output conversion and PDF DOM construction are bounded separately. Test
+refinements include an internal DST transition with valid endpoints and unsupported
+browser timezone data. This permits bounded implementation, not a PASS verdict.
 
 ## Required evidence before acceptance
 

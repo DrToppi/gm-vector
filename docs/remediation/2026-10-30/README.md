@@ -1,6 +1,6 @@
 # Bounded remediation programme
 
-Status: **WP-01/WP-02 ACCEPTED; WP-04 PLAN PREPARATION**. Date: 2026-10-30.
+Status: **WP-01/WP-02 ACCEPTED; WP-04 IMPLEMENTATION STARTING**. Date: 2026-10-30.
 See the [current checkpoint](../../implementation-checkpoint.md). WP-01 and the
 separate Git updater have their own independent verification records.
 Owner approval is required for architectural choices before implementation.
@@ -20,7 +20,7 @@ WP-02 progress and actual baseline failures are in its
 | --- | --- | --- | --- |
 | WP-01 | P1 | Reproducible multi-year schedules, including 2025–2027 | PASS — INDEPENDENTLY VERIFIED at 5812b2c |
 | WP-02 | P1 | No stale UI commits; measured read-path performance | PASS — INDEPENDENTLY VERIFIED at 400ae188 |
-| WP-04 | P2 | Complete time history and explicit time-zone semantics | D05 B/D06 A/D12 A accepted; bounded plan preparation |
+| WP-04 | P2 | Complete time history and explicit time-zone semantics | D05 B/D06 A/D12 A accepted; independently reviewed bounded plan frozen; implementation starting |
 | WP-03 | P2 | Bounded frontend modularisation and enforceable checks | Proposed; tools/module boundaries pending |
 | WP-05 | P2 | All-image scanning, restore evidence, cross-browser/security gates | Proposed; release policy pending |
 

@@ -40,7 +40,7 @@ WP-04 is next under its [bounded plan](remediation/2026-10-30/wp-04-implementati
 ## Planned remediation
 
 The [2026-10-30 remediation programme](remediation/2026-10-30/README.md) is currently
-**in progress, now preparing WP-04**. The user approved starting with the
+**in progress, now implementing WP-04**. The user approved starting with the
 separate updater, followed by the ordered work packages. WP-01/WP-02 have exact-SHA
 acceptance records; D05 B/D06 A/D12 A are accepted for WP-04. It defines WP-01
 through WP-05, the implementation order,

@@ -2,7 +2,8 @@
 
 Status: **RESUMED BY EXPLICIT USER REQUEST**. The pause below is historical.
 The reviewed updater commit has now been deployed and its host service enabled.
-Current work: WP-04 plan preparation after independently accepted WP-01 and WP-02.
+Current work: WP-04 implementation after independently accepted WP-01 and WP-02
+and a separate READ-ONLY plan review.
 
 ## Completed and verified
 
