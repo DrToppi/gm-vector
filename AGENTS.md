@@ -9,12 +9,13 @@ implementation or deployment.
 ## Current work mode
 
 The user explicitly resumed work. The verified updater was deployed and its host
-service enabled; WP-01 is independently accepted at 5812b2c and WP-02 at 400ae188.
-WP-04 follows under accepted D05 B/D06 A/D12 A and its bounded implementation plan.
+service enabled; WP-01 is independently accepted at 5812b2c, WP-02 at 400ae188 and
+WP-04 at e97971d. WP-03 planning follows under accepted D07 A/D08 A; freeze its
+tool versions, rule inventory, symbol map and bounded verification plan before code.
 See [the updated checkpoint](docs/implementation-checkpoint.md).
 
 The user approved implementation beginning with the Git updater, followed by
-the remediation programme on2026-10-30. The updater entry point is option B
+the remediation programme on 2026-10-30. The updater entry point is option B
 (administrator UI and separate host service); see docs/updater.md. Unresolved
 architectural decisions still require human approval. Its scope and ordering are recorded in
 [the programme README](docs/remediation/2026-10-30/README.md).

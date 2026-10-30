@@ -1,6 +1,6 @@
 # Complete time history
 
-Status: **WP-04 candidate contract; independent implementation acceptance pending**.
+Status: **WP-04 independently verified at e97971d**.
 See the [bounded plan](remediation/2026-10-30/wp-04-implementation.md) and
 [verification record](remediation/2026-10-30/wp-04-verification.md).
 
@@ -38,7 +38,7 @@ does not discard a broken filter and return unfiltered data.
 
 The response includes items, next_cursor, revision, filters, limit, project context,
 planning_timezone, total_count, recorded_minutes and legacy_unattributed. Order is
-`work_date DESC, id ASC`. An empty next_cursor ends traversal. Retain normalized
+`work_date DESC, id ASC`. A null next_cursor ends traversal. Retain normalized
 filters and limit for every continuation request.
 The UI renders one page and retains at most 100 backward cursor positions. A notice
 identifies discarded navigation positions; First can restart browsing earlier

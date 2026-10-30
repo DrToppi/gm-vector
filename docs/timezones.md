@@ -1,6 +1,6 @@
 # Planning timezone and portable project files
 
-Status: **WP-04 candidate contract; independent implementation acceptance pending**.
+Status: **WP-04 independently verified at e97971d**.
 The accepted policy is one IANA planning zone for the installation, shared by all
 projects and common employee daily ceilings. It does not introduce intraday
 allocation or separate project/employee timezones.

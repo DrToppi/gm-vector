@@ -1,13 +1,15 @@
 # WP-04 verification record
 
-Status: **IMPLEMENTATION AND VERIFICATION IN PROGRESS — NOT ACCEPTED**.
+Status: **PASS — INDEPENDENTLY VERIFIED** at
+`e97971ddf5125b433f27e194b1be3144c3748d67` on 2026-10-30.
 Baseline: `d656d65`, containing independently accepted WP-02 implementation
 `400ae188b6c059170dacfba7b3c8aec4a8af13af` and its documentation closure.
 Task branch: `feature/history-and-timezones`.
 
 The [bounded plan](wp-04-implementation.md), accepted
 [D05 B/D06 A/D12 A](wp-04-decisions.md) and matrix 04-01–09 govern this package.
-Executed checks are distinguished below from the remaining acceptance matrix.
+Intermediate checkpoints/failures below are historical; final acceptance and its
+limits are recorded at the end.
 Main and the running updater installation remain outside this work.
 
 ## Independent plan gate
@@ -47,9 +49,9 @@ The recovery fixture now prepares 1001 old leap-day facts, including a NULL empl
 and a removed assignment, root/child raw legacy minutes, a private New_York config
 and digest assertions. Its first execution used the previously built a2e07a binary:
 restore reached the expected missing /auth/me timezone assertion. That old-binary
-failure is not claimed as an exact-current-source regression. The final candidate
-must still pass actual restored API/history/config checks and packaged-image tzdata
-verification. The existing backup mechanism has not been rewritten.
+failure is not claimed as an exact-current-source regression. At that checkpoint,
+actual restored API/history/config and packaged-image tzdata checks remained open;
+their successful final results are below. The backup mechanism was not rewritten.
 
 ## Actual packaged-export RED
 
@@ -83,7 +85,7 @@ They do not substitute for final exact-SHA CI and independent acceptance.
 | Installer defaults | Five tests PASS; explicit compatible initialization |
 | Runner acceptance guards | Ten tests PASS; focused mode cannot masquerade as all, production DB refused, skipped roots/required children rejected and private logs cannot overwrite existing files |
 | Frontend checkpoints513edc3/7fcfbdc | Build/TypeScript/seven locales and pure checks PASS;20 asserted browser scenarios plus optional screenshot artifact case; former-ID absent from catalog demonstrated RED→GREEN and independently reproduced |
-| Expanded security matrix | PASS33.691s;448 cells covering59 routes/seven roles and35 explicit token/CSRF/strict-body/no-side-effect variants |
+| Expanded security matrix | PASS33.691s;448 cells covering59 routes/seven roles and 35 explicit token/CSRF/strict-body/no-side-effect variants |
 
 The deliberately cancelled export construction emits the existing generic
 operation_failed diagnostic. This is a controlled cancellation, not evidence
@@ -109,15 +111,16 @@ The same disposable installation passed actual packaged UTC/Moscow/New_York/
 Kathmandu configuration, nonroot image identity and observed stable API/worker
 startup, same-service valid/invalid/valid controls, omitted-setting compatibility,
 repeated preparation, unchanged secrets, real TOTP and credential-revoking recovery.
-Later runtime hardening and the final frontend still require final-image CI.
+At that checkpoint, later runtime hardening and the final frontend still required
+final-image CI; this is complete in the final record below.
 
-## Combined verification still open
+## Intermediate combined-gate failures
 
 The first broad integration invocation stopped because native nginx was not on
 PATH; completed API/diagnostic checks are not called a complete suite. The corrected
 runner accepts an explicit `--nginx-bin` and keeps that failed prerequisite record.
-The full server/security/recovery suite, frontend final gate and independent
-exact-source review remain in progress. No main merge or deployment occurred.
+The complete suite was not accepted from that partial run. No main merge or
+deployment occurred.
 
 The next broad server run passed the proxy prerequisite but stopped at the old
 security inventory guard (new59 routes). The owner added explicit route/role and
@@ -127,9 +130,9 @@ that malformed raw query encoding was being dropped: both history routes returne
 HTTP200/all3 records for a broken employee filter instead of422. Valid encoded
 filter controls returned2 records. The plan now requires strict raw-query parsing;
 no role/scope escalation is claimed. Its corrected run and the combined final gate
-remain pending at this checkpoint.
+were still pending at that checkpoint; final results follow.
 
-## Required evidence before acceptance
+## Acceptance checklist
 
 - Reproduce project-wide 1000-row truncation hiding an older task and a mismatched
   planning day with fixed UTC instants before changing production code.
@@ -148,3 +151,49 @@ remain pending at this checkpoint.
   required prior API/security/recovery suites. Skips are not evidence of a pass.
 - Obtain independent READ-ONLY review and successful final exact-SHA CI. Only then
   record `PASS — INDEPENDENTLY VERIFIED`, with limitations stated explicitly.
+
+## Final exact-source acceptance
+
+The source tree was clean at full-run launch on e97971d. The following completed
+against that implementation, with synthetic identities, projects and integrations:
+
+| Gate | Actual final result |
+| --- | --- |
+| Unified local unit/race/API/security/recovery/browser runner | PASS, exit 0; all required named roots and children executed without accepted skips |
+| Security matrix | 448 cells passed ; 59 routes, seven roles and 35 explicit boundary variants |
+| History/clock/browser regression | 20 asserted scenarios passed; optional screenshot artifact case is not counted as another functional assertion |
+| Rich matched backup/configuration restore | PASS; 1001 retained facts, full-row/date digest, NULL employee, raw legacy 40 minutes, New_York policy and actual least-privilege API |
+| Real API/PostgreSQL browser E2E | PASS 20.94s locally; 20.81s in CI, including existing identity/scheduling/export/recovery protections |
+| Final local packaged image | PASS; matching e979 release metadata, nonroot UID 65532, 10000 exact rows / 41660487 encoded bytes, two observed busy 429 responses, concurrent read/exclusive capacity write, enforced 768MiB container without OOM/restart |
+| Packaged planning policy | UTC/Moscow/New_York/Kathmandu, rejected invalid setting, compatible omission, stable observed API/worker startup, repeated prepare and credential-revoking recovery passed |
+| Exact-source [CI 41066617244](https://github.com/DrToppi/gm-vector/actions/runs/41066617244) | SUCCESS; full runner, OpenAPI consistency, npm audit, govulncheck reachability gate, builds, proxy scan, actual HTTPS/image installation and host updater/migration recovery |
+
+CI separately completed its 41660488-byte packaged export with the same data
+oracles. Generated timestamp metadata may differ; byte-identical downloads or
+independently built image digests are not claimed. The final local image was
+`gm-vector:wp04-e97971d`; it did not replace the running image tag or installation.
+
+The different READ-ONLY reviewer checked final requirements/code/evidence and
+independently executed RawQuery/race, the eight export/race scenarios, pure
+clock/export checks and the privacy/former-employee browser regressions. They
+queried exact-source CI independently, inspected restore/image receipts and
+confirmed no remaining WP-04 blocker. Verdict: **PASS — INDEPENDENTLY VERIFIED**.
+
+Private raw evidence SHA-256 (raw artifacts stay outside Git):
+
+- Local full runner: `ac6e9d9a985ae09767d61c88f04b6c2a7c226905fb7653ef47abe7fda13506eb`.
+- Final packaged fixture: `8fb683d5a6c89faf12c5e47d722f2f43a84116222ad8d8ff5670bd4e72a8b81a`.
+- Independent export: `49a035b034f665c53fd479fcc5e4d0ec667af09fa8b69f7e9795b095d96939cc`.
+- Independent malformed-query regression: `a7e331249e4aa9a6e333f9a56b1d210ae85f431b3ca22b5e26eb28e2adee7d3f`.
+
+Limits: no live calendar/provider consent is enabled or proven. Future timezone
+discovery needs the delegated permission review described in
+[integrations](../../integrations.md). Resource guards and successful datasets do
+not prove a universal memory peak or completion on arbitrarily slow networks.
+Historical opt-in profiling skips are not counted as completed performance gates.
+The existing large-bundle warning belongs to WP-03. CI govulncheck reported zero
+reachable/imported-package vulnerabilities but one advisory in a required module;
+it did not identify the module in default output. Do not call all required modules
+vulnerability-free; detailed follow-up belongs to WP-05. Final three-engine,
+all-image, full recovery and 60-minute operational acceptance remain open.
+No main merge, release publication or working-instance deployment was performed.

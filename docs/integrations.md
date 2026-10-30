@@ -23,7 +23,9 @@ Use `tls` for implicit TLS or `starttls` for mandatory STARTTLS. Certificates an
 hostnames are verified. For a corporate CA, place `smtp-ca.pem` next to the file
 and add `"ca_file": "/run/secrets/smtp-ca.pem"`. Set `smtp_file` in runtime
 `state/config/config.json` to `/run/secrets/smtp.json`, then run installer `prepare`
-with the existing state directory to copy secrets and recreate services.
+with the existing state directory to restage secrets. Recreate/restart API and
+worker to reload immutable configuration; changed volume contents alone do not
+restart services using the same image.
 
 An administrator invites an employee. External identities use the trusted
 directory email; local employees use an administrator-supplied email. The link is
@@ -53,6 +55,14 @@ and does not silently change task effort.
 is enabled in this release. The adapter is an extension point, not a claimed
 ready-to-use Microsoft365 connection. Implement and review an operator-approved
 provider configuration and token lifecycle before enabling external calls.
+
+Before enabling live timezone discovery, explicitly review delegated `User.Read`
+consent: Microsoft's [supportedTimeZones permission contract](https://learn.microsoft.com/en-us/graph/api/outlookuser-supportedtimezones?view=graph-rest-1.0)
+lists that permission, while the prepared OAuth configuration currently requests
+only offline access and calendar read/write. It is not an application-permission
+endpoint. This is a future enablement prerequisite, not an automatic permission
+change; live integration stays disabled. WP-04 fake-provider tests prove adapter
+behaviour, not tenant consent or production Microsoft365 readiness.
 
 ## Service desks and directories
 

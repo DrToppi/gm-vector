@@ -2,8 +2,8 @@
 
 Status: **RESUMED BY EXPLICIT USER REQUEST**. The pause below is historical.
 The reviewed updater commit has now been deployed and its host service enabled.
-Current work: WP-04 implementation after independently accepted WP-01 and WP-02
-and a separate READ-ONLY plan review.
+Current work: WP-03 bounded-plan preparation after independently accepted WP-01,
+WP-02 and WP-04. D07 A/D08 A are selected; tooling/refactoring has not started.
 
 ## Completed and verified
 
@@ -120,3 +120,21 @@ are accepted. Freeze and independently review its
 [bounded plan](remediation/2026-10-30/wp-04-implementation.md) before implementation.
 The working installation remains on reviewed updater c8c34ae. Main, installation
 data and services have not been changed by WP-01/WP-02.
+
+## WP-04 acceptance and WP-03 continuation
+
+WP-04 is **PASS — INDEPENDENTLY VERIFIED** at
+`e97971ddf5125b433f27e194b1be3144c3748d67`.
+[Exact-source CI 41066617244](https://github.com/DrToppi/gm-vector/actions/runs/41066617244)
+and the full local unit/race/API/security/recovery/browser runner passed. The final
+isolated image passed its real HTTPS 10000-row export, busy/download/concurrent-write
+guards, four planning zones, invalid/legacy configuration, TOTP and recovery.
+Matched restoration preserved 1001 old facts, date digests and configuration.
+See the [detailed evidence and limits](remediation/2026-10-30/wp-04-verification.md).
+
+The user selected WP-03 D07 A (Vitest/Testing Library, ESLint/Prettier) and D08 A
+(focused hooks, pure helpers and views in the current tree). Freeze exact versions,
+rules/ignore inventory, symbol moves, test matrix and ownership before implementation.
+Retain a separate formatting commit and all existing browser/API protections.
+WP-05 and final operational acceptance remain open. The working instance stays
+on reviewed updater c8c34ae; main and its data have not been switched to these WPs.

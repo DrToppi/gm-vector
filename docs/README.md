@@ -5,8 +5,8 @@ and remediation plans are labelled separately; they are not promises that the
 corresponding functionality is implemented.
 
 Current work is [resumed from the documented checkpoint](implementation-checkpoint.md).
-The verified updater is deployed; WP-01 and WP-02 are independently accepted.
-WP-04 is next under its [bounded plan](remediation/2026-10-30/wp-04-implementation.md).
+The verified updater is deployed; WP-01, WP-02 and WP-04 are independently accepted.
+WP-03 planning is next under accepted D07 A/D08 A.
 
 ## Install and operate
 
@@ -17,6 +17,7 @@ WP-04 is next under its [bounded plan](remediation/2026-10-30/wp-04-implementati
 | [HTTPS](https.md) | Local and operator-managed certificates, validation and renewal |
 | [Recovery](recovery.md) | Account recovery and database/configuration backup boundaries |
 | [Localization](localization.md) | Available languages, translation structure and limitations |
+| [Planning timezone and portable JSON](timezones.md) | Installation clock, preserved dates and explicit metadata imports |
 
 ## Integrate and develop
 
@@ -25,6 +26,7 @@ WP-04 is next under its [bounded plan](remediation/2026-10-30/wp-04-implementati
 | [Development workflow](development-workflow.md) | Canonical document-first policy and proportional implementation process |
 | [Architecture](architecture.md) | Current components, trust boundaries and domain model |
 | [HTTP API](api.md) | API usage and integration contracts |
+| [Complete time history](time-history.md) | Revision-guarded pages, filtered totals, compatibility and bounded complete downloads |
 | [OpenAPI contract](contracts/openapi.json) | Machine-readable HTTP contract |
 | [Directory integration](directory.md) | LDAP and external directory-source behaviour |
 | [Optional integrations](integrations.md) | Mail and calendar integration configuration and limitations |
@@ -40,9 +42,9 @@ WP-04 is next under its [bounded plan](remediation/2026-10-30/wp-04-implementati
 ## Planned remediation
 
 The [2026-10-30 remediation programme](remediation/2026-10-30/README.md) is currently
-**in progress, now implementing WP-04**. The user approved starting with the
-separate updater, followed by the ordered work packages. WP-01/WP-02 have exact-SHA
-acceptance records; D05 B/D06 A/D12 A are accepted for WP-04. It defines WP-01
+**in progress, now planning WP-03**. The user approved starting with the
+separate updater, followed by the ordered work packages. WP-01/WP-02/WP-04 have
+exact-SHA acceptance records; D07 A/D08 A are accepted for WP-03. It defines WP-01
 through WP-05, the implementation order,
 acceptance rules and required independent review. Read its
 [baseline](remediation/2026-10-30/baseline.md) and

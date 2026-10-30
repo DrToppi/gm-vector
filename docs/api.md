@@ -115,6 +115,16 @@ Project writes use optimistic revisions. Maximum request JSON: 5 MiB; projects:
 Dates use ISO8601; effort/capacity values use integer minutes. Server-calculated
 summary, actual and blocked fields must not be treated as authoritative client input.
 
+## Complete history and planning metadata
+
+Use [the history API](time-history.md) for server-filtered, revision-guarded pages
+and separate complete history exports. The legacy time-entry array retains its
+explicit 1000-row compatibility bound; it is not a complete-history API.
+Authenticated `/auth/me` metadata and history/export context expose the installation
+planning_timezone. [Timezone and portable JSON rules](timezones.md) preserve civil
+date labels and old project JSON while allowing explicit source/target confirmation
+for the optional metadata format. Neither project format imports time-entry facts.
+
 ## Compatibility
 
 The first public release provides REST v1 and a fresh database baseline. Project
