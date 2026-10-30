@@ -77,6 +77,33 @@ sample counts/errors/distributions, then obtain explicit agreement on numeric
 performance acceptance before claiming WP-02 PASS. No implementer may turn
 engineering observations into a negotiated SLO.
 
+## Baseline experiments (not acceptance targets)
+
+Use one and five ready projects, each with 300 tasks and 30 shared employees.
+Each employee has a ten-task chain (270 links/project), 192 planned minutes per
+task, a 96-minute task/day limit and a 96-minute project/day quota. Five projects
+sum to the 480-minute global ceiling without deliberately triggering an early
+capacity-conflict exit. Start across the 2026–2027 boundary with two independently
+constructed verified annual versions and explicit holiday/availability controls.
+Compare empty and 3000-row time-fact datasets. Use 1, 5 and 10 distinct authenticated
+users; ten calls bypassing auth or sharing one session heartbeat row are not an
+equivalent experiment.
+
+Count actual normalized SQL statements without arguments using test-only pgx
+tracing. Report full HTTP distributions and separate read/calendar/calculate/JSON
+work, allocations, pool waits and lock lifetime. Obtain representative EXPLAIN
+ANALYZE/BUFFERS only in a disposable schema. Record project-state digests before
+and after reads, excluding expected authentication-session heartbeat updates.
+Cold means a newly started test process, not a claim to have flushed database or
+OS caches. Race-enabled correctness results are separate from latency profiles.
+
+Reproduce two read-path hypotheses with controlled barriers before classifying
+them as defects: time-entry commit between project revision and aggregate reads;
+and a slow response writer holding the capacity transaction after materialization.
+Do not select a new isolation or locking architecture solely from these hypotheses.
+The old opt-in 20-project/100-employee test with a hardcoded 500 ms assertion is a
+historical stress harness; it is not an approved WP-02 acceptance profile.
+
 ## Primary-source check
 
 Checked on 2026-10-30: [React effect setup/cleanup](https://react.dev/reference/react/useEffect),
