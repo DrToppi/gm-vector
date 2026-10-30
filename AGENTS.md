@@ -9,7 +9,8 @@ implementation or deployment.
 ## Current work mode
 
 The user explicitly resumed work. The verified updater was deployed and its host
-service enabled; WP-01 implementation is now active under accepted D01 B/D02 B.
+service enabled; WP-01 is independently accepted at 5812b2c. WP-02 starts under
+accepted D03 A/D04 A; numeric performance acceptance remains unapproved.
 See [the updated checkpoint](docs/implementation-checkpoint.md).
 
 The user approved implementation beginning with the Git updater, followed by

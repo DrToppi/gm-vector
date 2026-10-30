@@ -1,8 +1,9 @@
 # WP-02 bounded implementation contract
 
-Status: **PREPARATION ONLY — WAITING FOR WP-01 ACCEPTANCE**.
+Status: **IMPLEMENTATION STARTING AFTER WP-01 ACCEPTANCE**.
 The user explicitly selected [D03 A/D04 A](decisions.md). This document bounds
-the next package; it does not close WP-01 or approve the proposed performance SLOs.
+this package. WP-01 was independently accepted at 5812b2c; numeric performance
+SLOs still require explicit agreement after baseline measurements.
 
 ## Refresh contract
 

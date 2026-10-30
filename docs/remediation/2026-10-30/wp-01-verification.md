@@ -1,6 +1,6 @@
 # WP-01 verification record
 
-Status: **IMPLEMENTED / INDEPENDENT ACCEPTANCE PENDING**. All fixtures below use
+Status: **PASS — INDEPENDENTLY VERIFIED** for the final source SHA below. All fixtures use
 synthetic projects and identities. No working installation or customer data is
 used by these checks. Main is unchanged; implementation is on
 `feature/multiyear-planning`.
@@ -98,9 +98,58 @@ GM_VECTOR_APP_IMAGE="$BASELINE_IMAGE" python3 production/scripts/updater-integra
 ```
 
 CI on that SHA passed browser checks but exposed a test-fixture port race in the
-HTTPS Docker regression. Earlier two runs stopped at the new browser harness's
-Chrome startup assertion. Acceptance remains pending until fixture diagnostics and
-port allocation are corrected, affected checks execute, and final CI/review pass.
+HTTPS Docker regression. Docker now reserves distinct loopback ports itself;
+the actual HTTPS regression passed without relaxing certificate/header assertions.
+Earlier two runs stopped at the new browser harness's Chrome startup assertion;
+bounded redacted stderr/exit diagnostics and cleanup were added without increasing
+the startup limit or disabling the sandbox. Negative false/missing executable
+checks return a prompt, sanitized failure.
+
+A later main E2E run failed after 2.27 seconds with insufficient evaluation
+diagnostics. Its precise cause remains unestablished. Safe static phase, numeric
+evaluation count, source-line and allowlisted exception-class diagnostics replaced
+the generic error and DOM dump; no assertions, timeouts or application behaviour
+were weakened. The targeted real E2E then passed locally, and final CI passed.
+Retain this prior nonreproduced test-stability finding for the broader WP-05 work;
+do not describe its unknown cause as fixed.
+
+## Final verification revision
+
+Final source: `5812b2c72855bcc0297553b2520f684c088c1f45`.
+[CI 41021707647](https://github.com/DrToppi/gm-vector/actions/runs/41021707647)
+completed **SUCCESS** for that exact SHA: full verification, OpenAPI parity,
+npm/Go vulnerability checks, builds, proxy-image gate, HTTPS, empty installation
+and host-updater/recovery fixtures. This does not extend image-scan coverage to
+the backend/PostgreSQL requirements still assigned to WP-05.
+
+The distinct-version local Git/Docker run explicitly recorded
+`c8c34ae211e185d2acbced0aead9549c4015c7d7` →
+`4275a59c031401d385ae3a959e2f6e1df06308d6`, with rich encrypted recovery and
+TOTP/key retention. The only change between that candidate and the final SHA is
+safe diagnostics in `production/scripts/e2e-check.cjs`; runtime Go/SQL/web files
+are identical. No untested runtime change is inferred from blob equivalence.
+
+Private evidence hashes (SHA-256):
+
+| Artifact | Digest |
+| --- | --- |
+| Full local matrix verification on a2e07ad | `8e4f64e5ea647fed17981100543a661c74c0374a1c8457f0801d08fc5bb3a752` |
+| Distinct-version rich Git/Docker upgrade and restore | `751d6131c2dfa282bbfc45dc8e89353fdfd1d8454ccaa29a422d4414d017783e` |
+| HTTPS fixture after atomic port allocation | `7383c0fefb46a23c7d2bb6ec39161a9ed658af94e5de145633df83ca7f4ef2b2` |
+| Final CI manifest (exact SHA, jobs and result) | `1593de40b17bf695aaf2fba5ee02182a9e73db7514c83c9edd7599d63212d725` |
+
+## Independent acceptance
+
+A separate read-only reviewer accepted exact source
+`5812b2c72855bcc0297553b2520f684c088c1f45` on 2026-10-30 with no remaining
+WP-01 blocker. The reviewer independently ran focused race, API/DB and browser
+tests, inspected the rich restore evidence and directly confirmed final CI success
+and all main E2E phases (20.92 seconds). Earlier findings were resolved and
+re-reviewed, rather than waived. Status: **PASS — INDEPENDENTLY VERIFIED**.
+
+The unexplained prior E2E failure and generic server diagnostic remain recorded
+risks for WP-05. This verdict is limited to WP-01; no deployment, main merge,
+performance SLO or whole-application operational/security acceptance is implied.
 
 Ordinary import intentionally rejects employee participation and clears assignments;
 this pre-existing security/identity contract remains unchanged. Its calendar/task

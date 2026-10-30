@@ -1,8 +1,8 @@
 # Bounded remediation programme
 
-Status: **WP-01 IMPLEMENTATION IN PROGRESS**. Date: 2026-10-30.
-See the [current checkpoint](../../implementation-checkpoint.md). WP-01 is
-implemented and undergoing independent acceptance; the separate Git updater is verified.
+Status: **WP-01 ACCEPTED; WP-02 STARTING**. Date: 2026-10-30.
+See the [current checkpoint](../../implementation-checkpoint.md). WP-01 and the
+separate Git updater have their own independent verification records.
 Owner approval is required for architectural choices before implementation.
 The user subsequently authorized implementation beginning with the updater;
 pending architecture choices still require approval. The user explicitly resumed implementation. No main merge is authorized.
@@ -12,12 +12,12 @@ pending architecture choices still require approval. The user explicitly resumed
 Address demonstrated architectural, functional and operational defects without
 rewriting the application. Sequence: **WP-01 → WP-02 → WP-04 → WP-03 → WP-05**.
 Freeze scope and acceptance before each WP; deliver independently reviewable commits.
-No remediation WP has final acceptance yet. See [WP-01 evidence](wp-01-verification.md).
+See [WP-01 evidence and acceptance](wp-01-verification.md).
 
 | WP | Priority | Outcome | Status |
 | --- | --- | --- | --- |
-| WP-01 | P1 | Reproducible multi-year schedules, including 2025–2027 | Implemented; independent acceptance pending |
-| WP-02 | P1 | No stale UI commits; measured read-path performance | D03 A/D04 A accepted; bounded plan and workload/SLO pending |
+| WP-01 | P1 | Reproducible multi-year schedules, including 2025–2027 | PASS — INDEPENDENTLY VERIFIED at 5812b2c |
+| WP-02 | P1 | No stale UI commits; measured read-path performance | D03 A/D04 A accepted; bounded implementation starting; numeric SLO pending |
 | WP-04 | P2 | Complete time history and explicit time-zone semantics | Proposed; API/time-zone decisions pending |
 | WP-03 | P2 | Bounded frontend modularisation and enforceable checks | Proposed; tools/module boundaries pending |
 | WP-05 | P2 | All-image scanning, restore evidence, cross-browser/security gates | Proposed; release policy pending |

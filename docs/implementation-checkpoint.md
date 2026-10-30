@@ -2,7 +2,7 @@
 
 Status: **RESUMED BY EXPLICIT USER REQUEST**. The pause below is historical.
 The reviewed updater commit has now been deployed and its host service enabled.
-Current work: WP-01 under accepted decisions D01 B/D02 B.
+Current work: WP-02 under accepted decisions D03 A/D04 A, after WP-01 acceptance.
 
 ## Completed and verified
 
@@ -42,7 +42,7 @@ No merge into `main` has been authorized or performed for these changes. Private
 state, source checkout paths, credentials, keys, backups and raw logs stay outside
 this public checkpoint.
 
-## Accepted next decisions
+## Accepted next decisions at pause (historical)
 
 The user selected WP-01 decisions **D01 B** and **D02 B**:
 
@@ -52,7 +52,7 @@ The user selected WP-01 decisions **D01 B** and **D02 B**:
 - Scheduling follows available calendar coverage with an explicit computation
   budget and a clear failure on exhaustion, replacing the fixed 730-day search.
 
-WP-01 implementation has **not started**. Numeric budgets and boundary evidence
+At the pause, WP-01 implementation had **not started**. Numeric budgets and boundary evidence
 still need to be frozen in its bounded implementation plan. Remaining decisions
 for WP-02/04/03/05 retain their recorded proposed status.
 
@@ -81,3 +81,19 @@ commit. The optional host service is enabled and active; authenticated Unix IPC
 returns enabled=true, state=idle and the installed commit. The service uses a
 separate detached source checkout, independent of the development working tree.
 No merge into main occurred. WP-01 implementation follows next.
+
+## WP-01 acceptance and next package
+
+WP-01 is **PASS — INDEPENDENTLY VERIFIED** at
+`5812b2c72855bcc0297553b2520f684c088c1f45` with
+[successful exact-SHA CI](https://github.com/DrToppi/gm-vector/actions/runs/41021707647).
+See [the full evidence record](remediation/2026-10-30/wp-01-verification.md).
+The working installation remains on reviewed updater c8c34ae; WP-01 has not been
+deployed there and main has not been merged.
+
+The user selected D03 A (ordered/versioned polling, one active refresh and hidden
+pause) and D04 A (profile then optimize the existing on-demand calculation).
+Continue with the [WP-02 bounded contract](remediation/2026-10-30/wp-02-implementation.md).
+Numeric load/SLO acceptance is still pending; do not infer it from a benchmark.
+Keep the prior unexplained E2E failure and generic server diagnostic visible for
+the broader WP-05 stability/diagnostic work.
