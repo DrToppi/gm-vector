@@ -19,7 +19,7 @@ func resolvePlanningTimezone(zone string) (string, *time.Location, error) {
 	if zone == "" {
 		zone = defaultPlanningTimezone
 	}
-	if zone == "Local" {
+	if zone == "Local" || zone == "localtime" || zone == "posixrules" {
 		return "", nil, errors.New("planning_timezone must be an explicit IANA location")
 	}
 	loc, err := time.LoadLocation(zone)

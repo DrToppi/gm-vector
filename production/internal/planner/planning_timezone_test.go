@@ -41,7 +41,7 @@ func TestPlanningTimezoneCivilDatesAndDST(t *testing.T) {
 			t.Fatal(zone, e)
 		}
 	}
-	for _, zone := range []string{"Local", "Etc/DefinitelyMissing", "../zone"} {
+	for _, zone := range []string{"Local", "localtime", "posixrules", "Etc/DefinitelyMissing", "../zone"} {
 		if _, _, e := resolvePlanningTimezone(zone); e == nil {
 			t.Fatal("invalid zone accepted", zone)
 		}
