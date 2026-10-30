@@ -1,8 +1,8 @@
 # Implementation checkpoint — 2026-10-30
 
-Status: **PAUSED AT THE USER'S REQUEST**. Only documentation of this checkpoint
-was requested after the pause. Resume implementation or deployment only after
-an explicit request to continue.
+Status: **RESUMED BY EXPLICIT USER REQUEST**. The pause below is historical.
+The reviewed updater commit has now been deployed and its host service enabled.
+Current work: WP-01 under accepted decisions D01 B/D02 B.
 
 ## Completed and verified
 
@@ -70,3 +70,14 @@ for WP-02/04/03/05 retain their recorded proposed status.
 
 These steps describe the saved continuation point. They are not permission to
 resume work while the user's pause remains in effect.
+
+
+## Resume result
+
+After the explicit resume request, the working local application was switched to
+reviewed commit c8c34ae. A stopped-writer encrypted backup was recorded before
+installation. Actual deployment metadata and verified HTTPS confirm the installed
+commit. The optional host service is enabled and active; authenticated Unix IPC
+returns enabled=true, state=idle and the installed commit. The service uses a
+separate detached source checkout, independent of the development working tree.
+No merge into main occurred. WP-01 implementation follows next.

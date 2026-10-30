@@ -1,12 +1,11 @@
 # Bounded remediation programme
 
-Status: **IMPLEMENTATION AUTHORIZED; PAUSED AT USER REQUEST**. Date: 2026-10-30.
+Status: **WP-01 IMPLEMENTATION IN PROGRESS**. Date: 2026-10-30.
 See the [current checkpoint](../../implementation-checkpoint.md). No remediation WP
 has been implemented; the separate Git updater is locally verified.
 Owner approval is required for architectural choices before implementation.
 The user subsequently authorized implementation beginning with the updater;
-pending architecture choices still require approval. The pause currently permits
-only recording state. No main merge is authorized.
+pending architecture choices still require approval. The user explicitly resumed implementation. No main merge is authorized.
 
 ## Goal and execution order
 
@@ -17,7 +16,7 @@ No WP currently has an implementation or acceptance result under this programme.
 
 | WP | Priority | Outcome | Status |
 | --- | --- | --- | --- |
-| WP-01 | P1 | Reproducible multi-year schedules, including 2025–2027 | D01 B/D02 B accepted; implementation not started, paused |
+| WP-01 | P1 | Reproducible multi-year schedules, including 2025–2027 | D01 B/D02 B accepted; bounded implementation in progress |
 | WP-02 | P1 | No stale UI commits; measured read-path performance | Proposed; workload/SLO approval pending |
 | WP-04 | P2 | Complete time history and explicit time-zone semantics | Proposed; API/time-zone decisions pending |
 | WP-03 | P2 | Bounded frontend modularisation and enforceable checks | Proposed; tools/module boundaries pending |
@@ -45,7 +44,7 @@ Do not label unrun tests as passing, skips as passes, or proposed thresholds as 
 The updater entry point B (administrator UI and separate host service) was accepted
 and implemented before the remediation WPs. It remains outside WP-05. Read the
 [verification record](../../updater-verification.md) and [saved checkpoint](../../implementation-checkpoint.md).
-Working-instance installation/service configuration is pending. No remediation
+Working-instance installation and service configuration are verified after resume. No remediation
 WP receives PASS status from the updater's acceptance.
 
 ## Definition of final acceptance

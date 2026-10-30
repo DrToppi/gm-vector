@@ -6,8 +6,10 @@ Status: **PASS — INDEPENDENTLY VERIFIED** for the locally reviewed updater
 implementation. Its [CI run 40968484550](https://github.com/DrToppi/gm-vector/actions/runs/40968484550)
 completed successfully for the same commit.
 
-Deployment is a separate gate: the working installation has not been updated or
-configured with the host service. Work is paused; see [checkpoint](implementation-checkpoint.md).
+Deployment was completed after the explicit resume request: the working instance
+reports c8c34ae, verified HTTPS is ready and the enabled host service returns
+enabled=true/state=idle over authenticated Unix IPC. A stopped-writer encrypted
+backup preceded installation. See [checkpoint](implementation-checkpoint.md).
 
 ## Executed evidence
 

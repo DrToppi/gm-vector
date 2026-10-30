@@ -8,11 +8,9 @@ implementation or deployment.
 
 ## Current work mode
 
-**Paused at the user's explicit request.** The latest request authorizes only
-documenting the checkpoint. Do not resume implementation, deployment or service
-configuration until the user asks to continue. See
-[implementation checkpoint](docs/implementation-checkpoint.md).
-
+The user explicitly resumed work. The verified updater was deployed and its host
+service enabled; WP-01 implementation is now active under accepted D01 B/D02 B.
+See [the updated checkpoint](docs/implementation-checkpoint.md).
 
 The user approved implementation beginning with the Git updater, followed by
 the remediation programme on2026-10-30. The updater entry point is option B

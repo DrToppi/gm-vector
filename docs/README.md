@@ -4,8 +4,8 @@ Start with the operator guides for the current application. Architecture proposa
 and remediation plans are labelled separately; they are not promises that the
 corresponding functionality is implemented.
 
-Current work is [paused at the documented checkpoint](implementation-checkpoint.md).
-The updater is implemented and verified, but its working-instance deployment is pending.
+Current work is [resumed from the documented checkpoint](implementation-checkpoint.md).
+The verified updater is deployed; WP-01 implementation is active.
 
 ## Install and operate
 
@@ -39,7 +39,7 @@ The updater is implemented and verified, but its working-instance deployment is 
 ## Planned remediation
 
 The [2026-10-30 remediation programme](remediation/2026-10-30/README.md) is currently
-**planned, with implementation paused**. The user approved starting with the
+**in progress, beginning with WP-01**. The user approved starting with the
 separate updater, followed by WP-01; D01 B/D02 B are accepted. It defines WP-01
 through WP-05, the implementation order,
 acceptance rules and required independent review. Read its
