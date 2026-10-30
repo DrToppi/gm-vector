@@ -7,7 +7,7 @@ VERIFIED BY IMPLEMENTER → INDEPENDENT REVIEW → PASS — INDEPENDENTLY VERIFI
 
 Use `BLOCKED` for missing required decisions/evidence and `FAIL` for an observed
 failed criterion. A documentation review may conclude `PLAN REVIEWED`; that is
-not implementation acceptance. All current WPs remain PROPOSED. Authoring this
+not implementation acceptance. Current WP states are in the programme README. Authoring this
 plan, a successful baseline CI, or an agent's summary cannot close a WP.
 
 ## Required WP evidence record

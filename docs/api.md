@@ -41,6 +41,33 @@ with `{ "project": ... }` to inspect calculated dates and warnings. Commit with
 blindly replay stale writes. The server validates hierarchy/dependency cycles,
 participation and capacity before applying changes.
 
+Projects retain `calendar_id` as an anchor and may select immutable versions for
+additional years with `calendar_versions`, for example
+`{"2027":"calendar-2027-v1"}`. A selected version must match its year and pass
+complete-date/checksum validation. Conflicting versions for the anchor year are
+rejected. An omitted map on a legacy update preserves existing selections,
+including the old anchor year when changing to a different year; an explicit
+empty map clears additional selections. Managers change selections through the
+normal preview/revision-controlled save flow. Calendar import does not attach a
+version automatically.
+
+Entirely unselected years use provisional Monday–Friday days. The response lists
+actually consulted `provisional_years`; these are not official holiday dates.
+Replacing provisional years requires explicit version selection and reviewed
+recalculation. A missing/corrupt selected version is an error, never a fallback.
+Supported calendar dates remain 2000–2200; no 730-day task constraint remains.
+
+Calculated `loads`, `warnings`, `provisional_years` and `calculation_state` are
+read-only. Omit them from mutation/import payloads. Calculation work, load count
+and derived result bytes are bounded; preview/save exhaustion returns HTTP 422,
+code `calculation_budget_exceeded`, without saving partial results. GET retains
+authoritative editable data with unavailable calculated dates and a warning when
+that budget is exhausted. See the [bounded scheduling contract](remediation/2026-10-30/wp-01-implementation.md).
+
+The project ETag is only its persisted revision. Employee changes and other-project
+capacity can alter derived results without changing it; do not use that ETag as a
+complete derived-state cache validator.
+
 `external_reference` is a free-form project-level reference (up to 500 UTF-8 bytes)
 for your own system. It does not trigger outbound calls. Your adapter owns the
 mapping, authentication and status synchronization with its external system.

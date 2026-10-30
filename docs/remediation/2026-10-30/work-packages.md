@@ -1,6 +1,8 @@
 # Work packages and verification matrix
 
-All tests below are **planned, not executed** for these WPs. Expected results must
+Tests below are acceptance requirements. They are **planned, not executed** unless
+the corresponding WP verification record explicitly reports actual evidence.
+See [WP-01 verification](wp-01-verification.md). Expected results must
 be encoded as assertions with independent expected values, not copied from the
 algorithm under test. Use a frozen clock and explicit timezone in date-sensitive
 fixtures; historical 2025–2027 tests must not depend on the real execution year.

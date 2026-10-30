@@ -30,6 +30,15 @@ on empty days. Insufficient capacity extends task duration; conflicting total
 allocations block publication of affected calculated dates until corrected.
 Work calendars pause execution on nonworking days in both duration display modes.
 
+Projects select immutable annual calendar versions, retaining a compatible anchor.
+Unselected years use visibly provisional weekdays; invalid selected versions never
+silently fall back. Multi-year calculations share an explicit cancellable work
+budget, including calendar validation and related-project capacity checks. The
+date domain remains 2000–2200; derived-ledger limits replace the old 730-day guard.
+Snapshots store authoritative inputs rather than large recomputable load arrays.
+See [WP-01 contract and evidence](remediation/2026-10-30/wp-01-verification.md)
+for verified scope and outstanding acceptance boundaries.
+
 ## Accounts and integrations
 
 First administrator setup opens at the normal URL without an installation key,

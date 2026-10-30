@@ -3,13 +3,15 @@
 Status: requested 2026-10-30. Update entry point B and calendar option B were accepted. Scheduling budget follows D02 option B.
 The user confirmed projects must be able to span more than one year.
 
-## Evidence
+## Original baseline evidence
 
-`readCalendar` loads only the project's single calendar_id. Imported calendars
-are complete immutable annual versions. The bundled dataset contains only2026.
-`Calculate` rejects a date missing from that calendar. Task DurationDays and
-capacity search also stop at730days. These are separate restrictions; simply
-raising a number cannot fix missing calendar coverage.
+At the original baseline, `readCalendar` loaded only the project's single calendar_id. Imported calendars
+were complete immutable annual versions. The bundled dataset contained only 2026.
+`Calculate` rejected a date missing from that calendar. Task DurationDays and
+capacity search also stopped at 730 days. These were separate restrictions;
+simply raising a number could not fix missing calendar coverage. See the current
+[WP-01 contract](remediation/2026-10-30/wp-01-implementation.md) and
+[verification record](remediation/2026-10-30/wp-01-verification.md) for the repair.
 
 ## Calendar options
 
