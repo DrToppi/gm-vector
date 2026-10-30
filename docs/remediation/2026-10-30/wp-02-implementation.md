@@ -105,6 +105,42 @@ Do not select a new isolation or locking architecture solely from these hypothes
 The old opt-in 20-project/100-employee test with a hardcoded 500 ms assertion is a
 historical stress harness; it is not an approved WP-02 acceptance profile.
 
+## D11 accepted correction and measured calendar reuse
+
+Both probes were executed. The user accepted [D11 A](wp-02-consistency.md): include
+fact add/delete in the existing exclusive portfolio lock before project-row locks,
+and end fully materialized read transactions before network output. Preserve the
+isolation level and lock order; cover add/delete, GET/preview/export, cancellation
+and the actual slow-writer database wait. No partial response may escape an error.
+
+Baseline measurements found ten repeated annual-calendar reads/validations in a
+five-project calculation. Under D04 A, a per-prepare map may reuse a validated
+immutable annual version by ID within that one coherent transaction. It must not
+survive the request, store calculated schedules, cache provisional dates or share
+mutable composite maps. Keep year/anchor-conflict checks on every selection,
+charge actual validation/merge work to the shared budget, check cancellation and
+allocate independent composite day/provenance maps per project. Uncached direct
+callers retain strict validation. Verify distinct versions, corrupt checksums,
+year mismatch, budget boundaries, context cancellation and map isolation, then
+measure before/after SQL/timing on the same fixture. No schema/index or broader
+batch rewrite is authorized solely to obtain a lower number.
+
+## Frozen reference-run controls
+
+Use the measured reference workstation (12 logical CPUs available, about 31.3 GiB
+RAM, GOMAXPROCS 12, existing 12-connection pool and local disposable PostgreSQL).
+Exercise authenticated loopback TLS API requests with ten distinct session rows;
+nginx/external network latency is excluded and must be stated. Use the ready
+five-project fixture above with deterministic seed. Mix 90% GET, 5% preview and
+5% PUT, with at most one action per second per client in a closed loop; report
+actual throughput and latency including response materialization/body transfer.
+Report p50/p95/p99, sample counts, all unexpected errors and explicit optimistic
+409 conflicts separately; do not silently drop slow/error samples or automatically
+retry mutations. Record resource/connection/goroutine observations over the
+ten-minute load and fifteen-minute soak and assert final data correctness.
+These controls describe this reference experiment, not an unbounded saturation
+test or a claim about another host's network and hardware.
+
 ## Primary-source check
 
 Checked on 2026-10-30: [React effect setup/cleanup](https://react.dev/reference/react/useEffect),

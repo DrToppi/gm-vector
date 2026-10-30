@@ -1,6 +1,6 @@
 # WP-02 project/fact consistency decision
 
-Status: **D11 PROPOSED — HUMAN SELECTION REQUIRED**.
+Status: **D11 A ACCEPTED BY THE USER ON 2026-10-30**.
 This is a demonstrated consistency defect, not a reason to replace the scheduler.
 
 ## Executed reproduction
@@ -31,9 +31,16 @@ an elapsed-time guess; preserve the materialized response and error behaviour.
 | B — hold project-row shared locks for input reads inside existing transactions | Facts serialize within their project; unrelated projects can continue | More read-path changes and transaction/ordering audit; a shared row lock outside an explicit transaction would not protect later statements | Partial coverage or a new lock cycle; test every read/prepare/export path and existing row-lock order with concurrent writers |
 | C — use repeatable-read snapshots for coherent read/preview transactions | A coherent transaction snapshot without globally serializing fact writers | Changes isolation semantics and transaction construction beyond the current lock convention | A snapshot can predate a lock wait; review retry/error, input freshness and authorization boundaries carefully, including writes racing with preview |
 
-Recommendation: **A**, paired with ending the materialized read transaction before
-network output. No option is selected automatically. Do not implement B/C or change
-the isolation level merely because its API is convenient.
+The user explicitly selected **A**, paired with ending the materialized read
+transaction before network output. Acquire the existing exclusive portfolio lock
+before each time-entry add/delete project's row lock, preserving the established
+global-before-row ordering. Keep READ COMMITTED and the existing API shapes.
+Verify add and delete interleavings, revision/actual alignment, cancellation and
+preview/export compatibility. The held writer test must now prove that a slow
+network write cannot retain the materialized read's portfolio transaction.
+Measure the accepted mixed-write profile rather than assuming contention is cheap.
+Options B/C are not selected; do not change the isolation level or introduce a
+second read-lock model as part of this correction.
 
 ## Sources checked on 2026-10-30
 
