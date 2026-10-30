@@ -99,7 +99,12 @@ class UpdaterHTTPTests(unittest.TestCase):
                     client.putheader('Authorization', 'Bearer ' + self.server.token)
                     client.putheader('Content-Length', '12')
                     client.putheader(name, value)
-                    client.endheaders(b'{"ref":"a"}')
+                    try:
+                        client.endheaders(b'{"ref":"a"}')
+                    except BrokenPipeError:
+                        # Header rejection may precede the separate body write.
+                        # Still require the server's precise HTTP error below.
+                        pass
                     response = client.getresponse()
                     self.assertEqual(response.status, expected)
                     response.read()
