@@ -2,7 +2,7 @@
 
 Status: **RESUMED BY EXPLICIT USER REQUEST**. The pause below is historical.
 The reviewed updater commit has now been deployed and its host service enabled.
-Current work: WP-02 under accepted decisions D03 A/D04 A, after WP-01 acceptance.
+Current work: WP-04 plan preparation after independently accepted WP-01 and WP-02.
 
 ## Completed and verified
 
@@ -100,3 +100,22 @@ ten minutes of mixed load and fifteen minutes of soak. The sixty-minute soak is
 reserved for final WP-05. Do not infer an acceptance result from short benchmarks.
 Keep the prior unexplained E2E failure and generic server diagnostic visible for
 the broader WP-05 stability/diagnostic work.
+
+## WP-02 acceptance and WP-04 continuation
+
+WP-02 is **PASS — INDEPENDENTLY VERIFIED** at
+`400ae188b6c059170dacfba7b3c8aec4a8af13af`, with
+[successful exact-SHA CI](https://github.com/DrToppi/gm-vector/actions/runs/41041090807).
+The approved 600+900-second reference run completed 14999 logical actions and 750
+committed saves with zero unexpected errors. Worst phase p95 was 297.578 ms for
+reads, 64.491 ms for preview and 327.860 ms for save. See the
+[evidence and limitations](remediation/2026-10-30/wp-02-verification.md).
+The earlier browser reload failure is now localized and guarded; the separate
+generic server diagnostic still belongs to WP-05.
+
+WP-04 decisions D05 B (revision-guarded cursor history), D06 A (one installation
+IANA timezone) and D12 A (legacy JSON default plus optional JSON with metadata)
+are accepted. Freeze and independently review its
+[bounded plan](remediation/2026-10-30/wp-04-implementation.md) before implementation.
+The working installation remains on reviewed updater c8c34ae. Main, installation
+data and services have not been changed by WP-01/WP-02.

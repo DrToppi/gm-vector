@@ -5,7 +5,8 @@ and remediation plans are labelled separately; they are not promises that the
 corresponding functionality is implemented.
 
 Current work is [resumed from the documented checkpoint](implementation-checkpoint.md).
-The verified updater is deployed; WP-01 is independently accepted and WP-02 is starting.
+The verified updater is deployed; WP-01 and WP-02 are independently accepted.
+WP-04 is next under its [bounded plan](remediation/2026-10-30/wp-04-implementation.md).
 
 ## Install and operate
 
@@ -39,8 +40,9 @@ The verified updater is deployed; WP-01 is independently accepted and WP-02 is s
 ## Planned remediation
 
 The [2026-10-30 remediation programme](remediation/2026-10-30/README.md) is currently
-**in progress, now starting WP-02**. The user approved starting with the
-separate updater, followed by WP-01; D01 B/D02 B and D03 A/D04 A are accepted. It defines WP-01
+**in progress, now preparing WP-04**. The user approved starting with the
+separate updater, followed by the ordered work packages. WP-01/WP-02 have exact-SHA
+acceptance records; D05 B/D06 A/D12 A are accepted for WP-04. It defines WP-01
 through WP-05, the implementation order,
 acceptance rules and required independent review. Read its
 [baseline](remediation/2026-10-30/baseline.md) and

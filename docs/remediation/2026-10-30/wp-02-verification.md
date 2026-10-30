@@ -1,6 +1,7 @@
 # WP-02 verification record
 
-Status: **IMPLEMENTATION IN PROGRESS — NOT ACCEPTED**.
+Status: **PASS — INDEPENDENTLY VERIFIED** at
+`400ae188b6c059170dacfba7b3c8aec4a8af13af` on 2026-10-30.
 Decisions [D03 A/D04 A](decisions.md) and the
 [bounded contract](wp-02-implementation.md) govern this package. Work starts from
 `d932046` on `feature/ordered-refresh`, after independently accepted WP-01.
@@ -73,9 +74,10 @@ barriers under race: GET returned old revision 0 with newly committed 15 minutes
 (stored revision 1), and a capacity writer waited on a database Lock while a
 fully materialized response was held. See the
 [D11 options and required decision](wp-02-consistency.md). No production correction
-to locking/isolation is claimed yet.
+to locking/isolation had been made at that baseline checkpoint. The accepted
+implementation and final results are recorded below.
 
-## Remaining work
+## Original remaining work (historical)
 
 Implement and verify selection/session/revision/resource guards, one background
 refresh batch, editor/write/visibility/offline pause and catch-up, plus actual
@@ -183,8 +185,9 @@ calendar data, global daily ceilings and revision/snapshot/audit counts all pass
 Thirty explicitly reported auxiliary GETs were outside the 14999-action mix.
 Per-client recorded logical-start gaps respected the one-second pacing bound.
 
-Observed combined Go client/server resources in this run: heap-inuse peaked at
-23.5 MB, RSS at 50.1 MB, pool at 9/12. Post-drain cleanup recorded five goroutines,
+Observed combined Go client/server resources sampled every ten seconds in this
+run: maximum sampled heap-inuse 23.5 MB, RSS 50.1 MB, pool 9/12. These are not
+continuous peaks. Post-drain cleanup recorded five goroutines,
 zero active HTTP and zero acquired connections. These observations exclude
 PostgreSQL/nginx and do not invent a portable memory SLO or promise leak freedom.
 See [sanitized reference results](wp-02-reference-results.json) for all endpoint
@@ -193,7 +196,7 @@ percentiles, counts, ranges and final data-oracle results. Raw logs remain priva
 Raw reference evidence SHA-256:
 `ae5bf5c07c6f93249dcb22e7654c4a4fc1649e0e0ed0e03ee86a9e357640835c`.
 [CI 41032927723](https://github.com/DrToppi/gm-vector/actions/runs/41032927723)
-completed SUCCESS for exact2c. Its manifest SHA-256 is
+completed SUCCESS for exact 2c. Its manifest SHA-256 is
 `167d2906c1d540bf6ed46b39ab2a2ce81432fd619d1c898e0331c54129666f3a`.
 
 ## Final matrix coverage review
@@ -211,6 +214,35 @@ Independent review correctly requested explicit concurrent capacity-input covera
 instead of inferring it from sequential tests and lock inspection. The test-only
 addition and mandatory runner gate were committed at
 `c9a248a15fa1bcd3e4515644eba1248149013a6f`; its focused race run passed locally.
-Runtime Go/SQL/web blobs are identical to the reference2c source. Final independent
-review and CI for that final coverage revision remain pending; WP-02 is not yet
-marked accepted and has not been deployed.
+Runtime Go/SQL/web blobs are identical to the reference 2c source. The independent
+reviewer executed the new capacity-input races on exact c9a248a under race:
+PASS in 7.094 seconds. The unchanged production runtime makes the reference run
+applicable to the final reviewed implementation without repeating its 25 minutes
+for test/documentation changes.
+
+## Final browser and CI gate
+
+The workspace browser startup fixture was aligned to the existing 15-second
+readiness standard after a CI startup deadline; all 17 local scenarios passed.
+A separate CI failure was localized to the profile-language reload assertion:
+it read documentElement before the new document existed. Old matching DOM could
+also satisfy five other reload waits. The harness now requires a new per-document
+marker and a ready document before the original persistence predicates. The old
+predicate was demonstrated RED; the new isolated predicate checks and actual
+API/PostgreSQL browser E2E passed (20.68 seconds). No application assertion,
+functional timeout, runtime code, protection or latency criterion was weakened.
+
+Final [CI 41041090807](https://github.com/DrToppi/gm-vector/actions/runs/41041090807)
+completed SUCCESS for exact `400ae188b6c059170dacfba7b3c8aec4a8af13af`.
+The different READ-ONLY reviewer checked that source, independently executed the
+frontend and database race regressions, inspected the reference evidence and
+confirmed production-runtime equivalence to2c. Verdict: **PASS — INDEPENDENTLY
+VERIFIED**, with no remaining WP-02 blocker.
+
+Acceptance covers the agreed reference workload, not every possible deployment.
+Five individual soak GETs exceeded 500 ms (maximum 610.746 ms); the agreed criterion
+is p95, which passed. Sampled Go resources exclude PostgreSQL/nginx and are not a
+leak-freedom claim. The generic operation_failed diagnostic remains a WP-05
+investigation; it does not erase the now-localized reload assertion failure.
+No main merge or deployment occurred. Later work packages and the final 60-minute
+operational soak remain outside this acceptance.
