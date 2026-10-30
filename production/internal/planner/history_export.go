@@ -56,7 +56,7 @@ func (a *App) exportTimeHistory(w http.ResponseWriter, r *http.Request, u Princi
 	}
 	h, role, e := a.historyHeader(ctx, tx, u, r.PathValue("id"))
 	if e != nil {
-		return e
+		return historyExportError(ctx, e)
 	}
 	if role != "manager" {
 		return denied()
