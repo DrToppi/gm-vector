@@ -1,0 +1,393 @@
+{
+  "source": {
+    "source_sha": "2c10bc4b0994e7827e911fe9b5e8e2b355063020",
+    "harness_sha256": "531c85f38510e078a83e37d4861025339db6a4039e9a1a211f2b4f7610290232",
+    "started_utc": "2026-10-30T09:22:19.030993+00:00",
+    "mixed_seconds": 600,
+    "soak_seconds": 900,
+    "smoke": false,
+    "go_race": false
+  },
+  "phases": [
+    {
+      "phase": "mixed",
+      "mode": "reference acceptance",
+      "scheduling_seconds": 600,
+      "actual_seconds_including_drain": 600.000618671,
+      "drain_seconds": 0.0006186709999838058,
+      "clients": 10,
+      "logical_actions": 6000,
+      "logical_actions_per_second_including_drain": 9.999989688827299,
+      "actual_logical_counts": {
+        "get": 5400,
+        "preview": 300,
+        "save": 300
+      },
+      "unexpected_errors": 0,
+      "optimistic409": 0,
+      "request_timeouts_or_cancellations": 0,
+      "per_client_minimum_start_gap_ms": [
+        1000,
+        1000,
+        1000,
+        1000,
+        1000,
+        1000,
+        1000,
+        1000,
+        1000,
+        1000
+      ],
+      "capacity_shared_lock_p95_ms": 81.285,
+      "capacity_shared_lock_max_ms": 135.565,
+      "endpoints": {
+        "get": {
+          "all": {
+            "samples": 5400,
+            "p50_ms": 54.218,
+            "p95_ms": 296.14,
+            "p99_ms": 332.389,
+            "max_ms": 452.482,
+            "statuses": {
+              "200": 5400
+            },
+            "outcomes": {
+              "ok": 5400
+            }
+          },
+          "successful": {
+            "samples": 5400,
+            "p50_ms": 54.218,
+            "p95_ms": 296.14,
+            "p99_ms": 332.389,
+            "max_ms": 452.482,
+            "statuses": {
+              "200": 5400
+            },
+            "outcomes": {
+              "ok": 5400
+            }
+          }
+        },
+        "preview": {
+          "all": {
+            "samples": 300,
+            "p50_ms": 55.683,
+            "p95_ms": 63.875,
+            "p99_ms": 66.257,
+            "max_ms": 76.371,
+            "statuses": {
+              "200": 300
+            },
+            "outcomes": {
+              "ok": 300
+            }
+          },
+          "successful": {
+            "samples": 300,
+            "p50_ms": 55.683,
+            "p95_ms": 63.875,
+            "p99_ms": 66.257,
+            "max_ms": 76.371,
+            "statuses": {
+              "200": 300
+            },
+            "outcomes": {
+              "ok": 300
+            }
+          }
+        },
+        "save": {
+          "all": {
+            "samples": 300,
+            "p50_ms": 298.919,
+            "p95_ms": 323.238,
+            "p99_ms": 350.609,
+            "max_ms": 422.582,
+            "statuses": {
+              "200": 300
+            },
+            "outcomes": {
+              "ok": 300
+            }
+          },
+          "successful": {
+            "samples": 300,
+            "p50_ms": 298.919,
+            "p95_ms": 323.238,
+            "p99_ms": 350.609,
+            "max_ms": 422.582,
+            "statuses": {
+              "200": 300
+            },
+            "outcomes": {
+              "ok": 300
+            }
+          }
+        }
+      },
+      "resource_ranges": {
+        "HeapInuseBytes": {
+          "min": 11321344,
+          "max": 22208512,
+          "first": 11321344,
+          "last": 15532032
+        },
+        "HeapAllocBytes": {
+          "min": 9023400,
+          "max": 18562872,
+          "first": 9023400,
+          "last": 10129912
+        },
+        "Goroutines": {
+          "min": 8,
+          "max": 40,
+          "first": 8,
+          "last": 29
+        },
+        "PoolTotal": {
+          "min": 1,
+          "max": 8,
+          "first": 1,
+          "last": 8
+        },
+        "PoolAcquired": {
+          "min": 0,
+          "max": 0,
+          "first": 0,
+          "last": 0
+        },
+        "HTTPActive": {
+          "min": 0,
+          "max": 0,
+          "first": 0,
+          "last": 0
+        },
+        "RSSBytes": {
+          "min": 35627008,
+          "max": 47702016,
+          "first": 35627008,
+          "last": 46551040
+        }
+      },
+      "slow_or_error_samples": 0
+    },
+    {
+      "phase": "soak",
+      "mode": "reference acceptance",
+      "scheduling_seconds": 900,
+      "actual_seconds_including_drain": 900.025966201,
+      "drain_seconds": 0.025966200999960165,
+      "clients": 10,
+      "logical_actions": 8999,
+      "logical_actions_per_second_including_drain": 9.998600415924313,
+      "actual_logical_counts": {
+        "get": 8099,
+        "preview": 450,
+        "save": 450
+      },
+      "unexpected_errors": 0,
+      "optimistic409": 0,
+      "request_timeouts_or_cancellations": 0,
+      "per_client_minimum_start_gap_ms": [
+        1000,
+        1000,
+        1000,
+        1000,
+        1000,
+        1000,
+        1000,
+        1000,
+        1000,
+        1000
+      ],
+      "capacity_shared_lock_p95_ms": 81.085,
+      "capacity_shared_lock_max_ms": 179.517,
+      "endpoints": {
+        "get": {
+          "all": {
+            "samples": 8099,
+            "p50_ms": 54.046,
+            "p95_ms": 297.578,
+            "p99_ms": 334.736,
+            "max_ms": 610.746,
+            "statuses": {
+              "200": 8099
+            },
+            "outcomes": {
+              "ok": 8099
+            }
+          },
+          "successful": {
+            "samples": 8099,
+            "p50_ms": 54.046,
+            "p95_ms": 297.578,
+            "p99_ms": 334.736,
+            "max_ms": 610.746,
+            "statuses": {
+              "200": 8099
+            },
+            "outcomes": {
+              "ok": 8099
+            }
+          }
+        },
+        "preview": {
+          "all": {
+            "samples": 450,
+            "p50_ms": 55.647,
+            "p95_ms": 64.491,
+            "p99_ms": 88.077,
+            "max_ms": 107.16,
+            "statuses": {
+              "200": 450
+            },
+            "outcomes": {
+              "ok": 450
+            }
+          },
+          "successful": {
+            "samples": 450,
+            "p50_ms": 55.647,
+            "p95_ms": 64.491,
+            "p99_ms": 88.077,
+            "max_ms": 107.16,
+            "statuses": {
+              "200": 450
+            },
+            "outcomes": {
+              "ok": 450
+            }
+          }
+        },
+        "save": {
+          "all": {
+            "samples": 450,
+            "p50_ms": 300.247,
+            "p95_ms": 327.86,
+            "p99_ms": 361.891,
+            "max_ms": 584.825,
+            "statuses": {
+              "200": 450
+            },
+            "outcomes": {
+              "ok": 450
+            }
+          },
+          "successful": {
+            "samples": 450,
+            "p50_ms": 300.247,
+            "p95_ms": 327.86,
+            "p99_ms": 361.891,
+            "max_ms": 584.825,
+            "statuses": {
+              "200": 450
+            },
+            "outcomes": {
+              "ok": 450
+            }
+          }
+        }
+      },
+      "resource_ranges": {
+        "HeapInuseBytes": {
+          "min": 15097856,
+          "max": 23502848,
+          "first": 17866752,
+          "last": 17211392
+        },
+        "HeapAllocBytes": {
+          "min": 9578872,
+          "max": 19646080,
+          "first": 12786184,
+          "last": 11562208
+        },
+        "Goroutines": {
+          "min": 29,
+          "max": 45,
+          "first": 29,
+          "last": 32
+        },
+        "PoolTotal": {
+          "min": 8,
+          "max": 9,
+          "first": 8,
+          "last": 9
+        },
+        "PoolAcquired": {
+          "min": 0,
+          "max": 1,
+          "first": 0,
+          "last": 0
+        },
+        "HTTPActive": {
+          "min": 0,
+          "max": 1,
+          "first": 0,
+          "last": 0
+        },
+        "RSSBytes": {
+          "min": 43331584,
+          "max": 50028544,
+          "first": 49635328,
+          "last": 43331584
+        }
+      },
+      "slow_or_error_samples": 5
+    }
+  ],
+  "READ_PATH_LOAD_FINAL": {
+    "ambiguous_ack_policy": "server200 after commit determines persisted writes; lost replies remain unexpected failures and are never retried",
+    "committed_puts_total": 750,
+    "global_employee_daily_maximum_checked": true,
+    "immutable_tables_digest_checked": true,
+    "project_schedule_facts_normalized_digests_checked": true,
+    "revision_snapshot_audit_counts_checked": true,
+    "server_canceled_contexts": {},
+    "server_committed_puts": {
+      "mixed": 300,
+      "soak": 450
+    },
+    "server_statuses": {
+      "baseline": {
+        "200": 5
+      },
+      "mixed": {
+        "200": 6000
+      },
+      "preflight-mixed": {
+        "200": 10
+      },
+      "preflight-soak": {
+        "200": 10
+      },
+      "soak": {
+        "200": 8999
+      },
+      "verification": {
+        "200": 5
+      }
+    },
+    "smoke_not_acceptance": false
+  },
+  "READ_PATH_LOAD_CLEANUP": {
+    "Seconds": 2.963e-05,
+    "RuntimeCPUEstimateSeconds": 707.2085241669998,
+    "PoolAcquireMS": 75.439,
+    "HeapAllocBytes": 4563136,
+    "HeapInuseBytes": 10608640,
+    "TotalAllocBytes": 183575829704,
+    "RSSBytes": 41963520,
+    "RSSAvailable": true,
+    "Goroutines": 5,
+    "HTTPActive": 0,
+    "PoolCanceledAcquires": 0,
+    "PoolEmptyAcquires": 9,
+    "PoolTotal": 9,
+    "PoolAcquired": 0,
+    "PoolMax": 12
+  },
+  "log_sha256": "ae5bf5c07c6f93249dcb22e7654c4a4fc1649e0e0ed0e03ee86a9e357640835c",
+  "scope": "Synthetic reference API workload; combined Go client/server resources; PostgreSQL/nginx resources and external network excluded.",
+  "interpretation": "Executed 600-second mixed load plus 900-second soak, not an unbounded saturation test or whole-application operational acceptance."
+}

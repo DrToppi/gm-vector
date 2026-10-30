@@ -154,5 +154,63 @@ change to application assertions, functional waits or API latency SLOs. The loca
 affected scenario passed with 202 ms readiness. Keep the original failed evidence;
 do not claim the unknown DBus/startup cause was diagnosed.
 
-The agreed long mixed/soak run, final combined regression, exact-SHA independent
-review and final CI remain open.
+## Executed reference acceptance run
+
+Exact source `2c10bc4b0994e7827e911fe9b5e8e2b355063020`, harness SHA-256
+`531c85f38510e078a83e37d4861025339db6a4039e9a1a211f2b4f7610290232`.
+The command explicitly enabled the reference test, removed smoke/duration overrides
+and used the disposable test database. No competing heavy local jobs ran.
+
+```sh
+GMA_READ_PATH_LOAD=1 go test -count=1 -timeout 40m \
+  -run '^TestReadPathLoad$' -v ./internal/planner
+```
+
+Set only the explicit disposable GMA_TEST_DSN privately. For this run the source
+tree was clean at launch, smoke was false, and durations were exactly 600/900
+seconds. TestReadPathLoad actually ran and passed in 1507.49 seconds; it was not
+accepted from an exit code that could also mean skip. Active requests drained at
+phase boundaries; no artificial deadline cancellations or mutation retries.
+
+| Phase | Scheduling time | Logical actions | GET p95 (ms) | Preview p95 (ms) | Save p95 (ms) | Unexpected errors / 409 / cancellations |
+| --- | --- | --- | --- | --- | --- | --- |
+| Mixed | 600 s | 6000 | 296.140 | 63.875 | 323.238 | 0 / 0 / 0 |
+| Soak | 900 s | 8999 | 297.578 | 64.491 | 327.860 | 0 / 0 / 0 |
+
+All-status and success-only p95 groups both met read ≤500 ms and preview/save
+≤2000 ms. There were 750 successful committed PUTs; normalized schedules, facts,
+calendar data, global daily ceilings and revision/snapshot/audit counts all passed.
+Thirty explicitly reported auxiliary GETs were outside the 14999-action mix.
+Per-client recorded logical-start gaps respected the one-second pacing bound.
+
+Observed combined Go client/server resources in this run: heap-inuse peaked at
+23.5 MB, RSS at 50.1 MB, pool at 9/12. Post-drain cleanup recorded five goroutines,
+zero active HTTP and zero acquired connections. These observations exclude
+PostgreSQL/nginx and do not invent a portable memory SLO or promise leak freedom.
+See [sanitized reference results](wp-02-reference-results.json) for all endpoint
+percentiles, counts, ranges and final data-oracle results. Raw logs remain private.
+
+Raw reference evidence SHA-256:
+`ae5bf5c07c6f93249dcb22e7654c4a4fc1649e0e0ed0e03ee86a9e357640835c`.
+[CI 41032927723](https://github.com/DrToppi/gm-vector/actions/runs/41032927723)
+completed SUCCESS for exact2c. Its manifest SHA-256 is
+`167d2906c1d540bf6ed46b39ab2a2ce81432fd619d1c898e0331c54129666f3a`.
+
+## Final matrix coverage review
+
+| Matrix IDs | Actual evidence |
+| --- | --- |
+| 02-01–06 | Four baseline RED races, 17 real React/Chrome ordering/lifecycle cases, coordinator units, prior session-identity unit/nine browser cases and real API E2E; independently executed frozen frontend |
+| 02-07 | Existing simultaneous same-revision saves plus new held actual quota/calendar/global-maximum writers during preview, followed by stale-preview save; exact lock waits, schedule/load oracles, authoritative recomputation or 409 |
+| 02-08–09 | Actual query tracing, nonmutation digests, request-local annual reuse/corruption/version/map/budget tests and changed-input API checks |
+| 02-10 | Approved exact-source 600+900-second reference run and endpoint SLOs above |
+| 02-11 | Concurrent unpaced profile cohorts, cancellation/slow-response database barriers, complete reference resource series and post-drain cleanup |
+| 02-12 | Actual synthetic EXPLAIN ANALYZE/BUFFERS and comparable same-harness SQL/timing replay; no unsupported index introduced |
+
+Independent review correctly requested explicit concurrent capacity-input coverage
+instead of inferring it from sequential tests and lock inspection. The test-only
+addition and mandatory runner gate were committed at
+`c9a248a15fa1bcd3e4515644eba1248149013a6f`; its focused race run passed locally.
+Runtime Go/SQL/web blobs are identical to the reference2c source. Final independent
+review and CI for that final coverage revision remain pending; WP-02 is not yet
+marked accepted and has not been deployed.

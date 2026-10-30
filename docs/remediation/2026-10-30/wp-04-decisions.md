@@ -85,7 +85,7 @@ ambiguous wall-clock windows must be detected before any future calendar publica
 with a visible warning instead of a guessed instant. Keep the live calendar module
 disabled; provider timezone identifiers require validation, not blind string replacement.
 
-## D12 — Project JSON provenance compatibility (pending)
+## D12 — Project JSON provenance compatibility (A accepted on 2026-10-30)
 
 Strict old importers reject unknown fields, so arbitrary embedded timezone metadata
 is not forward compatible. Legacy-file support and old applications consuming new
@@ -99,8 +99,12 @@ format rather than silently replacing the v1 response.
 | B — make portable versioned JSON the UI default; retain legacy JSON through an explicit compatible choice/API | Normal new exchanges carry zone metadata | Old applications cannot read the new default file until updated or given the legacy format | Explain forward incompatibility clearly; new importer must continue accepting old files without changing dates/identity rules |
 | C — ZIP with unchanged project.json and separate metadata.json | Payload stays familiar; metadata travels alongside it | New archive import/export path and extraction/size checks | Additional parser, decompression/path limits and cleanup/security tests are required |
 
-Recommendation: **A** for the smallest compatibility change. The user has not
-selected D12 yet. No option may embed time facts into ordinary Project JSON.
+Accepted choice: **A** for the smallest compatibility change. Keep existing JSON
+as the default and provide a separate clearly labelled portable JSON with explicit
+versioned metadata. New import handles both without weakening strict legacy
+decoding or embedding time facts into ordinary Project JSON. Old applications
+are not expected to accept the optional new envelope; the legacy choice remains
+available for them.
 
 ## Primary sources checked on 2026-10-30
 
