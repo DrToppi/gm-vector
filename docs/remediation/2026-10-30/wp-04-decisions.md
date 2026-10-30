@@ -1,8 +1,9 @@
 # WP-04 history and timezone decisions
 
-Status: **PROPOSED — NO WP-04 IMPLEMENTATION AUTHORIZED BY THESE RECOMMENDATIONS**.
+Status: **D05 B / D06 A ACCEPTED BY THE USER ON 2026-10-30**.
 Prepared during the quiet WP-02 reference run. Implementation begins only after
-WP-02 acceptance, human selection and a bounded WP-04 plan.
+WP-02 acceptance and a bounded WP-04 plan. The general programme is authorized;
+accepting these choices does not waive verification or authorize deployment.
 
 ## Observed contracts
 
@@ -33,11 +34,11 @@ project zone cannot simply be added without defining shared-employee day semanti
 | B — keyset pages with revision guard | Bounded deep-page work; exact traversal while the revision stays unchanged; no retained snapshot | No arbitrary page-number jump; changes require refreshing the list | Even unrelated project edits can invalidate a cursor; preserve mixed date-DESC/ID-ASC order, bind context and recheck access on every page |
 | C — materialized history snapshot with TTL | Stable browsing despite insertions/deletions while users navigate | Snapshot storage, quotas, expiry, cleanup and revocation handling | Temporarily retains deleted sensitive content; resource/privacy boundaries and recovery require additional design |
 
-Recommendation: **B** for a minimal compatible repair. This replaces the initial
+Accepted choice: **B** for a minimal compatible repair. This replaces the initial
 unselected watermark proposal with an explicit revision guard; do not pretend a
 random-ID watermark is a snapshot. No new isolation policy is chosen by it.
 
-Proposed shared packet for human selection:
+The user accepted the shared packet in the selection question:
 
 - New paged envelope resource; retain old array consumers and add explicit legacy
   truncation/paging metadata, with no scheduled compatibility removal in this WP.
@@ -64,12 +65,12 @@ Proposed shared packet for human selection:
 | B — IANA zone per project | Project-local deadlines/windows | The current date-only capacity ledger cannot prove a common day across mixed-zone projects | A bounded first version must disallow sharing an employee across different project zones; supporting that sharing requires a further agreed accounting-day/interval design |
 | C — IANA zone per employee for scheduling/capacity | Common limit follows each employee's local day across projects | Multi-person tasks, project calendars and exception dates need conversions | Largest model change: allocation across midnight/DST cannot be inferred from date+minutes alone; requires a broader explicit scheduling contract |
 
-Recommendation after code inspection: **A** for this bounded repair. The original
+Accepted choice after code inspection: **A** for this bounded repair. The original
 D06 B recommendation was unapproved and depended on unresolved common-day rules.
 If B/C is chosen, resolve the stated extra restrictions/conversion contracts before
 implementation; do not silently change accepted employee-allocation semantics.
 
-For A, propose an installation configuration setting with a compatible Moscow
+For A, use an installation configuration setting with a compatible Moscow
 default, checked at startup and carried in relevant backup/export metadata. Imports
 with a different declared planning zone require explicit acknowledgement, preserving
 date labels rather than converting them; legacy files without metadata are identified
