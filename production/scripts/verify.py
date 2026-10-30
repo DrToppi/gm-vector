@@ -91,7 +91,7 @@ def main():
             run(test + ' (race)',
                 [go, 'test', '-race', '-count=1', '-json', '-run', '^' + test + '$', './internal/planner'],
                 extra={'GMA_TEST_DSN': dsn}, expected_test=test)
-        for test in ('TestReadPathRevisionFactsCoherence', 'TestReadPathSlowResponseReleasesCapacityLock'):
+        for test in ('TestReadPathRevisionFactsCoherence', 'TestReadPathSlowResponseReleasesCapacityLock', 'TestReadPathConcurrentCapacityInputs'):
             run(test + ' (race)',
                 [go, 'test', '-race', '-count=1', '-json', '-run', '^' + test + '$', './internal/planner'],
                 extra={'GMA_TEST_DSN': dsn}, expected_test=test)
