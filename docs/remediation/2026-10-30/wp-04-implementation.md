@@ -107,6 +107,10 @@ exactly 1000 does not mean truncated. Preserve documented legacy existence/archi
 edge behaviour rather than silently changing it while introducing the new route.
 Move current UI to the paged API. Preserve drafts and D03 request/session intent
 guards, including late pages, fact refreshes, project switches and archived tasks.
+Keep one rendered page and at most 100 back cursors. Forward traversal remains
+unlimited by this local navigation guard; First resets traversal. If earlier back
+positions are discarded, explain that they remain reachable from First rather
+than implying that records were removed. Test the 100/101 back-history boundary.
 
 ## Complete separate history export
 
@@ -142,6 +146,18 @@ bytes or spill plaintext history into the 32 MiB container tmpfs. Verify ordinar
 cancellation, concurrent changes and slow downloads; revise engineering guards
 only with measured memory/correctness evidence. The API container limit is 768 MiB.
 All history remains traversable through bounded pages beyond a single-export budget.
+
+The actual packaged8743063 probe observed a second successful export while the
+first TLS client was paused. The bundled nginx can absorb an upstream response
+instead of propagating download backpressure. For the successful history export
+response only, send `X-Accel-Buffering: no`; retain all other proxy/TLS/auth settings.
+This is a bounded implementation correction to the accepted export lifetime guard,
+not a new proxy architecture. Re-run the actual paused-client/busy/read/write/full-
+body oracle before acceptance. Do not claim tmpfs exhaustion from that observation:
+the confirmed failure is early acceptance of the second export.
+The [official nginx directive contract](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_buffering)
+documents per-response buffering control and temporary-file buffering. Custom
+proxies must preserve equivalent streaming behaviour for this download resource.
 
 ## Installation timezone
 

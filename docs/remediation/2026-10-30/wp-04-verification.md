@@ -51,6 +51,22 @@ failure is not claimed as an exact-current-source regression. The final candidat
 must still pass actual restored API/history/config checks and packaged-image tzdata
 verification. The existing backup mechanism has not been rewritten.
 
+## Actual packaged-export RED
+
+The root built a separate image from committed backend8743063 without replacing
+the working image tag. A fresh disposable Docker installation completed real
+HTTPS/admin/TOTP setup and accepted its New_York metadata. The new10000×4000-byte
+comment export probe then observed HTTP200 on a second export while the first
+TLS client's receive window/body was held. The busy guard assertion failed;
+no later zone/large-body success is claimed from that run. Fixture volumes and
+containers were removed by finally-cleanup.
+
+This confirms an end-to-end lifetime mismatch through the proxy. It does not
+prove tmpfs exhaustion. The bounded plan now specifies per-response nginx
+buffering control; a corrected actual-image replay remains required. This image's
+web bundle was a development snapshot, so the probe is API/proxy evidence only,
+not a final frontend or exact-final-release acceptance.
+
 ## Required evidence before acceptance
 
 - Reproduce project-wide 1000-row truncation hiding an older task and a mismatched

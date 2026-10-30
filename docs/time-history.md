@@ -36,6 +36,9 @@ The response includes items, next_cursor, revision, filters, limit, project cont
 planning_timezone, total_count, recorded_minutes and legacy_unattributed. Order is
 `work_date DESC, id ASC`. An empty next_cursor ends traversal. Retain normalized
 filters and limit for every continuation request.
+The UI renders one page and retains at most 100 backward cursor positions. A notice
+identifies discarded navigation positions; First can restart browsing earlier
+records. Forward access and history retention are not limited by this guard.
 
 A cursor expires 15 minutes after the first page and never extends its own life.
 It is bound to the authenticated principal/kind, project, revision, filters and
