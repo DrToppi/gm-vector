@@ -1,8 +1,12 @@
 # Bounded remediation programme
 
-Status: **DOCUMENTATION ONLY — NOT IMPLEMENTED**. Date: 2026-10-30.
+Status: **IMPLEMENTATION AUTHORIZED; PAUSED AT USER REQUEST**. Date: 2026-10-30.
+See the [current checkpoint](../../implementation-checkpoint.md). No remediation WP
+has been implemented; the separate Git updater is locally verified.
 Owner approval is required for architectural choices before implementation.
-This branch does not authorize code changes, migrations, deployment, or a main merge.
+The user subsequently authorized implementation beginning with the updater;
+pending architecture choices still require approval. The pause currently permits
+only recording state. No main merge is authorized.
 
 ## Goal and execution order
 
@@ -13,7 +17,7 @@ No WP currently has an implementation or acceptance result under this programme.
 
 | WP | Priority | Outcome | Status |
 | --- | --- | --- | --- |
-| WP-01 | P1 | Reproducible multi-year schedules, including2025–2027 | Proposed; calendar policy pending |
+| WP-01 | P1 | Reproducible multi-year schedules, including 2025–2027 | D01 B/D02 B accepted; implementation not started, paused |
 | WP-02 | P1 | No stale UI commits; measured read-path performance | Proposed; workload/SLO approval pending |
 | WP-04 | P2 | Complete time history and explicit time-zone semantics | Proposed; API/time-zone decisions pending |
 | WP-03 | P2 | Bounded frontend modularisation and enforceable checks | Proposed; tools/module boundaries pending |
@@ -36,14 +40,13 @@ Read [baseline](baseline.md), [work packages and test matrix](work-packages.md),
 Do not conflate a passing test suite with correctness of untested scenarios.
 Do not label unrun tests as passing, skips as passes, or proposed thresholds as agreed.
 
-## Deferred request: Git updater
+## Separate Git updater
 
-The user also requested downloading/installing updates from Git. This remains
-tracked separately in [multi-year/update options](../../multiyear-and-updates.md).
-It is **not** folded into WP-05 or implemented by this branch. Its architecture,
-trusted source/release channel, backup/restore procedure and authorization model
-remain unapproved. After this documentation-only instruction, previously presented
-questions do not imply permission to implement either choice automatically.
+The updater entry point B (administrator UI and separate host service) was accepted
+and implemented before the remediation WPs. It remains outside WP-05. Read the
+[verification record](../../updater-verification.md) and [saved checkpoint](../../implementation-checkpoint.md).
+Working-instance installation/service configuration is pending. No remediation
+WP receives PASS status from the updater's acceptance.
 
 ## Definition of final acceptance
 

@@ -4,6 +4,9 @@ Start with the operator guides for the current application. Architecture proposa
 and remediation plans are labelled separately; they are not promises that the
 corresponding functionality is implemented.
 
+Current work is [paused at the documented checkpoint](implementation-checkpoint.md).
+The updater is implemented and verified, but its working-instance deployment is pending.
+
 ## Install and operate
 
 | Guide | Contents |
@@ -36,7 +39,9 @@ corresponding functionality is implemented.
 ## Planned remediation
 
 The [2026-10-30 remediation programme](remediation/2026-10-30/README.md) is currently
-**documentation only**. It defines WP-01 through WP-05, the implementation order,
+**planned, with implementation paused**. The user approved starting with the
+separate updater, followed by WP-01; D01 B/D02 B are accepted. It defines WP-01
+through WP-05, the implementation order,
 acceptance rules and required independent review. Read its
 [baseline](remediation/2026-10-30/baseline.md) and
 [work-package test matrix](remediation/2026-10-30/work-packages.md) before proposing
@@ -50,3 +55,5 @@ included in the remediation programme. Proposed choices require user approval.
 Return to the [project README](../README.md).
 
 - [Managed Git updates](updater.md) — optional administrator UI and host service.
+
+- [Updater verification](updater-verification.md) — exact reviewed SHA and executed evidence.

@@ -1,43 +1,64 @@
 # Updater verification record
 
-Implementation branch: feature/git-updater. Initial implementation730854b;
-nonroot PostgreSQL rehearsal fixes5c42cd1/03acb4a. Final SHA and independent
-acceptance remain pending until the final checks below complete.
+Implementation branch: `feature/git-updater`.
+Reviewed implementation SHA: `c8c34ae211e185d2acbced0aead9549c4015c7d7`.
+Status: **PASS — INDEPENDENTLY VERIFIED** for the locally reviewed updater
+implementation. Its [CI run 40968484550](https://github.com/DrToppi/gm-vector/actions/runs/40968484550)
+completed successfully for the same commit.
+
+Deployment is a separate gate: the working installation has not been updated or
+configured with the host service. Work is paused; see [checkpoint](implementation-checkpoint.md).
 
 ## Executed evidence
 
-- 31 engine/Unix IPC tests and 2 configuration tests passed. Includes auth/body
-  bounds, duplicate headers/JSON, non-ASCII bearer, official advertised branches
-  and peeled tags, changing refs, unadvertised fork SHA rejection, locks, restart
-  and failure handling, stopped writers, restore counts and committed-switch retry.
-- Go relay unit/race, administrator-session-only checks and pre-dispatch audit
-  integration passed. Authorization matrix now covers55routes/385role cases.
-- Seven locale catalogs and TypeScript/frontend build passed. Real React browser
-  update test passed, including accepted-command/lost-ack reconciliation, stale
-  response rejection and no destructive retry.
-- Full verifier passed unit/API/security/backup checks but initially stopped in
-  the new browser fixture. The fixture held a response before sending no-store
-  headers, provoking Chrome same-URL cache locking. Sending headers then holding
-  only the body fixes the harness; no production UI change or timeout widening.
-- Actual official HTTPS Git fetch→candidate build→disposable Docker application
-  update→failed-migration recovery passed on03acb4a. Project data, TOTP ciphertext
-  and encryption key survived; migration-added table was removed by restoring
-  the snapshot; repeat recovery did not restore/switch twice.
-- A separate read-only reviewer reproduced official advertised checkout and the
-  narrow unit suites; no live installation was used for test data.
+| Check | Actual result |
+| --- | --- |
+| Host engine and Unix IPC | 31 tests passed: authorization/body bounds, duplicates, non-ASCII bearer, official refs/peeled tags, ref changes, fork SHA rejection, locks, interrupted state, stopped writers and recovery retry |
+| Service configuration | 2 tests passed, including restrictive umask and private token/unit permissions |
+| Go relay and audit | Unit/race and API integration passed; session administrators only, audit before dispatch, no secrets in relayed messages |
+| Access control | 55 routes and 385 endpoint/role cases passed in the security matrix |
+| Frontend | TypeScript, seven locale catalogs, build and real React updater-browser checks passed |
+| Complete regression | CI passed the full verifier, including unit/race, API, backup, updater browser and existing real API/PostgreSQL browser E2E |
+| Official Git forward update | Disposable installation started from `03acb4a`, fetched the official `feature/git-updater` tip, built and installed `c8c34ae`; assertions required different commits and application image IDs |
+| Failed-migration recovery | Synthetic schema/data change followed by failure: writers stopped, matching snapshot restored, failed table absent, original project/TOTP ciphertext/encryption key retained |
+| Recovery retry | Repeated recovery recognized the committed database-name switch and did not replay restore or switch the database twice |
+| Container/installation CI | Proxy vulnerability gate, HTTPS, empty installation and updater maintenance/recovery fixture passed |
 
-## Independent findings resolved
+The forward test used `updater-integration-check.py --baseline-source` with an
+isolated checkout of the older commit and `--fetch-ref feature/git-updater`.
+It executed a real official HTTPS fetch and source build, not mocked downloads.
+The default CI fixture separately exercises host IPC, maintenance and recovery;
+the distinct-version forward upgrade was also run locally. All projects/accounts
+in these fixtures were synthetic. Raw logs remain private local evidence.
 
-Post-activation failures and service interruption now stop/confirm writers; failed
-stop is journaled. Fresh installer records actual image IDs and release metadata.
-Socket directory permissions are explicit under restrictive umask. Rehearsal
-handles nonroot PostgreSQL images and supplies a valid migration runtime role.
+## Independent review
+
+A different read-only reviewer inspected the exact final implementation SHA,
+requirements, test code and actual logs, independently reran the 31 engine/IPC
+and 2 setup tests, and reproduced an official advertised HTTPS checkout. The
+reviewer initially refused full acceptance of the same-SHA activation fixture;
+the distinct-version/image regression above closed that evidence gap.
+No blocking code findings remained at acceptance. This status does not apply to
+other remediation WPs or to final operational acceptance of the whole application.
+
+## Findings resolved during verification
+
+- Post-activation failure and interrupted service startup stop and confirm writers;
+  a failed stop is recorded rather than claiming maintenance is safe.
+- A fresh installer records actual running image IDs and embedded release metadata.
+- Socket directory permissions remain usable under restrictive umask.
+- Rehearsal supports nonroot PostgreSQL images and a valid migration runtime role.
+- PostgreSQL readiness uses TCP, avoiding the temporary initialization Unix server.
+- The browser stale-response fixture sends no-store headers before withholding the
+  body, avoiding Chrome cache locking; timeouts were not widened.
+- IPC negative tests assert the actual HTTP rejection even when the server rejects
+  headers before the client finishes sending a body.
 
 ## Limits
 
-Recovery is explicitly snapshot-based, not zero-data-loss rollback; failed DB is
-retained. Host agent self-update and infrastructure/major PostgreSQL upgrades are
-operator actions. The application updater rejects changed deployment contracts.
-No claim is made that all remediation WPs are complete. Final full verifier,
-final Git/Docker run, CI and exact-SHA independent review must be recorded before
-marking updater acceptance complete. Raw logs remain private local evidence.
+Only application code is updated automatically; changed infrastructure contracts
+are rejected. Host agent self-update and major PostgreSQL upgrades are operator
+actions. Recovery restores the stopped-writer snapshot and can discard later
+changes; the failed database is retained. A local recovery command is required
+when the API is stopped. Official source code is executed with host-operator
+privileges during builds. See [updater contract](updater.md).
