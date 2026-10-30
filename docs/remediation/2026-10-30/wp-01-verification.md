@@ -73,11 +73,34 @@ not accept later changes.
 
 ## Remaining acceptance work
 
-Independent matrix review requires explicit cross-year dependency-mode and
-individual-availability tests, a real two-project capacity fixture, export/import
-value comparison, and backup restoration of explicit annual pins with assignments,
-participants and time facts. These checks are being added; they are not PASS from
-the table above.
+The matrix gaps identified in independent review now have executed evidence:
+
+| IDs | Executed regression and assertions | Result |
+| --- | --- | --- |
+| 01-01, 01-02, 01-05 | Verified 2025–2027 chain and leap date; six cross-year together/after/delay cases in both modes with literal expected dates and complete ledgers | PASS, Go race; the new ten-case subset was also run independently |
+| 01-03 | Four individual-availability cases: shortened December 31, date overrides, transferred Saturday, holiday Monday, full-day and one-minute remainder | PASS, Go race |
+| 01-04 | Actual API/DB portfolio with different annual anchors/pins; exact 480-minute global boundary, January 4 conflict at 600 minutes, recovery without quota changes, GET leaves persisted data unchanged | PASS, API race; independently rerun |
+| 01-06, 01-09 | Missing/gapped/corrupt/version-conflicting years, provisional replacement, preview/cancel/save, undo of empty/pinned maps, stale revision, manager/member and legacy anchor behaviour | PASS, scheduler/API/browser |
+| 01-07, 01-11 | Actual legacy 730-day migration and 731-day save, editor and resize; third-year chart navigation with bounded columns; unknown selected-calendar readiness | PASS, isolated Docker/API/browser |
+| 01-08, 01-10 | Old schema 7 upgraded to 8; import and persisted re-export compare pins, tasks, dependency and exact dates; rich encrypted recovery compares calendar IDs/pins, revision, task facts, assignments, participants, dependency, loads and time-entry history | PASS; final CI remains pending |
+| 01-12 | Dense 300-task/30000-load calculation, large legacy metadata, shared calendar/graph/allocation budgets, cancellation, derived count/byte bounds and nonpublication of partial results | PASS, focused and full local suite; not a load/soak SLO |
+
+Full local `verify.py all` also passed on
+`a2e07ade1506d5bdda82a821aafd9aa8a9bb51c1`, including the new matrix cases. Local
+runtime: Linux amd64, Go 1.27.3, Node 24.21.0, Python 3.14.4 and Chrome
+156.0.8078.73. Integration tests create unique schemas in the explicit disposable
+test database. They do not use the working instance. Reproduce with:
+
+```sh
+python3 production/scripts/verify.py all --dsn-file "$TEST_DSN_FILE"
+GM_VECTOR_APP_IMAGE="$BASELINE_IMAGE" python3 production/scripts/updater-integration-check.py \
+  --baseline-source "$PINNED_UPDATER_SOURCE" --fetch-ref feature/multiyear-planning --multiyear
+```
+
+CI on that SHA passed browser checks but exposed a test-fixture port race in the
+HTTPS Docker regression. Earlier two runs stopped at the new browser harness's
+Chrome startup assertion. Acceptance remains pending until fixture diagnostics and
+port allocation are corrected, affected checks execute, and final CI/review pass.
 
 Ordinary import intentionally rejects employee participation and clears assignments;
 this pre-existing security/identity contract remains unchanged. Its calendar/task
