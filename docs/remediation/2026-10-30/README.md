@@ -21,7 +21,7 @@ WP-02 progress and actual baseline failures are in its
 | WP-01 | P1 | Reproducible multi-year schedules, including 2025–2027 | PASS — INDEPENDENTLY VERIFIED at 5812b2c |
 | WP-02 | P1 | No stale UI commits; measured read-path performance | PASS — INDEPENDENTLY VERIFIED at 400ae188 |
 | WP-04 | P2 | Complete time history and explicit time-zone semantics | D05 B/D06 A/D12 A accepted; independently reviewed bounded plan frozen; implementation starting |
-| WP-03 | P2 | Bounded frontend modularisation and enforceable checks | Proposed; tools/module boundaries pending |
+| WP-03 | P2 | Bounded frontend modularisation and enforceable checks | D07 A/D08 A accepted; bounded plan after WP-04 acceptance |
 | WP-05 | P2 | All-image scanning, restore evidence, cross-browser/security gates | Proposed; release policy pending |
 
 Read [baseline](baseline.md), [work packages and test matrix](work-packages.md),

@@ -1,8 +1,9 @@
 # WP-03 implementation choices
 
-Status: **PROPOSED; D07/D08 NOT SELECTED**. Prepared while WP-04 implementation
-runs. No WP-03 dependencies, configuration or application changes are authorized
-by this document. Start only after WP-04 acceptance and the user's selections.
+Status: **D07 A / D08 A ACCEPTED BY THE USER ON 2026-10-30**. Prepared while
+WP-04 implementation runs. The user explicitly selected the recommended toolchain
+and focused extraction in the current tree. WP-03 implementation starts only after
+WP-04 acceptance and its own bounded plan; this decision is not a test PASS.
 
 ## D07 — frontend component checks and tools
 
@@ -16,7 +17,7 @@ regressions.
 | B — extend current Node/CDP component fixtures; ESLint/Prettier | Reuses the working real React/Chrome fixtures and avoids a separate component runner | More custom test plumbing, selectors and lifecycle helpers to maintain | Home-grown waits can reintroduce stale-DOM races; require readiness barriers and explicit cleanup/failure checks |
 | C — Playwright Test with a small component story gallery; ESLint/Prettier | Real browser layout and shared interaction/trace tooling; potential reuse in WP-05 | Adds browser binaries, native prerequisites and a gallery served by the existing dev server | Test fixtures must remain isolated from shipped routes/data; pin supported tooling, retain API integration evidence and assess CI cost |
 
-Recommendation: **A** for a focused component layer, retaining all established
+Accepted choice: **A** for a focused component layer, retaining all established
 browser suites. The official current Playwright documentation now describes
 framework-agnostic gallery tests with `@playwright/test`; the former experimental
 component packages have been removed. Do not install a retired package based on
@@ -44,7 +45,7 @@ so the earlier rewrite alternative is replaced by an in-scope option.
 | B — incremental feature folders for workspace, tasks/history, people and charts | Clear feature ownership and public entry points | Wider import/move diff; more barrel/boundary choices to review | Circular dependencies or accidental API exposure; forbid cycles and keep shared types/transport explicitly owned |
 | C — presentation-first extraction, retain one workspace controller | Low state-transition risk; separate task table, header/actions and dialog composition from rendering | Central controller remains relatively large; less reduction in coordination coupling | Technical debt remains visible; constrain scope honestly instead of claiming full controller decomposition |
 
-Recommendation: **A**, freezing a symbol-level module map after WP-04 code is
+Accepted choice: **A**, freezing a symbol-level module map after WP-04 code is
 accepted. Do not prematurely move code that the current writers are changing.
 No arbitrary line-count target or unrelated redesign is part of this choice.
 
