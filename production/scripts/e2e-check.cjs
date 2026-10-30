@@ -9,8 +9,18 @@ let chrome, socket;
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => {chrome?.kill('SIGKILL');process.exit(1)});
 const pending = new Map();
 let sequence = 0;
+let phase = 'bootstrap', evaluationCount = 0;
+const setPhase = name => {phase=name;console.log('E2E phase: '+name)};
+function evaluationSite(){return [...new Error().stack.matchAll(/\be2e-check\.cjs:(\d+):\d+/g)].slice(2,5).map(match=>'e2e-check.cjs:'+match[1]).join(' <- ')||'e2e-check.cjs:unknown'}
+function evaluationFailure(site,details,index){
+  const candidate=details?.exception?.className;
+  const exception=['Error','TypeError','ReferenceError','SyntaxError','RangeError','URIError','EvalError','AggregateError','DOMException'].includes(candidate)?candidate:'Unknown';
+  // Never include expression, CDP exception text/description, input/config or DOM.
+  return Error('Browser evaluation failed; phase='+phase+'; evaluation='+index+'; at='+site+'; exception='+exception);
+}
 const deadline = setTimeout(() => { console.error('E2E exceeded 120 seconds'); chrome?.kill('SIGKILL'); process.exit(1); }, 120000);
 async function main() {
+  setPhase('browser-start');
   let input = ''; for await (const chunk of process.stdin) input += chunk;
   const config = JSON.parse(input);
   const origin = new URL(config.origin);
@@ -52,13 +62,14 @@ async function main() {
   };
   socket.onclose=()=>{for(const p of pending.values()){clearTimeout(p.timer);p.reject(Error('CDP closed'))}pending.clear()};
   const send = (method, params={}) => new Promise((resolve,reject)=>{const id=++sequence;const timer=setTimeout(()=>{pending.delete(id);reject(Error('CDP command timeout'))},15000);pending.set(id,{resolve,reject,timer,method});socket.send(JSON.stringify({id,method,params}))});
-  const evaluate = async expression => {const r=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw Error('Browser evaluation failed');return r.result.value};
-  const wait = async (expression, label) => {for(let i=0;i<150;i++){try{if(await evaluate(expression))return}catch(e){if(!e.message.includes('Runtime.evaluate (-32000)'))throw e}await sleep(100)}throw Error('Timed out: '+label+'; '+await evaluate(`JSON.stringify({heading:document.querySelector('h1')?.textContent,dialog:document.querySelector('dialog h2')?.textContent,error:document.querySelector('.error')?.textContent})`))};
+  const evaluate = async expression => {const site=evaluationSite(),index=++evaluationCount;const r=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw evaluationFailure(site,r.exceptionDetails,index);return r.result.value};
+  const wait = async (expression, _label) => {for(let i=0;i<150;i++){try{if(await evaluate(expression))return}catch(e){if(!e.message.includes('Runtime.evaluate (-32000)'))throw e}await sleep(100)}throw Error('Timed out; phase='+phase+'; evaluation='+evaluationCount+'; at='+evaluationSite())};
   const selectButton = text => `[...document.querySelectorAll('button')].find(x=>x.textContent.trim()===${JSON.stringify(text)})`;
   const click = async text => {await wait(`!!(${selectButton(text)}) && !(${selectButton(text)}).disabled`,text);await evaluate(`(${selectButton(text)}).click()`)};
   const field = async (selector,value) => {await wait(`!!document.querySelector(${JSON.stringify(selector)})`, 'input exists');await evaluate(`(()=>{const x=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(x,${JSON.stringify(value)});x.dispatchEvent(new Event('input',{bubbles:true}));return new Promise(resolve=>requestAnimationFrame(()=>resolve(true)));})()`)};
   const read = suffix => evaluate(`fetch('/api/v1'+${JSON.stringify(suffix)}).then(async r=>{if(!r.ok)throw Error('read failed');return r.json()})`);
   await send('Network.enable');await send('Runtime.enable');await send('Page.enable');await send('Page.addScriptToEvaluateOnNewDocument',{source:`try{localStorage.setItem('gm-vector.locale','ru')}catch{}`});await send('Page.addScriptToEvaluateOnNewDocument',{source:`{const originalFetch=window.fetch.bind(window);let release;const gate=new Promise(resolve=>release=resolve);window.releaseCalendarFixture=release;window.fetch=async(...args)=>{if(String(args[0]).endsWith('/api/v1/calendars'))await gate;return originalFetch(...args)};}`});await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});await send('Page.navigate',{url:config.origin});
+  setPhase('first-run-locales');
   await wait(`!!document.querySelector('input[autocomplete="username"]')`, 'login screen');
   assert.equal(await evaluate('document.title'),'gmVector','application tab name');
   assert.equal(await evaluate("document.querySelector('.brand').textContent"),'gmVector','login branding');
@@ -69,6 +80,7 @@ async function main() {
    await wait(`document.querySelector('.auth-card h2')?.textContent===${JSON.stringify(catalog.md74489dc8f)}`,'localized first-run heading '+locale);
   }
 
+  setPhase('first-run-enrollment');
   assert.equal(await evaluate(`document.querySelector('.auth-card input[autocomplete="off"]') !== null`),false,'no installation key field');
   await field('input[autocomplete="username"]',config.username);
   assert.equal(await evaluate('location.hash'),'','first run has no secret URL');
@@ -89,6 +101,7 @@ async function main() {
   await click('Коды сохранены — открыть планировщик');await wait(`!!document.querySelector('.sidebar-new')`,'new administrator workspace');
   assert.equal(await evaluate("document.querySelector('.brand').textContent"),'gmVector','workspace branding');
   const bootstrapStatus=await read('/auth/status');assert.equal(bootstrapStatus.setup_required,false,'first-run consumed');
+  setPhase('project-create');
   await click('＋ Новый проект');await field('dialog form input','E2E synthetic project');await field('dialog input[type=date]','2026-10-23');
   // deliberately open the form before calendar data is available.
   assert(await evaluate(`(${selectButton('Создать')}).disabled`),'no calendar blocks submission');
@@ -99,10 +112,12 @@ async function main() {
   await send('Page.addScriptToEvaluateOnNewDocument',{source:`queueMicrotask(()=>window.releaseCalendarFixture?.())`});
   await click('Создать');
   await wait(`document.querySelector('.project-header h1')?.textContent==='E2E synthetic project'`,'project created');
+  setPhase('profile-language');
   await setLanguage('en');assert.equal((await read('/auth/me')).user.locale,'en','profile language saved');
   await send('Page.reload');await wait(`document.documentElement.lang==='en' && !!document.querySelector('.project-header')`,'profile language survives reload');
   assert.equal((await read('/auth/me')).user.locale,'en');await setLanguage('ru');assert.equal((await read('/auth/me')).user.locale,'ru');
 
+  setPhase('task-hierarchy');
   await evaluate(`document.querySelector('.project-actions').open=true`);await click('＋ Задача');
   await field('dialog form input','E2E parent');await field('dialog input[type=number]','2');await click('Проверить и сохранить');await click('Применить изменения');
   await wait(`!document.querySelector('dialog[open]')`,'task saved');
@@ -119,6 +134,7 @@ async function main() {
   saved=(await read('/projects/'+id)).project;assert.equal(saved.tasks.find(t=>t.id===parentID).planned_minutes,195);
   // project-start changes move existing tasks and their summary,
   // preserve effort/manual duration, and do not move twice after preview.
+  setPhase('project-start-shift');
   assert.equal(child.start,'2026-10-23');assert.equal(child.end,'2026-10-26');
   const shiftProject = async (start, end) => {
     const before=(await read('/projects/'+id)).project;
@@ -146,6 +162,7 @@ async function main() {
   await shiftProject('2026-10-23','2026-10-26');
   // summaries remain visibly distinct in every view, with selection
   // and folding layered over the task state instead of erasing it.
+  setPhase('gantt-and-map');
   const milestoneSelector=`[data-milestone="${parentID}"]`;
   const leafMarker=`[data-milestone="${child.id}"]`;
   const selectedCard=`[data-task="${parentID}"]>.task-card`;
@@ -205,6 +222,7 @@ async function main() {
   assert.equal((await read('/projects/'+id)).project.revision,viewRevision,'map modes do not change project revision');
 
   // configure real per-project weekly capacity in the UI.
+  setPhase('employee-participation');
   const employeeName='Тестов Макет'; // Synthetic fixture for the accepted surname-first initials contract.
   const choose=async(selector,value)=>{
     await wait(`!!document.querySelector(${JSON.stringify(selector)})`,'select exists');
@@ -232,6 +250,7 @@ async function main() {
   assert.equal(participant.week['1'].daily_minutes,120);assert.equal(participant.week['1'].start,'10:00');assert.equal(participant.week['1'].end,'12:00');assert.equal(participant.week['5'].daily_minutes,240);
   assert.equal(await evaluate(`document.querySelector('[data-participant="${employee.id}"] .avatar').textContent`),'МТ','employee avatar is given-name then family-name initial');
   assert(await evaluate(`![...document.querySelectorAll('button')].some(b=>b.textContent==='Лимит и аккаунт')`),'project cannot edit global maximum');
+  setPhase('employee-limits');
   await click('⚙ Управление');
   await wait(`(()=>{const row=document.querySelector('[data-employee-admin="${employee.id}"]');return row && !row.querySelector('input').disabled && !row.querySelector('button[type="submit"]').disabled})()`,'employee administration permissions loaded');
   await field(`[data-employee-admin="${employee.id}"] [aria-label="Общий дневной лимит, часов"]`,'4');
@@ -254,6 +273,7 @@ async function main() {
   const write=async(suffix,method,body)=>evaluate(`(async()=>{const me=await fetch('/api/v1/auth/me').then(r=>r.json());const r=await fetch('/api/v1'+${JSON.stringify(suffix)},{method:${JSON.stringify(method)},headers:{'Content-Type':'application/json','X-CSRF-Token':me.csrf},body:JSON.stringify(${JSON.stringify(body)})});if(!r.ok)throw Error('fixture write failed');return r.json()})()`);
   // A second synthetic project makes actual daily totals exceed the global cap.
   // Observe the original screen updating even though its own revision is unchanged.
+  setPhase('cross-project-capacity');
   const originalRevision=(await read('/projects/'+id)).project.revision;
   const other=await write('/projects','POST',{title:'E2E competing quota',start:'2026-10-23',duration_mode:'working',calendar_id:allocated.calendar_id});
   other.people=[participant];other.tasks=[{...work,id:'quota-other',parent:'',title:'Competing work',requested_start:'2026-10-23',start:'',end:'',duration_days:1,planned_minutes:240,summary:false}];other.links=[];
@@ -266,6 +286,7 @@ async function main() {
   await wait(`document.querySelector('header[data-calculation-state]')?.dataset.calculationState==='ready'`,'capacity recovers after conflict removed');
   const recovered=(await read('/projects/'+id)).project;assert.equal(recovered.revision,originalRevision);assert.equal(recovered.tasks.find(t=>t.id===child.id).end,'2026-10-29');
   // fact recording refreshes the revision without erasing task drafts.
+  setPhase('effort-drafts');
   await click('Задачи');await click('E2E child');
   await wait(`!!document.querySelector('[data-task-effort="${child.id}"]')`,'effort embedded in task editor');
   await field('dialog form input','E2E child draft title');await field('dialog input[type=number]','17');
@@ -285,6 +306,7 @@ async function main() {
   await click('E2E child draft title');await field('dialog form input','E2E child');
   await click('Проверить и сохранить');await click('Применить изменения');await wait(`!document.querySelector('dialog[open]')`,'fixture title restored without losing fact');
   // customer address persists; internal messages never silently email.
+  setPhase('task-comments');
   await click('Задачи');await click('E2E child');
   await evaluate(`[...document.querySelectorAll('dialog label')].find(x=>x.textContent==='Задачу выполняет заказчик').querySelector('input').click()`);
   await field('.customer-fields input','E2E customer owner');
@@ -310,6 +332,7 @@ async function main() {
   assert.equal(await evaluate(`document.querySelector('[aria-label="Почта заказчика"]').value`),'customer@example.test');
   await evaluate(`document.querySelector('dialog .icon').click()`);await wait(`!document.querySelector('dialog[open]')`,'comment editor closed');
   // exercise actual browser downloads, not only HTML/CSV generators.
+  setPhase('exports');
   const downloadDir=path.join(config.profile,'downloads');await fs.mkdir(downloadDir,{recursive:true});
   await send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:downloadDir});
   const exportButton=async format=>{await evaluate(`document.querySelector('[data-export-format="${format}"]').closest('details').open=true`);await evaluate(`document.querySelector('[data-export-format="${format}"]').click()`)};
@@ -324,6 +347,7 @@ async function main() {
   await exportButton('pdf');await wait(`window.__printCalled && window.__printDocument.body.textContent.includes('E2E child')`,'PDF action requests report print');
   await evaluate(`window.open=window.__originalOpen`);
   // download real JWE, decrypt only with disposable fixture private key.
+  setPhase('bug-report');
   const secretMarker='sensitive-marker-must-not-export';
   await evaluate(`history.replaceState(null,'','/?private=${secretMarker}#setup=${secretMarker}'); console.error('${secretMarker}'); window.dispatchEvent(new ErrorEvent('error',{message:'${secretMarker}',filename:location.origin+'/private/${secretMarker}.js',lineno:7})); fetch('/api/v1/projects/${secretMarker}?email=${secretMarker}').then(r=>r.text())`);
   await click('Bug Report');
@@ -391,6 +415,7 @@ async function main() {
   await evaluate(`document.querySelector('[data-bug-report="reviewed"]').click()`);await click('Скачать зашифрованный отчёт');
   assert.equal(decryptBug(await readBug(2)).server.events_status,'unavailable');
   await evaluate(`window.fetch=window.bugOriginalFetch; history.replaceState(null,'','/'); document.querySelector('dialog .icon').click()`);
+  setPhase('project-archive');
   await click('Настройки проекта');await click('Удалить проект…');
   const confirm=selectButton('Удалить и переместить в корзину');assert(await evaluate(`(${confirm}).disabled`),'empty phrase blocks archive');
   await field('.danger-zone input','wrong');assert(await evaluate(`(${confirm}).disabled`),'wrong phrase blocks archive');
@@ -399,6 +424,7 @@ async function main() {
   assert.equal((await read('/projects')).length,0,'archived project absent');const trash=await read('/trash');assert(trash.some(p=>p.id===id),'project recoverable in trash');
   // invitation-link enrollment UI. The existing admin API supplies a
   // synthetic token; SMTP delivery is deliberately outside this browser check.
+  setPhase('invitation');
   const invitedUsername='e2e_invited_member';
   const invitation=await write('/users','POST',{username:invitedUsername,name:'Тестов Макет',admin:false});
   assert(typeof invitation.enrollment_token==='string' && invitation.enrollment_token.length>=32,'synthetic enrollment token issued');
@@ -434,6 +460,7 @@ async function main() {
   for(const [pathname,status] of memberRefresh)assert.equal(status,200,'new member refresh: '+pathname);
   assert.deepEqual(serverFailures,[],'no API server errors (paths/statuses only)');
   assert(await evaluate(`!document.querySelector('.global-error')`),'new member has no workspace refresh error');
+  setPhase('missing-public-key');
   await evaluate(`window.noKeyOriginalFetch=window.fetch;window.fetch=(...args)=>String(args[0]).endsWith('/diagnostics/key')?Promise.resolve(new Response(JSON.stringify({configured:false}),{status:200,headers:{'Content-Type':'application/json'}})):window.noKeyOriginalFetch(...args)`);
   await click('Выйти');await wait(`!!document.querySelector('input[autocomplete="username"]')`,'logout for missing-key test');await click('Bug Report');
   await wait(`document.querySelector('[data-bug-report="key-status"]')?.textContent.includes('ещё не настроен')`,'missing public key explained');
