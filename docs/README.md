@@ -6,7 +6,8 @@ corresponding functionality is implemented.
 
 Current work is [resumed from the documented checkpoint](implementation-checkpoint.md).
 The verified updater is deployed; WP-01, WP-02 and WP-04 are independently accepted.
-WP-03 planning is next under accepted D07 A/D08 A.
+WP-03 [bounded planning](remediation/2026-10-30/wp-03-implementation.md) is next
+under accepted D07 A/D08 A.
 
 ## Install and operate
 
