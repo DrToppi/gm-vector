@@ -3,6 +3,7 @@ package planner
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
@@ -344,8 +345,25 @@ func TestSecurityAuditMatrix(t *testing.T) {
 	matches := regexp.MustCompile(`"((?:GET|POST|PUT|PATCH|DELETE) /api/[^" ]+)":\s*a\.(\w+)`).FindAllStringSubmatch(string(source), -1)
 	publicMatches := regexp.MustCompile(`mux.HandleFunc\("((?:GET|POST) /api/[^" ]+)", a.wrap\(a\.(\w+), false\)\)`).FindAllStringSubmatch(string(source), -1)
 	matches = append(matches, publicMatches...)
-	if len(matches) != 55 {
+	if len(matches) != 59 {
 		t.Fatal("route inventory changed", len(matches))
+	}
+	newRoutes := map[string]string{
+		"GET /api/v1/projects/{id}/time-history":        "timeHistory",
+		"GET /api/v1/projects/{id}/time-history/export": "exportTimeHistory",
+		"GET /api/v1/projects/{id}/portable/export":     "exportPortableProject",
+		"POST /api/v1/import/portable":                  "importPortableProject",
+	}
+	for pattern, handler := range newRoutes {
+		found := 0
+		for _, route := range matches {
+			if route[1] == pattern && route[2] == handler {
+				found++
+			}
+		}
+		if found != 1 {
+			t.Fatalf("new route must have exactly one security matrix cell per role: %s (%d)", pattern, found)
+		}
 	}
 	password := "synthetic audit password only"
 	ph := passwordHash(password)
@@ -355,11 +373,11 @@ func TestSecurityAuditMatrix(t *testing.T) {
 	results := []string{"endpoint,handler,role,variant,expected_http,actual_http,status"}
 	failures := 0
 	adminHandlers := map[string]bool{}
-	for _, h := range strings.Fields("updaterStatus updaterCheck updaterApply updaterRecover users inviteUser updateUser saveEmployee inviteEmployee employeeInvite importCalendar integrations diagnostics auditLog trash restoreProject createProject importProject tokens createToken revokeToken directoryPeople directoryStatus syncDirectory syncLDAPDirectory") {
+	for _, h := range strings.Fields("updaterStatus updaterCheck updaterApply updaterRecover users inviteUser updateUser saveEmployee inviteEmployee employeeInvite importCalendar integrations diagnostics auditLog trash restoreProject createProject importProject importPortableProject tokens createToken revokeToken directoryPeople directoryStatus syncDirectory syncLDAPDirectory") {
 		adminHandlers[h] = true
 	}
 	managerOnly := map[string]bool{}
-	for _, h := range strings.Fields("members setMember archiveProject undoProject exportProject memberCandidates") {
+	for _, h := range strings.Fields("members setMember archiveProject undoProject exportProject exportTimeHistory exportPortableProject memberCandidates") {
 		managerOnly[h] = true
 	}
 	writerOnly := map[string]bool{}
@@ -375,6 +393,32 @@ func TestSecurityAuditMatrix(t *testing.T) {
 		if _, err := s.DB.Exec(ctx, sql, args...); err != nil {
 			t.Fatal("synthetic fixture SQL failed", err)
 		}
+	}
+	// Ignore only the authenticated session heartbeat. Rejected new routes must
+	// leave project data, identities, access, exports, audit and delivery state intact.
+	stateDigest := func() [32]byte {
+		t.Helper()
+		var state bytes.Buffer
+		for _, table := range strings.Fields("projects tasks dependencies assignments participation time_entries calendars snapshots employees users memberships api_tokens settings task_comments outbox event_mappings audit enrollments employee_invitations directory_entries login_limits") {
+			rows, err := s.DB.Query(ctx, "SELECT row_to_json(t)::text FROM "+table+" t ORDER BY row_to_json(t)::text")
+			if err != nil {
+				t.Fatal("cannot capture synthetic security state", err)
+			}
+			for rows.Next() {
+				var row string
+				if err = rows.Scan(&row); err != nil {
+					rows.Close()
+					t.Fatal(err)
+				}
+				state.WriteString(table + "\x00" + row + "\n")
+			}
+			err = rows.Err()
+			rows.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		return sha256.Sum256(state.Bytes())
 	}
 	for _, state := range []string{"community"} {
 		for _, role := range []string{"anonymous", "authenticated-no-membership", "viewer", "member", "manager", "administrator", "API-token"} {
@@ -486,6 +530,15 @@ func TestSecurityAuditMatrix(t *testing.T) {
 					}
 					body = ImportRequest{Project: imp}
 					want = 201
+				case "importPortableProject":
+					imp := project
+					imp.People = []Participation{}
+					for i := range imp.Tasks {
+						imp.Tasks[i].Assignments = []Assignment{}
+					}
+					preview := false
+					body = PortableImportRequest{Document: PortableProject{Format: "gm-vector-project", SchemaVersion: 1, Metadata: PortableMetadata{PlanningTimezone: defaultPlanningTimezone, GeneratedAt: "2026-10-30T00:00:00Z"}, Project: imp}, Preview: &preview}
+					want = 201
 				case "directoryPeople", "directoryStatus":
 					want = 200
 				case "syncDirectory":
@@ -538,7 +591,15 @@ func TestSecurityAuditMatrix(t *testing.T) {
 					r.Header.Set("X-CSRF-Token", csrf)
 				}
 				w := httptest.NewRecorder()
+				_, newEndpoint := newRoutes[pattern]
+				var before [32]byte
+				if newEndpoint && want >= 400 {
+					before = stateDigest()
+				}
 				a.Handler().ServeHTTP(w, r)
+				if newEndpoint && want >= 400 && before != stateDigest() {
+					t.Errorf("%s %s rejected request modified persisted state", role, pattern)
+				}
 				status := "checked_problem_not_reproduced"
 				if w.Code != want {
 					status = "unexpected_requires_review"
@@ -546,6 +607,107 @@ func TestSecurityAuditMatrix(t *testing.T) {
 					t.Errorf("%s %s %s got%d expected%d", state, role, pattern, w.Code, want)
 				}
 				results = append(results, fmt.Sprintf("%s,%s,%s,%s,%d,%d,%s", pattern, h, role, state, want, w.Code, status))
+				if newEndpoint && role == "administrator" {
+					// Use otherwise valid bodies and active administrator credentials, so
+					// every rejection is attributable to the boundary being exercised.
+					checkDenied := func(variant, target string, payload []byte, session, requestCSRF, origin, service string, expected int) {
+						t.Helper()
+						before := stateDigest()
+						request := httptest.NewRequest(method, cfg.Origin+target, bytes.NewReader(payload))
+						request.Header.Set("Content-Type", "application/json")
+						request.Header.Set("Origin", origin)
+						if session != "" {
+							request.Header.Set("Cookie", "__Host-gma="+session)
+							request.Header.Set("X-CSRF-Token", requestCSRF)
+						}
+						if service != "" {
+							request.Header.Set("Authorization", "Bearer "+service)
+						}
+						response := httptest.NewRecorder()
+						a.Handler().ServeHTTP(response, request)
+						result := "checked_problem_not_reproduced"
+						if response.Code != expected {
+							result = "unexpected_requires_review"
+							failures++
+							t.Errorf("%s %s got%d expected%d", pattern, variant, response.Code, expected)
+						}
+						if before != stateDigest() {
+							t.Errorf("%s %s rejected request modified persisted state", pattern, variant)
+						}
+						var problem struct {
+							Error struct {
+								Code string `json:"code"`
+							} `json:"error"`
+						}
+						if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil || problem.Error.Code == "" {
+							t.Errorf("%s %s did not return the structured error contract", pattern, variant)
+						}
+						results = append(results, fmt.Sprintf("%s,%s,administrator,%s,%d,%d,%s", pattern, h, variant, expected, response.Code, result))
+					}
+					if h == "importPortableProject" {
+						for _, boundary := range []struct{ name, csrf, origin string }{
+							{"missing-csrf", "", cfg.Origin},
+							{"wrong-csrf", "wrong", cfg.Origin},
+							{"missing-origin", csrf, ""},
+							{"foreign-origin", csrf, "https://foreign.invalid"},
+						} {
+							checkDenied(boundary.name, path, raw, cookie, boundary.csrf, boundary.origin, "", 403)
+						}
+						for _, variant := range []string{"unknown-field", "unknown-document-field", "unknown-project-field", "missing-preview", "legacy-wrapper"} {
+							var invalid map[string]any
+							if err := json.Unmarshal(raw, &invalid); err != nil {
+								t.Fatal(err)
+							}
+							switch variant {
+							case "unknown-field":
+								invalid["unexpected"] = true
+							case "unknown-document-field":
+								invalid["document"].(map[string]any)["unexpected"] = true
+							case "unknown-project-field":
+								invalid["document"].(map[string]any)["project"].(map[string]any)["unexpected"] = true
+							case "missing-preview":
+								delete(invalid, "preview")
+							case "legacy-wrapper":
+								invalid = map[string]any{"project": project, "preview": false}
+							}
+							payload, err := json.Marshal(invalid)
+							if err != nil {
+								t.Fatal(err)
+							}
+							checkDenied(variant, path, payload, cookie, csrf, cfg.Origin, "", 422)
+						}
+						// Even an administrator's project-scoped token cannot import identities.
+						checkDenied("service-token-import-denied", path, raw, "", "", "", bearer, 403)
+					} else {
+						missingScope := "project:read"
+						if h == "timeHistory" {
+							missingScope = "export"
+						}
+						exec("UPDATE api_tokens SET scopes=ARRAY[$1] WHERE hash=$2", missingScope, hash(bearer))
+						checkDenied("missing-required-token-scope", path, raw, "", "", "", bearer, 403)
+						exec("UPDATE api_tokens SET scopes=ARRAY['project:read','project:write','export'],project_ids=ARRAY['archived'] WHERE hash=$1", hash(bearer))
+						checkDenied("token-project-scope", path, raw, "", "", "", bearer, 404)
+						exec("UPDATE api_tokens SET project_ids=ARRAY['p'],expires_at=now()-interval '1 second' WHERE hash=$1", hash(bearer))
+						checkDenied("expired-token", path, raw, "", "", "", bearer, 401)
+						exec("UPDATE api_tokens SET expires_at=now()+interval '1 hour' WHERE hash=$1", hash(bearer))
+						exec("UPDATE users SET active=false WHERE id='actor'")
+						checkDenied("inactive-token-principal", path, raw, "", "", "", bearer, 401)
+						exec("UPDATE users SET active=true WHERE id='actor'")
+						exec("DELETE FROM api_tokens WHERE hash=$1", hash(bearer))
+						checkDenied("revoked-token", path, raw, "", "", "", bearer, 401)
+						if h == "timeHistory" || h == "exportTimeHistory" {
+							queries := []string{"?unexpected=1", "?date_from=0000-01-01", "?employee_id=e&employee_id=e"}
+							if h == "timeHistory" {
+								queries = append(queries, "?limit=501", "?cursor=forged")
+							} else {
+								queries = append(queries, "?limit=1", "?cursor=forged")
+							}
+							for _, query := range queries {
+								checkDenied("strict-history-query"+query, path+query, raw, cookie, csrf, cfg.Origin, "", 422)
+							}
+						}
+					}
+				}
 			}
 		}
 	}
