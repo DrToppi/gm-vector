@@ -9,7 +9,7 @@ let server,chrome,socket,profile,seq=0;const heldCalendars=[];
 const pending=new Map(),exceptions=[];
 function chromeDiagnostic(stderr){return stderr.replace(/\x1b\[[0-9;]*[A-Za-z]/g,'').replace(/[\x00-\x08\x0b-\x1f\x7f]/g,'').replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi,'<url>').replace(/\b[A-Z]:\\[^\s"'<>]+/gi,'<path>').replace(/\/[^\s"'<>\])]+/g,'<path>').replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,'<email>').replace(/\b(token|password|secret|credential|authorization)\s*[:=]\s*[^\s,;]+/gi,'$1=<redacted>').trim().slice(-4096)}
 async function chromePort(child,dir){
- let stderr='',spawnCode='';
+ let stderr='',spawnCode='';const started=performance.now();
  // Bound capture before redaction; never dump environment, arguments or the
  // fixture bundle. The fresh synthetic profile contains no user application data.
  child.stderr.on('data',chunk=>{stderr=(stderr+chunk.toString('utf8')).slice(-8192)});
@@ -18,10 +18,10 @@ async function chromePort(child,dir){
  for(let i=0;i<150;i++){
   if(spawnCode)throw failure('spawn error');
   if(child.exitCode!==null||child.signalCode!==null)throw failure('process exited before DevTools became ready');
-  try{const value=(await fs.readFile(path.join(dir,'DevToolsActivePort'),'utf8')).split('\n')[0];if(/^\d+$/.test(value)&&Number(value)>0&&Number(value)<=65535)return Number(value)}catch{}
-  await sleep(40);
+  try{const value=(await fs.readFile(path.join(dir,'DevToolsActivePort'),'utf8')).split('\n')[0];if(/^\d+$/.test(value)&&Number(value)>0&&Number(value)<=65535){const elapsed=Math.round(performance.now()-started);console.log('Chrome startup readiness: elapsed_ms='+elapsed+'; late_after_6000ms='+(elapsed>6000));return Number(value)}}catch{}
+  await sleep(100);
  }
- throw failure('DevTools port unavailable after 6000ms');
+ throw failure('DevTools port unavailable after 15000ms');
 }
 async function stopChrome(){
  if(!chrome?.pid||chrome.exitCode!==null||chrome.signalCode!==null)return;
