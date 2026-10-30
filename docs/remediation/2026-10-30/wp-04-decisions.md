@@ -46,7 +46,8 @@ The user accepted the shared packet in the selection question:
   15 minutes and binds project, principal, filters, ordering and revision. Every
   page rechecks current authorization. No server transaction held across browsing.
 - Filter by task/employee/date on the server before pagination. Milestones show
-  their descendants' recorded history; identify source tasks and keep recorded
+  their own recorded entries plus descendants' history (root-inclusive subtree);
+  never hide pre-existing direct milestone records. Identify source tasks and keep recorded
   totals independent of page count. Show legacy minutes separately; do not change
   existing actual/summary billing semantics to make history totals appear equal.
 - Full history export uses a separate schema/download, with HTML/CSV/JSON and
@@ -71,15 +72,35 @@ If B/C is chosen, resolve the stated extra restrictions/conversion contracts bef
 implementation; do not silently change accepted employee-allocation semantics.
 
 For A, use an installation configuration setting with a compatible Moscow
-default, checked at startup and carried in relevant backup/export metadata. Imports
-with a different declared planning zone require explicit acknowledgement, preserving
-date labels rather than converting them; legacy files without metadata are identified
-as the former Moscow policy. A zone change must be explicit and documented; no
+default, checked at startup and carried in relevant backup/export metadata. Use
+the installation zone for planning today, overdue/default dates, reports and
+labelled UI timestamp presentation; storage/API instants and security durations
+remain independent. Imports with a different declared planning zone require
+explicit acknowledgement, preserving date labels rather than converting them.
+Legacy files without metadata must be labelled as unproven provenance; former
+releases used Moscow, but the file alone does not prove its origin. A zone change must be explicit and documented; no
 historical DATE or effort values are rewritten. Planned minutes remain nominal window minutes. UTC audit instants,
 TOTP/session expiry and elapsed security durations remain independent. Nonexistent/
 ambiguous wall-clock windows must be detected before any future calendar publication,
 with a visible warning instead of a guessed instant. Keep the live calendar module
 disabled; provider timezone identifiers require validation, not blind string replacement.
+
+## D12 — Project JSON provenance compatibility (pending)
+
+Strict old importers reject unknown fields, so arbitrary embedded timezone metadata
+is not forward compatible. Legacy-file support and old applications consuming new
+files are different guarantees. All options keep the existing legacy HTTP export
+contract and import identity protections; a new format must use an explicit resource/
+format rather than silently replacing the v1 response.
+
+| Choice | Benefits | Drawbacks | Risks |
+| --- | --- | --- | --- |
+| A — retain the current JSON default; add an optional portable JSON with a versioned metadata envelope | Existing file/API workflows remain unchanged; users can explicitly carry the planning zone | Two clearly labelled JSON choices | Legacy files cannot prove their zone; imports must show that uncertainty instead of fabricating provenance |
+| B — make portable versioned JSON the UI default; retain legacy JSON through an explicit compatible choice/API | Normal new exchanges carry zone metadata | Old applications cannot read the new default file until updated or given the legacy format | Explain forward incompatibility clearly; new importer must continue accepting old files without changing dates/identity rules |
+| C — ZIP with unchanged project.json and separate metadata.json | Payload stays familiar; metadata travels alongside it | New archive import/export path and extraction/size checks | Additional parser, decompression/path limits and cleanup/security tests are required |
+
+Recommendation: **A** for the smallest compatibility change. The user has not
+selected D12 yet. No option may embed time facts into ordinary Project JSON.
 
 ## Primary sources checked on 2026-10-30
 
