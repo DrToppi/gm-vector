@@ -79,16 +79,38 @@ func validateCalendarVersions(p *Project) error {
 	}
 	return nil
 }
-func readProjectCalendar(ctx context.Context, q DBTX, p *Project) (Calendar, error) {
+func calendarBudget(ctx context.Context, supplied []*calculationBudget) *calculationBudget {
+	if len(supplied) > 0 && supplied[0] != nil {
+		return supplied[0]
+	}
+	return newCalculationBudget(ctx)
+}
+func readProjectCalendar(ctx context.Context, q DBTX, p *Project, supplied ...*calculationBudget) (Calendar, error) {
+	budget := calendarBudget(ctx, supplied)
+	// Check cancellation before SQL and account for checking every annual pin.
+	if err := budget.take(len(p.CalendarVersions) + 1); err != nil {
+		return Calendar{}, err
+	}
 	if err := validateCalendarVersions(p); err != nil {
 		return Calendar{}, err
 	}
 	anchor, err := readCalendar(ctx, q, p.CalendarID)
 	if err != nil {
+		if ctx.Err() != nil {
+			return Calendar{}, ctx.Err()
+		}
 		return Calendar{}, bad("Calendar anchor is unavailable")
 	}
-	calendars := map[int]Calendar{anchor.Year: anchor}
+	result := compositeCalendar(anchor)
+	if err := mergeAnnualCalendar(&result, anchor.Year, anchor, budget); err != nil {
+		return Calendar{}, err
+	}
 	for year, id := range p.CalendarVersions {
+		// Load and validate one version at a time. Exhausting the shared budget
+		// must stop before reading all other years or the next shared project.
+		if err := budget.take(1); err != nil {
+			return Calendar{}, err
+		}
 		n, _ := strconv.Atoi(year)
 		if n == anchor.Year && id != anchor.ID {
 			return Calendar{}, bad("Annual calendar conflicts with the anchor version")
@@ -98,35 +120,55 @@ func readProjectCalendar(ctx context.Context, q DBTX, p *Project) (Calendar, err
 		}
 		c, err := readCalendar(ctx, q, id)
 		if err != nil {
+			if ctx.Err() != nil {
+				return Calendar{}, ctx.Err()
+			}
 			return Calendar{}, bad("Selected annual calendar is unavailable")
 		}
-		if c.Year != n {
-			return Calendar{}, bad("Annual calendar version does not match its year")
+		if err := mergeAnnualCalendar(&result, n, c, budget); err != nil {
+			return Calendar{}, err
 		}
-		calendars[n] = c
 	}
-	return combineCalendars(anchor, calendars)
+	return result, nil
 }
-func combineCalendars(anchor Calendar, calendars map[int]Calendar) (Calendar, error) {
+func compositeCalendar(anchor Calendar) Calendar {
 	result := anchor
 	result.Days = map[string]Day{}
 	result.allowProvisional = true
 	result.verifiedYears = map[int]bool{}
+	return result
+}
+func mergeAnnualCalendar(result *Calendar, year int, c Calendar, budget *calculationBudget) error {
+	if c.Year != year || year < firstCalendarYear || year > lastCalendarYear {
+		return bad("Annual calendar version does not match its year")
+	}
+	start := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC)
+	validationDays := int(start.AddDate(1, 0, 0).Sub(start).Hours() / 24)
+	// Reserve all per-day validation and merge operations before either loop.
+	// A single annual version is bounded to 366 dates; check context each year.
+	if err := budget.take(validationDays + len(c.Days)); err != nil {
+		return err
+	}
+	// Persisted versions are revalidated; missing/altered verified data must not
+	// become provisional working days merely because the schedule is long.
+	if c.Checksum == "" {
+		return bad("Selected annual calendar has no checksum")
+	}
+	if err := validateCalendar(&c); err != nil {
+		return err
+	}
+	result.verifiedYears[year] = true
+	for day, value := range c.Days {
+		result.Days[day] = value
+	}
+	return nil
+}
+func combineCalendars(anchor Calendar, calendars map[int]Calendar, supplied ...*calculationBudget) (Calendar, error) {
+	budget := calendarBudget(context.Background(), supplied)
+	result := compositeCalendar(anchor)
 	for year, c := range calendars {
-		if c.Year != year {
-			return Calendar{}, bad("Annual calendar version does not match its year")
-		}
-		// Persisted versions are revalidated; missing/altered verified data must not
-		// become provisional working days merely because the schedule is long.
-		if c.Checksum == "" {
-			return Calendar{}, bad("Selected annual calendar has no checksum")
-		}
-		if err := validateCalendar(&c); err != nil {
+		if err := mergeAnnualCalendar(&result, year, c, budget); err != nil {
 			return Calendar{}, err
-		}
-		result.verifiedYears[year] = true
-		for day, value := range c.Days {
-			result.Days[day] = value
 		}
 	}
 	return result, nil

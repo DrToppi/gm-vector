@@ -556,5 +556,6 @@
   "calendar.unavailableVersion": "Unavailable calendar version: {{id}}",
   "calendar.anchorHelp": "This year comes from the project’s primary calendar. Choose another verified version to replace it.",
   "calendar.replacementPreview": "Calendar changes open a date preview. Review and explicitly apply the changes before saving.",
-  "calendar.budgetExceeded": "The schedule exceeds its calculation or result-size budget. Reduce the amount of scheduled work or split the project, then try again. No partial schedule was saved."
+  "calendar.budgetExceeded": "The schedule exceeds its calculation or result-size budget. Reduce the amount of scheduled work or split the project, then try again. No partial schedule was saved.",
+  "calendar.unavailableNotice": "Selected calendar data is not available yet. Date dragging and duration resizing are disabled until it loads. You can still edit task titles and effort."
 }

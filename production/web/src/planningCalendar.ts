@@ -3,7 +3,7 @@ import {dateNum,dateStr,type Calendar,type Project,type Task} from './types';
 export const MIN_PLANNING_DATE='2000-01-01';
 export const MAX_PLANNING_DATE='2200-12-31';
 export const MAX_DURATION_DAYS=dateNum(MAX_PLANNING_DATE)-dateNum(MIN_PLANNING_DATE)+1;
-export type PlanningCalendar=Calendar&{verified_years?:number[]};
+export type PlanningCalendar=Calendar&{verified_years?:number[];ready?:boolean};
 const yearKey=(value:string)=>/^\d{4}$/.test(value)&&Number(value)>=2000&&Number(value)<=2200;
 
 export function calendarPins(project:Project,calendars:Calendar[]):Record<string,string>{
@@ -41,13 +41,17 @@ export function calendarForProject(project:Project,calendars:Calendar[]):Plannin
   const calendar=calendars.find(value=>value.id===id&&String(value.year)===year);
   if(calendar)for(const [day,value] of Object.entries(calendar.days))if(day.startsWith(year+'-'))days[day]=value;
  }
- return {id:project.calendar_id,year:anchor?.year||Number(project.start.slice(0,4)),title:anchor?.title||'',source:anchor?.source||'',checksum:anchor?.checksum||'',days,verified_years:Object.keys(pins).filter(yearKey).map(Number)};
+ const ready=!!anchor&&Object.entries(pins).every(([year,id])=>calendars.some(calendar=>calendar.id===id&&String(calendar.year)===year));
+ return {id:project.calendar_id,year:anchor?.year||0,title:anchor?.title||'',source:anchor?.source||'',checksum:anchor?.checksum||'',days,ready,verified_years:Object.keys(pins).filter(yearKey).map(Number)};
 }
+
+export function planningCalendarReady(calendar:PlanningCalendar|undefined):boolean{return !!calendar&&calendar.ready!==false;}
 
 export function planningDay(calendar:PlanningCalendar|undefined,day:string):{working:boolean;shortened:boolean}|undefined{
  if(!/^\d{4}-\d{2}-\d{2}$/.test(day)||day<MIN_PLANNING_DATE||day>MAX_PLANNING_DATE)return undefined;
  const value=calendar?.days[day];
  if(value)return value;
+ if(!planningCalendarReady(calendar))return undefined;
  const year=Number(day.slice(0,4));
  if(calendar?.verified_years?.includes(year)||(!calendar?.verified_years&&calendar?.year===year))return undefined;
  const weekday=new Date(day+'T00:00:00Z').getUTCDay();
@@ -55,6 +59,7 @@ export function planningDay(calendar:PlanningCalendar|undefined,day:string):{wor
 }
 
 export function resizedDuration(project:Project,task:Task,side:string|undefined,days:number,calendar?:PlanningCalendar):{requested_start:string;duration_days:number}{
+ if(!planningCalendarReady(calendar))return {requested_start:task.requested_start,duration_days:task.duration_days};
  const min=dateNum(MIN_PLANNING_DATE),max=dateNum(MAX_PLANNING_DATE);
  let start=Math.min(max,Math.max(min,dateNum(task.start||task.legacy_start||project.start)));
  let end=Math.max(start,Math.min(max,dateNum(task.end||task.legacy_end||dateStr(start))));

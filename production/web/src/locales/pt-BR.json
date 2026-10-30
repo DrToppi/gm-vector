@@ -556,5 +556,6 @@
   "calendar.unavailableVersion": "Versão de calendário indisponível: {{id}}",
   "calendar.anchorHelp": "Este ano é fornecido pelo calendário principal do projeto. Selecione outra versão verificada para substituí-la.",
   "calendar.replacementPreview": "As alterações abrem uma prévia das datas. Revise e aplique explicitamente as alterações antes de salvá-las.",
-  "calendar.budgetExceeded": "O cronograma excede o limite de cálculo ou de tamanho do resultado. Reduza o trabalho planejado ou divida o projeto e tente novamente. Nenhum cronograma parcial foi salvo."
+  "calendar.budgetExceeded": "O cronograma excede o limite de cálculo ou de tamanho do resultado. Reduza o trabalho planejado ou divida o projeto e tente novamente. Nenhum cronograma parcial foi salvo.",
+  "calendar.unavailableNotice": "Os dados dos calendários selecionados ainda não estão disponíveis. Arrastar datas e ajustar a duração ficam desativados até o carregamento. Títulos e esforço continuam editáveis."
 }

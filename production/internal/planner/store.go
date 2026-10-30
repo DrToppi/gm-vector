@@ -327,7 +327,7 @@ func (s *Store) prepare(ctx context.Context, q DBTX, p *Project) (result error) 
 		}
 	}()
 	budget := newCalculationBudget(ctx)
-	c, e := readProjectCalendar(ctx, q, p)
+	c, e := readProjectCalendar(ctx, q, p, budget)
 	if e != nil {
 		invalidateSchedule(p, "blocked_capacity", e.Error())
 		return e
@@ -401,13 +401,12 @@ func (s *Store) prepare(ctx context.Context, q DBTX, p *Project) (result error) 
 		if err != nil {
 			return err
 		}
-		otherCal, err := readProjectCalendar(ctx, q, &other)
-		if err != nil {
-			invalidateSchedule(p, "blocked_capacity", "Суммарная загрузка не подтверждена: есть нерассчитанный план для общего сотрудника")
-			return nil
-		}
+		otherCal, err := readProjectCalendar(ctx, q, &other, budget)
 		// Local calculation only: recursively calling prepare would double count or loop.
-		if err = calculate(&other, otherCal, people, now, budget); err != nil {
+		if err == nil {
+			err = calculate(&other, otherCal, people, now, budget)
+		}
+		if err != nil {
 			var typed appError
 			if errors.As(err, &typed) && typed.Code == "calculation_budget_exceeded" {
 				invalidateSchedule(p, "blocked_capacity", typed.Message)

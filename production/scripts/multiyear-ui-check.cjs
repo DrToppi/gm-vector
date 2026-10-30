@@ -5,7 +5,7 @@ const production=path.resolve(__dirname,'..'),currentRoot=path.join(production,'
 const baselineIndex=process.argv.indexOf('--baseline-source');
 const root=baselineIndex<0?currentRoot:path.resolve(process.argv[baselineIndex+1],'production/web');
 const baseline=baselineIndex>=0,sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-let server,chrome,socket,profile,seq=0;
+let server,chrome,socket,profile,seq=0;const heldCalendars=[];
 const pending=new Map(),exceptions=[];
 const dayNumber=s=>Date.parse(s+'T00:00:00Z')/86400000;
 const iso=n=>new Date(n*86400000).toISOString().slice(0,10);
@@ -15,12 +15,18 @@ calendars[0].days['2025-01-01'].working=false;
 calendars[0].days['2025-03-08']={working:true,shortened:true};
 calendars[1].days['2026-01-01'].working=false;
 const task={duration_days:730,id:'synthetic-task',parent:'',title:'Synthetic multi-year task',description:'Synthetic retained detail',result:'Synthetic result',brief:'Synthetic status',status:'todo',requested_start:'2025-01-01',start:'2025-01-01',end:'2026-12-31',planned_minutes:960,actual_minutes:0,legacy_actual_minutes:0,responsibility:'internal',customer_owner:'',customer_due:'',owner_legacy:'',legacy_start:'',legacy_end:'',assignments:[],summary:false,blocked:false};
-const project={calculation_state:'ready',id:'synthetic-project',title:'Synthetic multi-year project',brief:'',start:'2025-01-01',duration_mode:'calendar',calendar_id:'test-2025',calendar_versions:{'2025':'test-2025','2024':'unavailable-fixture-version'},provisional_years:[2026,2027],revision:1,external_reference:'',tasks:[task],links:[],people:[],warnings:[],loads:[]};
+const project={calculation_state:'ready',id:'synthetic-project',title:'Synthetic multi-year project',brief:'',start:'2025-01-01',duration_mode:'calendar',calendar_id:'test-2025',calendar_versions:{'2025':'test-2025'},provisional_years:[2026,2027],revision:1,external_reference:'',tasks:[task],links:[],people:[],warnings:[],loads:[]};
 function unit(){
  const entry=`export * from './src/planningCalendar';export * from './src/projectPayload';`;
  const bundle=buildSync({stdin:{contents:entry,resolveDir:currentRoot,loader:'ts'},bundle:true,platform:'node',format:'cjs',write:false});
  const sandbox={module:{exports:{}},exports:{},console,setTimeout,clearTimeout,Intl,Date,URLSearchParams,require};vm.runInNewContext(bundle.outputFiles[0].text,sandbox);const app=sandbox.module.exports;
  assert.equal(app.MAX_DURATION_DAYS,73414);
+ const missing=app.calendarForProject({...project,calendar_versions:undefined},[]);
+ assert.equal(app.planningCalendarReady(missing),false,'unknown legacy anchor is not a provisional calendar');
+ assert.equal(app.planningDay(missing,'2026-01-01'),undefined,'unknown selected anchor cannot invent working holidays');
+ assert.equal(app.planningDay(missing,'2027-01-01'),undefined,'fallback waits until anchor identity is known');
+ assert.equal(app.planningDay(undefined,'2026-01-01'),undefined);
+ assert.equal(app.resizedDuration(project,task,'out',1,missing).duration_days,730,'unknown calendar resize is a no-op');
  const pinned={...project,calendar_versions:{'2026':'test-2026'}};
  const calendar=app.calendarForProject(pinned,calendars);
  assert.equal(app.planningDay(calendar,'2026-01-01').working,false,'verified holiday beats fallback');
@@ -32,6 +38,7 @@ function unit(){
  const broken=app.calendarForProject(pinned,[{...calendars[0],days:{...calendars[0].days,'2025-01-02':undefined}},...calendars.slice(1)]);
  assert.equal(app.planningDay(broken,'2025-01-02'),undefined,'verified gap is not provisional');
  const next=app.selectCalendarYear(pinned,'2027','test-2027-b',calendars);
+ const unavailable={...pinned,calendar_versions:{...pinned.calendar_versions,'2024':'unavailable-fixture-version'}};assert.equal(app.selectCalendarYear(unavailable,'2027','test-2027-b',calendars).calendar_versions['2024'],'unavailable-fixture-version');
  assert.equal(next.calendar_id,pinned.calendar_id);assert.equal(next.calendar_versions['2027'],'test-2027-b');assert(!pinned.calendar_versions['2027']);
  const anchor=app.changeCalendarAnchor(next,'test-2026',calendars);
  assert.equal(anchor.calendar_versions['2025'],'test-2025');assert.equal(anchor.calendar_versions['2026'],'test-2026');assert.equal(anchor.calendar_versions['2027'],'test-2027-b');
@@ -53,9 +60,9 @@ function unit(){
 }
 async function main(){
  if(!baseline)unit();
- const entry=`import React from 'react';import {createRoot} from 'react-dom/client';import {TaskEditor,ProjectEditor} from './src/Editors';import {Chart} from './src/Chart';import {changeLocale} from './src/i18n';${baseline?'':"import {calendarForProject} from './src/planningCalendar';import {ProvisionalCalendarNotice} from './src/ProjectCalendars';"}const project=${JSON.stringify(project)},calendars=${JSON.stringify(calendars)},user={id:'synthetic-admin',username:'synthetic-admin',name:'Synthetic administrator',admin:true,active:true,employee_id:''};let root;window.fixtureProject=project;window.fixtureCalendars=calendars;window.openFixture=(mode)=>{root?.unmount();document.getElementById('root').innerHTML='';root=createRoot(document.getElementById('root'));window.savedTask=null;window.proposed=null;window.fixtureClosed=false;const close=()=>{window.fixtureClosed=true;root.unmount()};if(mode==='task')root.render(React.createElement(TaskEditor,{task:project.tasks[0],project,employees:[],onSave:t=>window.savedTask=t,onDelete:()=>{},onChild:()=>{},onClose:close,canManage:true,canWrite:true,user,onRefresh:async()=>{}}));else if(mode==='project')root.render(React.createElement(ProjectEditor,{project,calendars,onSave:p=>window.proposed=p,onDelete:async()=>{},onClose:close}));else if(mode==='chart')root.render(React.createElement(Chart,{project,calendar:${baseline?'calendars[0]':'calendarForProject(project,calendars)'},view:'gantt',selected:'',setSelected:()=>{},onEdit:()=>{},onChild:()=>{},onLink:()=>{},onChange:p=>window.proposed=p,trace:'',setTrace:()=>{},canEdit:true,filter:''}));${baseline?'':"else root.render(React.createElement(ProvisionalCalendarNotice,{project}));"}};void changeLocale('en').then(()=>window.openFixture('task'));`;
+ const entry=`import React from 'react';import {createRoot} from 'react-dom/client';import {TaskEditor,ProjectEditor} from './src/Editors';import {Chart} from './src/Chart';import {changeLocale} from './src/i18n';${baseline?'':"import {calendarForProject} from './src/planningCalendar';import {ProvisionalCalendarNotice} from './src/ProjectCalendars';"}${baseline?'':`function LoadingChart(){const [catalog,setCatalog]=React.useState([]),[editing,setEditing]=React.useState(false);window.editTaskWhileCalendarPending=()=>setEditing(true);React.useEffect(()=>{let active=true;fetch('/api/v1/calendars').then(r=>r.json()).then(value=>{if(active)setCatalog(value)});return()=>{active=false}},[]);return React.createElement(React.Fragment,null,React.createElement(Chart,{project,calendar:calendarForProject(project,catalog),view:'gantt',selected:'',setSelected:()=>{},onEdit:()=>{},onChild:()=>{},onLink:()=>{},onChange:p=>window.proposed=p,trace:'',setTrace:()=>{},canEdit:true,filter:''}),editing?React.createElement(TaskEditor,{task:project.tasks[0],project,employees:[],onSave:t=>{window.savedTask=t;setEditing(false)},onDelete:()=>{},onChild:()=>{},onClose:()=>setEditing(false),canManage:true,canWrite:true,user,onRefresh:async()=>{}}):null)};`}const project=${JSON.stringify(project)},calendars=${JSON.stringify(calendars)},user={id:'synthetic-admin',username:'synthetic-admin',name:'Synthetic administrator',admin:true,active:true,employee_id:''};let root;window.fixtureProject=project;window.fixtureCalendars=calendars;window.openFixture=(mode)=>{root?.unmount();document.getElementById('root').innerHTML='';root=createRoot(document.getElementById('root'));window.savedTask=null;window.proposed=null;window.fixtureClosed=false;const close=()=>{window.fixtureClosed=true;root.unmount()};if(mode==='task')root.render(React.createElement(TaskEditor,{task:project.tasks[0],project,employees:[],onSave:t=>window.savedTask=t,onDelete:()=>{},onChild:()=>{},onClose:close,canManage:true,canWrite:true,user,onRefresh:async()=>{}}));else if(mode==='project')root.render(React.createElement(ProjectEditor,{project,calendars,onSave:p=>window.proposed=p,onDelete:async()=>{},onClose:close}));${baseline?'':"else if(mode==='chart-loading')root.render(React.createElement(LoadingChart));"}else if(mode==='chart')root.render(React.createElement(Chart,{project,calendar:${baseline?'calendars[0]':'calendarForProject(project,calendars)'},view:'gantt',selected:'',setSelected:()=>{},onEdit:()=>{},onChild:()=>{},onLink:()=>{},onChange:p=>window.proposed=p,trace:'',setTrace:()=>{},canEdit:true,filter:''}));${baseline?'':"else root.render(React.createElement(ProvisionalCalendarNotice,{project}));"}};void changeLocale('en').then(()=>window.openFixture('task'));`;
  const bundle=buildSync({stdin:{contents:entry,resolveDir:root,loader:'tsx'},bundle:true,platform:'browser',format:'iife',write:false,loader:{'.css':'empty'}}).outputFiles[0].text;
- server=http.createServer((req,res)=>{res.setHeader('Cache-Control','no-store');if(req.url==='/fixture.js'){res.setHeader('Content-Type','application/javascript');return res.end(bundle)}if(req.url.startsWith('/api/')){res.setHeader('Content-Type','application/json');return res.end(req.url.endsWith('/comments')?JSON.stringify({comments:[],email_enabled:false,can_comment:false,customer_email:'',customer:false}):'[]')}res.setHeader('Content-Type','text/html');res.end('<style>body{margin:0}.chart-scroll{width:900px;height:420px;overflow:auto}dialog{max-height:90vh;overflow:auto}</style><div id="root"></div><script src="/fixture.js"></script>')});
+ server=http.createServer((req,res)=>{res.setHeader('Cache-Control','no-store');if(req.url==='/fixture.js'){res.setHeader('Content-Type','application/javascript');return res.end(bundle)}if(req.url==='/api/v1/calendars'){res.setHeader('Content-Type','application/json');res.flushHeaders();heldCalendars.push(()=>res.end(JSON.stringify(calendars)));return}if(req.url.startsWith('/api/')){res.setHeader('Content-Type','application/json');return res.end(req.url.endsWith('/comments')?JSON.stringify({comments:[],email_enabled:false,can_comment:false,customer_email:'',customer:false}):'[]')}res.setHeader('Content-Type','text/html');res.end('<style>body{margin:0}.chart-scroll{width:900px;height:420px;overflow:auto}dialog{max-height:90vh;overflow:auto}</style><div id="root"></div><script src="/fixture.js"></script>')});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='http://127.0.0.1:'+server.address().port;
  profile=await fs.mkdtemp(path.join(os.tmpdir(),'gm-vector-multiyear-ui-'));
  chrome=spawn(process.env.GMA_CHROME_BIN||'google-chrome',['--headless=new','--no-first-run','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-background-networking','--disable-component-update','--disable-sync','--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--user-data-dir='+profile,'about:blank'],{stdio:'ignore'});
@@ -76,7 +83,7 @@ async function main(){
  assert.equal(await evaluate('document.querySelector('+JSON.stringify(durationSelector)+').validity.valid'),true,'731-day task must be editable');
  assert.equal(await evaluate("document.querySelector('dialog form').checkValidity()"),true,JSON.stringify(await evaluate("[...document.querySelector('dialog form').elements].filter(x=>x.validity&&!x.validity.valid).map(x=>({tag:x.tagName,type:x.type,value:x.value,message:x.validationMessage}))")));await evaluate("document.querySelector('dialog form').requestSubmit()");await wait('window.savedTask?.duration_days===731','saved731');assert.equal(await evaluate('window.savedTask.planned_minutes'),960,'duration does not change effort');
  if(baseline)throw Error('baseline unexpectedly supports731 days');
- await evaluate("window.openFixture('project')");await wait("!!document.querySelector('[data-calendar-year=\"2027\"]')",'annual selectors');
+ await evaluate("window.fixtureProject.calendar_versions['2024']='unavailable-fixture-version';window.openFixture('project')");await wait("!!document.querySelector('[data-calendar-year=\"2027\"]')",'annual selectors');
  assert.equal(await evaluate("document.querySelector('[data-calendar-year=\"2027\"]').value"),'','imported versions are not selected automatically');
  assert.equal(await evaluate("document.querySelector('[data-calendar-year=\"2024\"]').value"),'unavailable-fixture-version','unknown stored pin preserved');
  await select('[data-calendar-year="2027"]','test-2027-b');await evaluate("document.querySelector('dialog form').requestSubmit()");await wait("window.proposed?.calendar_versions?.['2027']==='test-2027-b'",'calendar preview proposal');
@@ -86,7 +93,27 @@ async function main(){
  await select('dialog select[data-calendar-anchor]','test-2026');await evaluate("document.querySelector('dialog form').requestSubmit()");await wait("window.proposed?.calendar_id==='test-2026'",'anchor proposal');
  assert.equal(await evaluate("window.proposed.calendar_versions['2025']"),'test-2025');assert.equal(await evaluate("window.proposed.calendar_versions['2026']"),'test-2026');
  await evaluate("window.openFixture('notice')");await wait("!!document.querySelector('[data-provisional-years=\"2026,2027\"]')",'visible provisional notice');assert(await evaluate("document.body.textContent.includes('Monday–Friday')"));
- await evaluate("window.openFixture('chart')");await wait("!!document.querySelector('[data-resize=out]')",'gantt');
+ await evaluate("delete window.fixtureProject.calendar_versions['2024'];window.openFixture('chart-loading')");
+ await wait("!!document.querySelector('[data-calendar-unavailable]')",'calendar loading notice');
+ assert.equal(await evaluate("document.querySelector('[data-gantt-day=\"2025-01-01\"]').dataset.calendarWorking"),'unknown','held selected calendar leaves holiday neutral');
+ assert.equal(await evaluate("document.querySelectorAll('[data-resize]').length"),0,'unknown calendar has no resize handles');
+ for(let i=0;i<200&&!heldCalendars.length;i++)await sleep(20);assert.equal(heldCalendars.length,1,'calendar response held');
+ const unknownCard=await evaluate("(()=>{const r=document.querySelector('.task-card').getBoundingClientRect();return{x:Math.min(700,r.x+20),y:r.y+r.height/2}})()");
+ await send('Input.dispatchMouseEvent',{type:'mousePressed',x:unknownCard.x,y:unknownCard.y,button:'left',clickCount:1});
+ await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:unknownCard.x+32,y:unknownCard.y,button:'left',buttons:1});
+ await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:unknownCard.x+32,y:unknownCard.y,button:'left',clickCount:1});
+ assert.equal(await evaluate('window.proposed'),null,'dragging unknown calendar does not propose dates');
+ await evaluate('window.editTaskWhileCalendarPending()');
+ await wait("!!document.querySelector('dialog input[maxlength=\"500\"]')",'non-calendar editing while catalog held');
+ await field('dialog input[maxlength="500"]','Edited while calendar pending');
+ await field('dialog input[max="1000000"]',17);
+ await evaluate("document.querySelector('dialog form').requestSubmit()");
+ await wait("window.savedTask?.title==='Edited while calendar pending'&&window.savedTask?.planned_minutes===1020&&!document.querySelector('dialog')",'title and effort remain editable');
+ assert(await evaluate("!!document.querySelector('[data-calendar-unavailable]')"),'task edits did not fake calendar readiness');
+
+ for(const release of heldCalendars.splice(0))release();
+ await wait("!!document.querySelector('[data-resize=out]')&&!document.querySelector('[data-calendar-unavailable]')",'loaded calendar gestures');
+ assert.equal(await evaluate("document.querySelector('[data-gantt-day=\"2025-01-01\"]').dataset.calendarWorking"),'nonworking','loaded verified holiday overrides provisional weekdays');
  await evaluate("(()=>{const x=document.querySelector('.chart-scroll');x.scrollLeft=x.scrollWidth-x.clientWidth;x.dispatchEvent(new Event('scroll',{bubbles:true}));})()");
  await wait("!!document.querySelector('[data-gantt-day=\"2027-01-01\"]')",'year3 grid');
  assert(await evaluate("document.querySelectorAll('[data-gantt-day]').length<100"),'bounded virtualized date columns');
@@ -97,6 +124,6 @@ async function main(){
  await wait('window.proposed?.tasks?.[0]?.duration_days===731','gantt resize731');
  assert.equal(await evaluate('window.proposed.tasks[0].planned_minutes'),960);
  assert.equal(exceptions.length,0,'no browser exception');
- console.log('Multi-year browser PASS:731-day editor and Gantt resize, full year3 navigation with bounded columns, annual pins/anchor/cancel and visible provisional warning.');
+ console.log('Multi-year browser PASS:731-day editor and Gantt resize, full year3 navigation with bounded columns, annual pins/anchor/cancel and visible provisional warning, held calendar readiness and safe gestures.');
 }
 main().catch(error=>{console.error(error.message);process.exitCode=1}).finally(async()=>{if(socket)socket.close();if(chrome){chrome.kill();await new Promise(resolve=>chrome.once('exit',resolve))}if(server)await new Promise(resolve=>server.close(resolve));if(profile)await fs.rm(profile,{recursive:true,force:true,maxRetries:5,retryDelay:100});for(const value of pending.values())clearTimeout(value.timer)});

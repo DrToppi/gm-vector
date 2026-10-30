@@ -110,7 +110,7 @@ async function main() {
   let saved=(await read('/projects/'+id)).project;
   assert.equal(saved.tasks.length,1);assert.equal(saved.tasks[0].planned_minutes,120);const parentID=saved.tasks[0].id;
   await click('Задачи');await evaluate(`document.querySelector('[aria-label="Добавить подзадачу: E2E parent"]').click()`);
-  await field('dialog form input','E2E child');await field('dialog input[type=number]','3.25');await field('dialog input[type=number][max="730"]','2');await click('Проверить и сохранить');await click('Применить изменения');await wait(`!document.querySelector('dialog[open]')`,'child saved');
+  await field('dialog form input','E2E child');await field('dialog input[type=number]','3.25');await field('dialog input[type=number][data-duration-days]','2');await click('Проверить и сохранить');await click('Применить изменения');await wait(`!document.querySelector('dialog[open]')`,'child saved');
   saved=(await read('/projects/'+id)).project;
   assert.equal(saved.tasks.length,2);const parent=saved.tasks.find(t=>t.id===parentID),child=saved.tasks.find(t=>t.parent===parentID);
   assert(parent.summary,'first subtask creates summary milestone');assert.equal(child.planned_minutes,195);assert.equal(parent.planned_minutes,195,'summary rolls up child hours');

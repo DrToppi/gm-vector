@@ -556,5 +556,6 @@
   "calendar.unavailableVersion": "日历版本不可用：{{id}}",
   "calendar.anchorHelp": "此年份使用项目主日历。如需替换，请选择其他已核实的版本。",
   "calendar.replacementPreview": "更改日历后将显示日期预览。请检查日期变化并明确确认后再保存。",
-  "calendar.budgetExceeded": "计划超出计算量或结果大小限制。请减少计划工作量或拆分项目后重试。系统未保存不完整的计划。"
+  "calendar.budgetExceeded": "计划超出计算量或结果大小限制。请减少计划工作量或拆分项目后重试。系统未保存不完整的计划。",
+  "calendar.unavailableNotice": "所选日历数据尚不可用。加载完成前无法拖动日期或调整时长，仍可编辑任务名称和工时。"
 }

@@ -556,5 +556,6 @@
   "calendar.unavailableVersion": "Kalenderversion nicht verfügbar: {{id}}",
   "calendar.anchorHelp": "Dieses Jahr stammt aus dem Hauptkalender des Projekts. Wählen Sie eine andere geprüfte Version, um sie zu ersetzen.",
   "calendar.replacementPreview": "Kalenderänderungen öffnen eine Terminvoransicht. Prüfen und bestätigen Sie die Änderungen ausdrücklich vor dem Speichern.",
-  "calendar.budgetExceeded": "Der Zeitplan überschreitet das Berechnungs- oder Ergebnisgrößenlimit. Verringern Sie den Planungsumfang oder teilen Sie das Projekt auf und versuchen Sie es erneut. Kein Teilplan wurde gespeichert."
+  "calendar.budgetExceeded": "Der Zeitplan überschreitet das Berechnungs- oder Ergebnisgrößenlimit. Verringern Sie den Planungsumfang oder teilen Sie das Projekt auf und versuchen Sie es erneut. Kein Teilplan wurde gespeichert.",
+  "calendar.unavailableNotice": "Die ausgewählten Kalenderdaten sind noch nicht verfügbar. Das Verschieben von Terminen und Anpassen der Dauer ist bis zum Laden deaktiviert. Aufgabentitel und Aufwand bleiben bearbeitbar."
 }

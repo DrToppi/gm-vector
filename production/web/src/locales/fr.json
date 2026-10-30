@@ -556,5 +556,6 @@
   "calendar.unavailableVersion": "Version de calendrier indisponible : {{id}}",
   "calendar.anchorHelp": "Cette année provient du calendrier principal du projet. Choisissez une autre version vérifiée pour la remplacer.",
   "calendar.replacementPreview": "Les changements ouvrent un aperçu des dates. Vérifiez et appliquez explicitement les modifications avant de les enregistrer.",
-  "calendar.budgetExceeded": "Le planning dépasse la limite de calcul ou de taille du résultat. Réduisez le travail planifié ou divisez le projet, puis réessayez. Aucun planning partiel n’a été enregistré."
+  "calendar.budgetExceeded": "Le planning dépasse la limite de calcul ou de taille du résultat. Réduisez le travail planifié ou divisez le projet, puis réessayez. Aucun planning partiel n’a été enregistré.",
+  "calendar.unavailableNotice": "Les données des calendriers sélectionnés ne sont pas encore disponibles. Le déplacement des dates et le redimensionnement de la durée sont désactivés pendant le chargement. Les titres et les charges restent modifiables."
 }
