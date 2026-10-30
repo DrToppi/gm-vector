@@ -38,13 +38,17 @@ func (a *App) exportProject(w http.ResponseWriter, r *http.Request, u Principal)
 	if e = audit(ctx, tx, u.ID, p.ID, "project.exported", requestID(r), nil); e != nil {
 		return e
 	}
+	exported := snapshotProject(p)
+	exported.CalculationState = p.CalculationState // Keep the existing small readiness hint; omit the large ledger.
+	raw, e := json.Marshal(exported)
+	if e != nil {
+		return e
+	}
 	if e = tx.Commit(ctx); e != nil {
 		return e
 	}
 	w.Header().Set("Content-Disposition", `attachment; filename="gma-project.json"`)
-	exported := snapshotProject(p)
-	exported.CalculationState = p.CalculationState // Keep the existing small readiness hint; omit the large ledger.
-	jsonResponse(w, 200, exported)
+	writeMaterializedJSON(w, raw)
 	return nil
 }
 func (a *App) importProject(w http.ResponseWriter, r *http.Request, u Principal) error {

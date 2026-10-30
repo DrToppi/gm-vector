@@ -91,6 +91,10 @@ def main():
             run(test + ' (race)',
                 [go, 'test', '-race', '-count=1', '-json', '-run', '^' + test + '$', './internal/planner'],
                 extra={'GMA_TEST_DSN': dsn}, expected_test=test)
+        for test in ('TestReadPathRevisionFactsCoherence', 'TestReadPathSlowResponseReleasesCapacityLock'):
+            run(test + ' (race)',
+                [go, 'test', '-race', '-count=1', '-json', '-run', '^' + test + '$', './internal/planner'],
+                extra={'GMA_TEST_DSN': dsn}, expected_test=test)
         run('Community backend build',
             [sys.executable, str(ROOT / 'scripts/build.py'), '--backend-only'])
         run('Signed release tamper regression', [sys.executable, str(ROOT / 'scripts/release-check.py')])
@@ -98,6 +102,7 @@ def main():
         run('Isolated backup recovery', [sys.executable, str(ROOT / 'scripts/recovery-integration-check.py')])
     if args.suite in ('e2e', 'all'):
         run('Frontend build for E2E', ['npm', 'run', 'build'], ROOT / 'web')
+        run('Workspace refresh browser regression', ['node', str(ROOT / 'scripts/workspace-refresh-check.cjs')])
         run('Multi-year browser regression', ['node', str(ROOT / 'scripts/multiyear-ui-check.cjs')])
         run('Updater browser regression', ['node', str(ROOT / 'scripts/updater-ui-check.cjs')])
         run('Session identity browser regression', ['node', str(ROOT / 'scripts/security-identity-regression.cjs')])

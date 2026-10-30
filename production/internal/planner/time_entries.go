@@ -51,6 +51,9 @@ func (a *App) addTimeEntry(w http.ResponseWriter, r *http.Request, u Principal) 
 		return e
 	}
 	defer tx.Rollback(ctx)
+	if e = capacityLock(ctx, tx, false); e != nil {
+		return e
+	}
 	if _, e = tx.Exec(ctx, "SELECT id FROM projects WHERE id=$1 FOR UPDATE", r.PathValue("id")); e != nil {
 		return e
 	}
@@ -95,6 +98,9 @@ func (a *App) deleteTimeEntry(w http.ResponseWriter, r *http.Request, u Principa
 		return e
 	}
 	defer tx.Rollback(ctx)
+	if e = capacityLock(ctx, tx, false); e != nil {
+		return e
+	}
 	if _, e = tx.Exec(ctx, "SELECT id FROM projects WHERE id=$1 FOR UPDATE", r.PathValue("id")); e != nil {
 		return e
 	}

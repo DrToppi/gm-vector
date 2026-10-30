@@ -67,9 +67,31 @@ func (a *App) getProject(w http.ResponseWriter, r *http.Request, u Principal) er
 			p.Warnings = append(p.Warnings, e.Error())
 		}
 	}
+	raw, e := materializeProjectRead(ctx, tx, map[string]any{"project": p, "role": role})
+	if e != nil {
+		return e
+	}
 	w.Header().Set("ETag", fmt.Sprintf(`"%d"`, p.Revision))
-	jsonResponse(w, 200, map[string]any{"project": p, "role": role})
+	writeMaterializedJSON(w, raw)
 	return nil
+}
+
+// Complete encoding while the protected inputs are stable, then release the
+// transaction before writing to a possibly slow or disconnected HTTP client.
+func materializeProjectRead(ctx context.Context, tx pgx.Tx, value any) ([]byte, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	if err = tx.Rollback(ctx); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+func writeMaterializedJSON(w http.ResponseWriter, raw []byte) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(append(raw, '\n'))
 }
 func (a *App) createProject(w http.ResponseWriter, r *http.Request, u Principal) error {
 	if !u.Admin || u.Token {
@@ -176,7 +198,11 @@ func (a *App) previewProject(w http.ResponseWriter, r *http.Request, u Principal
 	if e = a.Store.prepare(ctx, tx, &in.Project); e != nil {
 		return calculationFailure(e)
 	}
-	jsonResponse(w, 200, in.Project)
+	raw, e := materializeProjectRead(ctx, tx, in.Project)
+	if e != nil {
+		return e
+	}
+	writeMaterializedJSON(w, raw)
 	return nil
 }
 func memberChange(u Principal, role string, old, p Project) error {

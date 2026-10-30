@@ -86,7 +86,12 @@ func calendarBudget(ctx context.Context, supplied []*calculationBudget) *calcula
 	return newCalculationBudget(ctx)
 }
 func readProjectCalendar(ctx context.Context, q DBTX, p *Project, supplied ...*calculationBudget) (Calendar, error) {
-	budget := calendarBudget(ctx, supplied)
+	return readProjectCalendarReusing(ctx, q, p, calendarBudget(ctx, supplied), nil)
+}
+
+// The reuse map belongs only to one prepare call and its coherent transaction.
+// Its annual maps are immutable: every project receives independent merged days.
+func readProjectCalendarReusing(ctx context.Context, q DBTX, p *Project, budget *calculationBudget, versions map[string]Calendar) (Calendar, error) {
 	// Check cancellation before SQL and account for checking every annual pin.
 	if err := budget.take(len(p.CalendarVersions) + 1); err != nil {
 		return Calendar{}, err
@@ -94,7 +99,14 @@ func readProjectCalendar(ctx context.Context, q DBTX, p *Project, supplied ...*c
 	if err := validateCalendarVersions(p); err != nil {
 		return Calendar{}, err
 	}
-	anchor, err := readCalendar(ctx, q, p.CalendarID)
+	load := func(id string) (Calendar, bool, error) {
+		if c, ok := versions[id]; ok {
+			return c, true, nil
+		}
+		c, err := readCalendar(ctx, q, id)
+		return c, false, err
+	}
+	anchor, reused, err := load(p.CalendarID)
 	if err != nil {
 		if ctx.Err() != nil {
 			return Calendar{}, ctx.Err()
@@ -102,7 +114,7 @@ func readProjectCalendar(ctx context.Context, q DBTX, p *Project, supplied ...*c
 		return Calendar{}, bad("Calendar anchor is unavailable")
 	}
 	result := compositeCalendar(anchor)
-	if err := mergeAnnualCalendar(&result, anchor.Year, anchor, budget); err != nil {
+	if err := mergeProjectCalendar(&result, anchor.Year, anchor, budget, versions, reused); err != nil {
 		return Calendar{}, err
 	}
 	for year, id := range p.CalendarVersions {
@@ -118,18 +130,40 @@ func readProjectCalendar(ctx context.Context, q DBTX, p *Project, supplied ...*c
 		if id == anchor.ID && n == anchor.Year {
 			continue
 		}
-		c, err := readCalendar(ctx, q, id)
+		c, reused, err := load(id)
 		if err != nil {
 			if ctx.Err() != nil {
 				return Calendar{}, ctx.Err()
 			}
 			return Calendar{}, bad("Selected annual calendar is unavailable")
 		}
-		if err := mergeAnnualCalendar(&result, n, c, budget); err != nil {
+		if err := mergeProjectCalendar(&result, n, c, budget, versions, reused); err != nil {
 			return Calendar{}, err
 		}
 	}
 	return result, nil
+}
+
+func mergeProjectCalendar(result *Calendar, year int, c Calendar, budget *calculationBudget, versions map[string]Calendar, reused bool) error {
+	if !reused {
+		if err := mergeAnnualCalendar(result, year, c, budget); err != nil {
+			return err
+		}
+		if versions != nil {
+			versions[c.ID] = c
+		}
+		return nil
+	}
+	if c.Year != year || year < firstCalendarYear || year > lastCalendarYear {
+		return bad("Annual calendar version does not match its year")
+	}
+	// Validation was already charged when the immutable ID entered this map.
+	// Copying into another project's mutable composite is still real work.
+	if err := budget.take(len(c.Days)); err != nil {
+		return err
+	}
+	copyAnnualDays(result, year, c)
+	return nil
 }
 func compositeCalendar(anchor Calendar) Calendar {
 	result := anchor
@@ -157,11 +191,14 @@ func mergeAnnualCalendar(result *Calendar, year int, c Calendar, budget *calcula
 	if err := validateCalendar(&c); err != nil {
 		return err
 	}
+	copyAnnualDays(result, year, c)
+	return nil
+}
+func copyAnnualDays(result *Calendar, year int, c Calendar) {
 	result.verifiedYears[year] = true
 	for day, value := range c.Days {
 		result.Days[day] = value
 	}
-	return nil
 }
 func combineCalendars(anchor Calendar, calendars map[int]Calendar, supplied ...*calculationBudget) (Calendar, error) {
 	budget := calendarBudget(context.Background(), supplied)

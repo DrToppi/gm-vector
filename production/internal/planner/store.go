@@ -327,7 +327,8 @@ func (s *Store) prepare(ctx context.Context, q DBTX, p *Project) (result error) 
 		}
 	}()
 	budget := newCalculationBudget(ctx)
-	c, e := readProjectCalendar(ctx, q, p, budget)
+	versions := map[string]Calendar{}
+	c, e := readProjectCalendarReusing(ctx, q, p, budget, versions)
 	if e != nil {
 		invalidateSchedule(p, "blocked_capacity", e.Error())
 		return e
@@ -401,7 +402,7 @@ func (s *Store) prepare(ctx context.Context, q DBTX, p *Project) (result error) 
 		if err != nil {
 			return err
 		}
-		otherCal, err := readProjectCalendar(ctx, q, &other, budget)
+		otherCal, err := readProjectCalendarReusing(ctx, q, &other, budget, versions)
 		// Local calculation only: recursively calling prepare would double count or loop.
 		if err == nil {
 			err = calculate(&other, otherCal, people, now, budget)
