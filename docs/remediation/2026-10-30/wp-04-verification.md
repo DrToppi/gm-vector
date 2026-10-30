@@ -7,7 +7,7 @@ Task branch: `feature/history-and-timezones`.
 
 The [bounded plan](wp-04-implementation.md), accepted
 [D05 B/D06 A/D12 A](wp-04-decisions.md) and matrix 04-01–09 govern this package.
-No new history, timezone or portable-import check is claimed as executed below.
+Executed checks are distinguished below from the remaining acceptance matrix.
 Main and the running updater installation remain outside this work.
 
 ## Independent plan gate
@@ -19,6 +19,37 @@ through network-buffer lifetime, and specify zone-acknowledgement preview behavi
 Browser output conversion and PDF DOM construction are bounded separately. Test
 refinements include an internal DST transition with valid endpoints and unsupported
 browser timezone data. This permits bounded implementation, not a PASS verdict.
+
+## Demonstrated baseline failures
+
+Before production changes at plan source efe1751, the writers actually executed:
+
+| Regression | Observed baseline | Result |
+| --- | --- | --- |
+| TestTimeHistoryLegacyMetadataRegression | 3000 facts silently reduced to 1000, total/truncated headers absent | RED, assertion failure |
+| TestPlanningTimezoneProviderRegression | A New_York busy block was published as Russian Standard Time | RED, fake transport assertion failure |
+| Real React old_task browser case | Older task record beyond the project's first 1000 missing | RED |
+| Real React milestone browser case | Descendant records excluded by exact-task filtering | RED |
+| Real React planning_zone browser case | Fixed expected New_York 2026-10-29 produced Moscow 2026-10-30 | RED |
+| Real React portable browser case | Metadata envelope went through strict legacy import route | RED |
+
+These were actual assertions in the existing components/backend, not missing
+symbols or compilation failures. No live Graph/directory/mail system was called.
+
+## Installer and recovery fixture checkpoint
+
+New-install configuration now explicitly records the compatible Europe/Moscow
+default. The existing installer suite first failed at the missing field, then all
+five tests passed after the narrow initializer change. This is installer component
+evidence, not timezone/history acceptance. Python syntax compilation also passed.
+
+The recovery fixture now prepares 1001 old leap-day facts, including a NULL employee
+and a removed assignment, root/child raw legacy minutes, a private New_York config
+and digest assertions. Its first execution used the previously built a2e07a binary:
+restore reached the expected missing /auth/me timezone assertion. That old-binary
+failure is not claimed as an exact-current-source regression. The final candidate
+must still pass actual restored API/history/config checks and packaged-image tzdata
+verification. The existing backup mechanism has not been rewritten.
 
 ## Required evidence before acceptance
 
