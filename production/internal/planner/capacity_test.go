@@ -241,7 +241,7 @@ func TestZeroCapacityAndExhaustedExceptionsAreDrafts(t *testing.T) {
 	}
 }
 
-func TestCapacityHorizonExhaustionIsDraft(t *testing.T) {
+func TestStrictCalendarCoverageExhaustionIsExplicit(t *testing.T) {
 	p, cal, employees := fixture()
 	start, _ := date(p.Start)
 	for d := start; !d.After(start.AddDate(0, 0, 731)); d = d.AddDate(0, 0, 1) {
@@ -249,8 +249,8 @@ func TestCapacityHorizonExhaustionIsDraft(t *testing.T) {
 	}
 	p.Tasks[0].Planned = 1000
 	p.Tasks[0].Assignments[0].Daily = 1
-	if err := Calculate(&p, cal, employees, schedulingNow); err != nil {
-		t.Fatal("valid but insufficient horizon must remain a draft", err)
+	if err := Calculate(&p, cal, employees, schedulingNow); err == nil {
+		t.Fatal("strict standalone calendar coverage exhaustion must be explicit")
 	}
 	if p.CalculationState != "blocked_capacity" || len(p.Loads) != 0 || p.Tasks[0].Start != "" || p.Tasks[0].End != "" {
 		t.Fatal("horizon exhaustion leaked a partial schedule", p)

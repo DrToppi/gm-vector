@@ -4,6 +4,7 @@ const source=fs.readFileSync(path.join(__dirname,'../web/src/diagnostics.ts'),'u
 const sandbox={exports:{},URL,Date,Intl,window:{},navigator:{}};
 vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,sandbox);
 const d=sandbox.exports,now=Date.now();
+const payloadSandbox={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'../web/src/projectPayload.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,payloadSandbox);
 const secret='DO_NOT_EXPORT_SECRET',project='customer-secret-project';
 for(const route of ['/projects/'+project+'?token='+secret,'/api/v1/projects/'+project+'#setup='+secret])assert.equal(d.safeRoute(route),'/api/v1/projects/{id}');
 assert.equal(d.safeRoute('/projects/'+project+'/tasks/secret-task/comments'),'/api/v1/projects/{id}/tasks/{task}/comments');
@@ -21,7 +22,7 @@ assert(!JSON.stringify(d.safeServerState({version:'0.1.0',database:'ready',backu
 const invalid=d.safeServerEvents({events:[{time:new Date(now).toISOString(),method:secret,route:secret,request_id:'bad id '+secret,duration_ms:Infinity,status:-7}]})[0];assert.equal(invalid.method,'unknown');assert.equal(invalid.route,'unknown');assert.equal(invalid.request_id,'');assert.equal(invalid.duration_ms,0);assert.equal(invalid.status,0);
 console.log('Bug report: secret/body/URL exclusion, allowlists, bounded/expired memory, identity and in-flight isolation passed.');
 (async()=>{
- const apiSandbox={exports:{},require:name=>{if(name==='./i18n')return require('./test-i18n.cjs');assert.equal(name,'./diagnostics');return d},performance,AbortController,fetch:async(_url,options)=>new Promise((_resolve,reject)=>{assert(options.signal);options.signal.addEventListener('abort',()=>reject(new DOMException('Synthetic sensitive reason','AbortError')),{once:true})})};
+ const apiSandbox={exports:{},require:name=>{if(name==='./i18n')return require('./test-i18n.cjs');if(name==='./projectPayload')return payloadSandbox.exports;assert.equal(name,'./diagnostics');return d},performance,AbortController,fetch:async(_url,options)=>new Promise((_resolve,reject)=>{assert(options.signal);options.signal.addEventListener('abort',()=>reject(new DOMException('Synthetic sensitive reason','AbortError')),{once:true})})};
  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'../web/src/api.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,apiSandbox);
  const controller=new AbortController();const pending=apiSandbox.exports.api('/diagnostics/events','GET',undefined,controller.signal);controller.abort();await assert.rejects(pending,{name:'AbortError'});const latest=d.diagnosticSnapshot().at(-1);assert.equal(latest.status,0);assert(!JSON.stringify(latest).includes('sensitive'));console.log('Bug report: AbortSignal reaches fetch, cancellation records metadata only.');
 })().catch(e=>{console.error(e);process.exitCode=1});

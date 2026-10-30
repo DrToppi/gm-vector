@@ -546,5 +546,15 @@
   "updates.phase.verify": "Installation prüfen",
   "updates.phase.restore": "Vorherigen Zustand wiederherstellen",
   "updates.phase.complete": "Abgeschlossen",
-  "updates.phase.working": "In Bearbeitung"
+  "updates.phase.working": "In Bearbeitung",
+  "calendar.provisionalTitle": "Vorläufiger Arbeitskalender",
+  "calendar.provisionalNotice": "Die Jahre {{years}} verwenden vorläufig Montag bis Freitag als Arbeitstage. Feiertage und verlegte Arbeitstage sind noch nicht geprüft.",
+  "calendar.annualTitle": "Geprüfte Jahreskalender",
+  "calendar.annualHelp": "Wählen Sie für jedes verfügbare Jahr eine feste Kalenderversion. Nicht ausgewählte Jahre verwenden vorläufige Werktage; ein Import wählt keinen Kalender automatisch aus.",
+  "calendar.year": "Jahr {{year}}",
+  "calendar.provisionalOption": "Vorläufiger Wochenplan Montag–Freitag",
+  "calendar.unavailableVersion": "Kalenderversion nicht verfügbar: {{id}}",
+  "calendar.anchorHelp": "Dieses Jahr stammt aus dem Hauptkalender des Projekts. Wählen Sie eine andere geprüfte Version, um sie zu ersetzen.",
+  "calendar.replacementPreview": "Kalenderänderungen öffnen eine Terminvoransicht. Prüfen und bestätigen Sie die Änderungen ausdrücklich vor dem Speichern.",
+  "calendar.budgetExceeded": "Der Zeitplan überschreitet das Berechnungs- oder Ergebnisgrößenlimit. Verringern Sie den Planungsumfang oder teilen Sie das Projekt auf und versuchen Sie es erneut. Kein Teilplan wurde gespeichert."
 }

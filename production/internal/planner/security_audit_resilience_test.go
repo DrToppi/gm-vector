@@ -72,7 +72,7 @@ func TestSecurityAuditResilience(t *testing.T) {
 			}
 		}
 		var n int
-		if e := s.DB.QueryRow(ctx, "SELECT count(*) FROM schema_versions").Scan(&n); e != nil || n != 7 {
+		if e := s.DB.QueryRow(ctx, "SELECT count(*) FROM schema_versions").Scan(&n); e != nil || n != 8 {
 			t.Fatal("expected exactly seven migrations")
 		}
 		if _, e := s.DB.Exec(ctx, "UPDATE schema_versions SET checksum='synthetic-corruption' WHERE version=3"); e != nil {

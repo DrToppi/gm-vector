@@ -10,20 +10,22 @@ import (
 )
 
 type Project struct {
-	CalculationState string          `json:"calculation_state,omitempty"`
-	ID               string          `json:"id"`
-	Title            string          `json:"title"`
-	Brief            string          `json:"brief"`
-	Start            string          `json:"start"`
-	Mode             string          `json:"duration_mode"`
-	CalendarID       string          `json:"calendar_id"`
-	Revision         int64           `json:"revision"`
-	ExternalReference         string          `json:"external_reference"`
-	Tasks            []Task          `json:"tasks"`
-	Links            []Link          `json:"links"`
-	People           []Participation `json:"people"`
-	Warnings         []string        `json:"warnings,omitempty"`
-	Loads            []Load          `json:"loads,omitempty"`
+	CalendarVersions  map[string]string `json:"calendar_versions"`
+	ProvisionalYears  []int             `json:"provisional_years,omitempty"`
+	CalculationState  string            `json:"calculation_state,omitempty"`
+	ID                string            `json:"id"`
+	Title             string            `json:"title"`
+	Brief             string            `json:"brief"`
+	Start             string            `json:"start"`
+	Mode              string            `json:"duration_mode"`
+	CalendarID        string            `json:"calendar_id"`
+	Revision          int64             `json:"revision"`
+	ExternalReference string            `json:"external_reference"`
+	Tasks             []Task            `json:"tasks"`
+	Links             []Link            `json:"links"`
+	People            []Participation   `json:"people"`
+	Warnings          []string          `json:"warnings,omitempty"`
+	Loads             []Load            `json:"loads,omitempty"`
 }
 type Task struct {
 	DurationDays   int          `json:"duration_days"`
@@ -85,12 +87,14 @@ type Employee struct {
 	ExternalID string `json:"external_id"`
 }
 type Calendar struct {
-	ID       string         `json:"id"`
-	Year     int            `json:"year"`
-	Title    string         `json:"title"`
-	Source   string         `json:"source"`
-	Checksum string         `json:"checksum"`
-	Days     map[string]Day `json:"days"`
+	allowProvisional bool
+	verifiedYears    map[int]bool
+	ID               string         `json:"id"`
+	Year             int            `json:"year"`
+	Title            string         `json:"title"`
+	Source           string         `json:"source"`
+	Checksum         string         `json:"checksum"`
+	Days             map[string]Day `json:"days"`
 }
 type Day struct {
 	Working   bool `json:"working"`

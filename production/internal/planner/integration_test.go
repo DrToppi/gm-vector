@@ -168,6 +168,7 @@ func TestAPIIntegration(t *testing.T) {
 	json.Unmarshal(b, &me)
 	admin.csrf = me.CSRF
 	t.Run("updater request audit", func(t *testing.T) { testUpdaterAudit(t, app, me.User) })
+	t.Run("multi-year calendars and budget", func(t *testing.T) { testMultiYearAPI(t, store, request, &admin) })
 	code, _ = request("PUT", "/auth/preferences", map[string]string{"locale": "en"}, &admin, nil)
 	expect(200, code, "locale saved")
 	code, b = request("GET", "/auth/me", nil, &admin, nil)

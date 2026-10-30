@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-//go:embed schema.sql schema-002.sql schema-003.sql schema-004.sql schema-005.sql schema-006.sql schema-007.sql
+//go:embed schema.sql schema-002.sql schema-003.sql schema-004.sql schema-005.sql schema-006.sql schema-007.sql schema-008.sql
 var schema embed.FS
 
 type Store struct{ DB *pgxpool.Pool }
@@ -51,7 +51,7 @@ func (s *Store) MigrateForRuntime(ctx context.Context, runtimeRole string) error
 	if _, e = tx.Exec(ctx, "CREATE TABLE IF NOT EXISTS schema_versions(version integer PRIMARY KEY, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())"); e != nil {
 		return e
 	}
-	for i, name := range []string{"schema.sql", "schema-002.sql", "schema-003.sql", "schema-004.sql", "schema-005.sql", "schema-006.sql", "schema-007.sql"} {
+	for i, name := range []string{"schema.sql", "schema-002.sql", "schema-003.sql", "schema-004.sql", "schema-005.sql", "schema-006.sql", "schema-007.sql", "schema-008.sql"} {
 		b, e := schema.ReadFile(name)
 		if e != nil {
 			return e
@@ -92,8 +92,12 @@ type DBTX interface {
 
 func readProject(ctx context.Context, q DBTX, id string) (Project, error) {
 	p := Project{Tasks: []Task{}, Links: []Link{}, People: []Participation{}}
-	e := q.QueryRow(ctx, "SELECT id,title,brief,start_date::text,duration_mode,calendar_id,revision,external_reference FROM projects WHERE id=$1 AND archived_at IS NULL", id).Scan(&p.ID, &p.Title, &p.Brief, &p.Start, &p.Mode, &p.CalendarID, &p.Revision, &p.ExternalReference)
+	var pins []byte
+	e := q.QueryRow(ctx, "SELECT id,title,brief,start_date::text,duration_mode,calendar_id,revision,external_reference,calendar_versions FROM projects WHERE id=$1 AND archived_at IS NULL", id).Scan(&p.ID, &p.Title, &p.Brief, &p.Start, &p.Mode, &p.CalendarID, &p.Revision, &p.ExternalReference, &pins)
 	if e != nil {
+		return p, e
+	}
+	if e = json.Unmarshal(pins, &p.CalendarVersions); e != nil {
 		return p, e
 	}
 	rows, e := q.Query(ctx, `SELECT id,coalesce(parent_id,''),title,description,result,brief,status,coalesce(requested_start::text,''),coalesce(start_date::text,''),coalesce(end_date::text,''),planned_minutes,responsibility,customer_owner,coalesce(customer_due::text,''),owner_legacy,coalesce(legacy_start::text,''),coalesce(legacy_end::text,''),legacy_actual_minutes,duration_days,customer_email FROM tasks WHERE project_id=$1 ORDER BY sort_order,id`, id)
@@ -232,7 +236,14 @@ func audit(ctx context.Context, q DBTX, actor, project, action, req string, deta
 	return e
 }
 func writeProject(ctx context.Context, tx pgx.Tx, p Project) error {
-	_, e := tx.Exec(ctx, "UPDATE projects SET title=$2,brief=$3,start_date=$4,duration_mode=$5,calendar_id=$6,revision=$7,external_reference=$8 WHERE id=$1", p.ID, p.Title, p.Brief, p.Start, p.Mode, p.CalendarID, p.Revision, p.ExternalReference)
+	if p.CalendarVersions == nil {
+		p.CalendarVersions = map[string]string{}
+	}
+	pins, err := json.Marshal(p.CalendarVersions)
+	if err != nil {
+		return err
+	}
+	_, e := tx.Exec(ctx, "UPDATE projects SET title=$2,brief=$3,start_date=$4,duration_mode=$5,calendar_id=$6,revision=$7,external_reference=$8,calendar_versions=$9 WHERE id=$1", p.ID, p.Title, p.Brief, p.Start, p.Mode, p.CalendarID, p.Revision, p.ExternalReference, pins)
 	if e != nil {
 		return e
 	}
@@ -308,10 +319,18 @@ func capacityLock(ctx context.Context, q DBTX, shared bool) error {
 	return err
 }
 
-func (s *Store) prepare(ctx context.Context, q DBTX, p *Project) error {
-	c, e := readCalendar(ctx, q, p.CalendarID)
+func (s *Store) prepare(ctx context.Context, q DBTX, p *Project) (result error) {
+	customerDates := customerInputRanges(p)
+	defer func() {
+		if result != nil {
+			restoreCustomerInputRanges(p, customerDates)
+		}
+	}()
+	budget := newCalculationBudget(ctx)
+	c, e := readProjectCalendar(ctx, q, p)
 	if e != nil {
-		return fmt.Errorf("календарь недоступен")
+		invalidateSchedule(p, "blocked_capacity", e.Error())
+		return e
 	}
 	people, e := readEmployees(ctx, q)
 	if e != nil {
@@ -319,7 +338,7 @@ func (s *Store) prepare(ctx context.Context, q DBTX, p *Project) error {
 	}
 	loc, _ := time.LoadLocation("Europe/Moscow")
 	now := time.Now().In(loc)
-	if e = Calculate(p, c, people, now); e != nil {
+	if e = calculate(p, c, people, now, budget); e != nil {
 		return e
 	}
 	if p.CalculationState != "ready" || len(p.Loads) == 0 {
@@ -382,13 +401,22 @@ func (s *Store) prepare(ctx context.Context, q DBTX, p *Project) error {
 		if err != nil {
 			return err
 		}
-		otherCal, err := readCalendar(ctx, q, other.CalendarID)
+		otherCal, err := readProjectCalendar(ctx, q, &other)
 		if err != nil {
 			invalidateSchedule(p, "blocked_capacity", "Суммарная загрузка не подтверждена: есть нерассчитанный план для общего сотрудника")
 			return nil
 		}
 		// Local calculation only: recursively calling prepare would double count or loop.
-		if err = Calculate(&other, otherCal, people, now); err != nil {
+		if err = calculate(&other, otherCal, people, now, budget); err != nil {
+			var typed appError
+			if errors.As(err, &typed) && typed.Code == "calculation_budget_exceeded" {
+				invalidateSchedule(p, "blocked_capacity", typed.Message)
+				return err
+			}
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				invalidateSchedule(p, "blocked_capacity", err.Error())
+				return err
+			}
 			invalidateSchedule(p, "blocked_capacity", "Суммарная загрузка не подтверждена: есть нерассчитанный план для общего сотрудника")
 			return nil
 		}

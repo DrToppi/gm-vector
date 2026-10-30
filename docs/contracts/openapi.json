@@ -2991,6 +2991,17 @@
                   },
                   "calendar_id": {
                     "type": "string"
+                  },
+                  "calendar_versions": {
+                    "type": "object",
+                    "propertyNames": {
+                      "pattern": "^(20[0-9]{2}|21[0-9]{2}|2200)$"
+                    },
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "maxProperties": 201,
+                    "description": "Optional immutable annual calendar IDs. calendar_id is authoritative for its year. Omitted on update preserves stored pins; explicit empty map clears extra years."
                   }
                 },
                 "additionalProperties": false,
@@ -7253,6 +7264,27 @@
       "Project": {
         "type": "object",
         "properties": {
+          "calendar_versions": {
+            "type": "object",
+            "propertyNames": {
+              "pattern": "^(20[0-9]{2}|21[0-9]{2}|2200)$"
+            },
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 201,
+            "description": "Optional immutable annual calendar IDs. calendar_id is authoritative for its year. Omitted on update preserves stored pins; explicit empty map clears extra years."
+          },
+          "provisional_years": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 2000,
+              "maximum": 2200
+            },
+            "readOnly": true,
+            "description": "Derived years actually calculated using provisional Monday-Friday days."
+          },
           "calculation_state": {
             "type": "string",
             "enum": [
@@ -7260,7 +7292,8 @@
               "needs_participation",
               "blocked_capacity"
             ],
-            "description": "Computed by server. ready confirms schedule and shared capacity; other states withhold active internal task dates."
+            "description": "Computed by server. ready confirms schedule and shared capacity; other states withhold active internal task dates.",
+            "readOnly": true
           },
           "id": {
             "type": "string"
@@ -7317,13 +7350,15 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "readOnly": true
           },
           "loads": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Load"
-            }
+            },
+            "readOnly": true
           }
         },
         "additionalProperties": false
@@ -7334,7 +7369,7 @@
           "duration_days": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 730,
+            "maximum": 73414,
             "default": 0,
             "description": "0 means capacity-derived duration. Positive values are a lower bound; insufficient availability extends duration without changing planned effort."
           },

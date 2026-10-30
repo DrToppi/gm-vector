@@ -546,5 +546,15 @@
   "updates.phase.verify": "正在检查安装",
   "updates.phase.restore": "正在恢复以前的状态",
   "updates.phase.complete": "已完成",
-  "updates.phase.working": "正在处理"
+  "updates.phase.working": "正在处理",
+  "calendar.provisionalTitle": "临时工作日历",
+  "calendar.provisionalNotice": "{{years}} 年暂按周一至周五工作制计算。节假日及调休工作日尚未核实。",
+  "calendar.annualTitle": "已核实的年度日历",
+  "calendar.annualHelp": "为每个可用年份选择固定版本的日历。未选择的年份使用临时工作日；导入日历不会自动选择该日历。",
+  "calendar.year": "{{year}} 年",
+  "calendar.provisionalOption": "临时周一至周五工作制",
+  "calendar.unavailableVersion": "日历版本不可用：{{id}}",
+  "calendar.anchorHelp": "此年份使用项目主日历。如需替换，请选择其他已核实的版本。",
+  "calendar.replacementPreview": "更改日历后将显示日期预览。请检查日期变化并明确确认后再保存。",
+  "calendar.budgetExceeded": "计划超出计算量或结果大小限制。请减少计划工作量或拆分项目后重试。系统未保存不完整的计划。"
 }

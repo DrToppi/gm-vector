@@ -19,13 +19,17 @@ schemas['SaveProject']=obj({'project':ref('Project'),'override_reason':string},[
 schemas['Project']['properties']['calculation_state']={'type':'string','enum':['ready','needs_participation','blocked_capacity'],'description':'Computed by server. ready confirms schedule and shared capacity; other states withhold active internal task dates.'}
 schemas['Participation']['properties']['week']={'type':'object','propertyNames':{'enum':['0','1','2','3','4','5','6']},'additionalProperties':ref('Activity'),'description':'Participation by weekday, 0 = Sunday. New participants require a schedule; missing legacy schedules remain drafts.'}
 schemas['Activity']['properties']['daily_minutes']={'type':'integer','minimum':0,'maximum':1440,'description':'Active days need a positive quota within the start/end window. Date exceptions replace weekly settings.'}
+schemas['Project']['properties']['calendar_versions']={'type':'object','propertyNames':{'pattern':'^(20[0-9]{2}|21[0-9]{2}|2200)$'},'additionalProperties':string,'maxProperties':201,'description':'Optional immutable annual calendar IDs. calendar_id is authoritative for its year. Omitted on update preserves stored pins; explicit empty map clears extra years.'}
+schemas['Project']['properties']['provisional_years']={'type':'array','items':{'type':'integer','minimum':2000,'maximum':2200},'readOnly':True,'description':'Derived years actually calculated using provisional Monday-Friday days.'}
 schemas['Project']['properties']['duration_mode']={'type':'string','enum':['working','calendar']}
 schemas['Task']['properties']['status']={'type':'string','enum':['todo','doing','done']}
 schemas['Link']['properties']['mode']={'type':'string','enum':['together','after','delay']}
 schemas['Project']['properties']['tasks']['maxItems']=300
 schemas['Project']['properties']['links']['maxItems']=1500
-schemas['Task']['properties']['duration_days']={'type':'integer','minimum':0,'maximum':730,'default':0,'description':'0 means capacity-derived duration. Positive values are a lower bound; insufficient availability extends duration without changing planned effort.'}
+schemas['Task']['properties']['duration_days']={'type':'integer','minimum':0,'maximum':73414,'default':0,'description':'0 means capacity-derived duration. Positive values are a lower bound; insufficient availability extends duration without changing planned effort.'}
 schemas['Task']['properties']['planned_minutes']={'type':'integer','minimum':0,'maximum':60000000}
+for field in ['loads','warnings','provisional_years','calculation_state']:
+ schemas['Project']['properties'][field]['readOnly']=True
 for field in ['actual_minutes','summary','blocked']:schemas['Task']['properties'][field]['description']='Computed by the server.'
 schemas['Task']['properties']['customer_email']={'type':'string','maxLength':254,'description':'One ASCII customer email address; empty disables recipient selection. Manager-editable.'}
 schemas['TaskComment']['properties']['delivery_state']={'type':'string','enum':['internal','queued','sent','failed','uncertain']}
@@ -54,7 +58,7 @@ requests={
  'POST /auth/bootstrap/confirm':obj({'token':string,'code':string},['token','code']),
  'POST /auth/logout':obj({}),
  'POST /auth/password':obj({'old_password':string,'new_password':string,'code':string},['old_password','new_password','code']),
- 'POST /projects':obj({'title':string,'start':string,'duration_mode':string,'calendar_id':string},['title','start','duration_mode','calendar_id']),
+ 'POST /projects':obj({'title':string,'start':string,'duration_mode':string,'calendar_id':string,'calendar_versions':schemas['Project']['properties']['calendar_versions']},['title','start','duration_mode','calendar_id']),
  'PUT /projects/{id}':ref('SaveProject'),'POST /projects/{id}/preview':ref('SaveProject'),
  'DELETE /projects/{id}':obj({'revision':integer},['revision']),'POST /projects/{id}/undo':obj({'revision':integer},['revision']),
  'POST /employees':ref('Employee'),'POST /calendars':ref('Calendar'),

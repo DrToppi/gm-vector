@@ -546,5 +546,15 @@
   "updates.phase.verify": "Verificando instalação",
   "updates.phase.restore": "Restaurando estado anterior",
   "updates.phase.complete": "Concluído",
-  "updates.phase.working": "Em andamento"
+  "updates.phase.working": "Em andamento",
+  "calendar.provisionalTitle": "Calendário de trabalho provisório",
+  "calendar.provisionalNotice": "Os anos {{years}} usam provisoriamente uma semana de segunda a sexta. Feriados e transferências de dias úteis ainda não foram verificados.",
+  "calendar.annualTitle": "Calendários anuais verificados",
+  "calendar.annualHelp": "Selecione uma versão fixa do calendário para cada ano disponível. Os anos não selecionados usam dias úteis provisórios; importar um calendário não o seleciona automaticamente.",
+  "calendar.year": "Ano {{year}}",
+  "calendar.provisionalOption": "Semana provisória de segunda a sexta",
+  "calendar.unavailableVersion": "Versão de calendário indisponível: {{id}}",
+  "calendar.anchorHelp": "Este ano é fornecido pelo calendário principal do projeto. Selecione outra versão verificada para substituí-la.",
+  "calendar.replacementPreview": "As alterações abrem uma prévia das datas. Revise e aplique explicitamente as alterações antes de salvá-las.",
+  "calendar.budgetExceeded": "O cronograma excede o limite de cálculo ou de tamanho do resultado. Reduza o trabalho planejado ou divida o projeto e tente novamente. Nenhum cronograma parcial foi salvo."
 }

@@ -98,6 +98,7 @@ def main():
         run('Isolated backup recovery', [sys.executable, str(ROOT / 'scripts/recovery-integration-check.py')])
     if args.suite in ('e2e', 'all'):
         run('Frontend build for E2E', ['npm', 'run', 'build'], ROOT / 'web')
+        run('Multi-year browser regression', ['node', str(ROOT / 'scripts/multiyear-ui-check.cjs')])
         run('Updater browser regression', ['node', str(ROOT / 'scripts/updater-ui-check.cjs')])
         run('Session identity browser regression', ['node', str(ROOT / 'scripts/security-identity-regression.cjs')])
         run('Browser E2E (real API and PostgreSQL)',

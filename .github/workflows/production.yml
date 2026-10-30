@@ -58,4 +58,4 @@ jobs:
       - name: Empty installation smoke
         run: /usr/bin/python3 production/scripts/install-check.py
       - name: Host updater and failed-migration recovery
-        run: /usr/bin/python3 production/scripts/updater-integration-check.py
+        run: /usr/bin/python3 production/scripts/updater-integration-check.py --multiyear

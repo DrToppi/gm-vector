@@ -546,5 +546,15 @@
   "updates.phase.verify": "Comprobando instalación",
   "updates.phase.restore": "Restaurando estado anterior",
   "updates.phase.complete": "Completado",
-  "updates.phase.working": "En curso"
+  "updates.phase.working": "En curso",
+  "calendar.provisionalTitle": "Calendario laboral provisional",
+  "calendar.provisionalNotice": "Los años {{years}} usan provisionalmente una semana de lunes a viernes. Los festivos y los días laborables trasladados todavía no están verificados.",
+  "calendar.annualTitle": "Calendarios anuales verificados",
+  "calendar.annualHelp": "Elige una versión fija del calendario para cada año disponible. Los años no seleccionados usan días laborables provisionales; importar un calendario no lo selecciona automáticamente.",
+  "calendar.year": "Año {{year}}",
+  "calendar.provisionalOption": "Semana provisional de lunes a viernes",
+  "calendar.unavailableVersion": "Versión de calendario no disponible: {{id}}",
+  "calendar.anchorHelp": "Este año procede del calendario principal del proyecto. Elige otra versión verificada para sustituirla.",
+  "calendar.replacementPreview": "Los cambios abren una vista previa de fechas. Revisa y aplica explícitamente los cambios antes de guardarlos.",
+  "calendar.budgetExceeded": "El calendario supera el límite de cálculo o de tamaño del resultado. Reduce el trabajo planificado o divide el proyecto y vuelve a intentarlo. No se guardó ningún calendario parcial."
 }

@@ -546,5 +546,15 @@
   "updates.phase.verify": "Vérification de l’installation",
   "updates.phase.restore": "Restauration de l’état précédent",
   "updates.phase.complete": "Terminé",
-  "updates.phase.working": "En cours"
+  "updates.phase.working": "En cours",
+  "calendar.provisionalTitle": "Calendrier de travail provisoire",
+  "calendar.provisionalNotice": "Les années {{years}} utilisent provisoirement une semaine du lundi au vendredi. Les jours fériés et les reports de jours travaillés ne sont pas encore vérifiés.",
+  "calendar.annualTitle": "Calendriers annuels vérifiés",
+  "calendar.annualHelp": "Choisissez une version fixe du calendrier pour chaque année disponible. Les années non sélectionnées utilisent des jours ouvrés provisoires ; un import ne sélectionne pas automatiquement le calendrier.",
+  "calendar.year": "Année {{year}}",
+  "calendar.provisionalOption": "Semaine provisoire du lundi au vendredi",
+  "calendar.unavailableVersion": "Version de calendrier indisponible : {{id}}",
+  "calendar.anchorHelp": "Cette année provient du calendrier principal du projet. Choisissez une autre version vérifiée pour la remplacer.",
+  "calendar.replacementPreview": "Les changements ouvrent un aperçu des dates. Vérifiez et appliquez explicitement les modifications avant de les enregistrer.",
+  "calendar.budgetExceeded": "Le planning dépasse la limite de calcul ou de taille du résultat. Réduisez le travail planifié ou divisez le projet, puis réessayez. Aucun planning partiel n’a été enregistré."
 }

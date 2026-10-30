@@ -3,6 +3,7 @@ package planner
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5"
 	"net/http"
@@ -54,7 +55,17 @@ func (a *App) getProject(w http.ResponseWriter, r *http.Request, u Principal) er
 		return e
 	}
 	if e = a.Store.prepare(ctx, tx, &p); e != nil {
-		p.Warnings = append(p.Warnings, e.Error())
+		if errors.Is(e, context.Canceled) || errors.Is(e, context.DeadlineExceeded) {
+			return e
+		}
+		var typed appError
+		if errors.As(e, &typed) && typed.Code == "calculation_budget_exceeded" {
+			// GET remains usable for legacy large metadata. Derived schedule is
+			// withheld; preview/save must return the explicit budget error.
+			invalidateSchedule(&p, "blocked_capacity", typed.Message)
+		} else if !contains(p.Warnings, e.Error()) {
+			p.Warnings = append(p.Warnings, e.Error())
+		}
 	}
 	w.Header().Set("ETag", fmt.Sprintf(`"%d"`, p.Revision))
 	jsonResponse(w, 200, map[string]any{"project": p, "role": role})
@@ -65,15 +76,16 @@ func (a *App) createProject(w http.ResponseWriter, r *http.Request, u Principal)
 		return denied()
 	}
 	var in struct {
-		Title      string `json:"title"`
-		Start      string `json:"start"`
-		CalendarID string `json:"calendar_id"`
-		Mode       string `json:"duration_mode"`
+		Title            string            `json:"title"`
+		Start            string            `json:"start"`
+		CalendarID       string            `json:"calendar_id"`
+		CalendarVersions map[string]string `json:"calendar_versions"`
+		Mode             string            `json:"duration_mode"`
 	}
 	if e := decode(r, &in); e != nil {
 		return e
 	}
-	p := Project{ID: newID(), Title: strings.TrimSpace(in.Title), Start: in.Start, Mode: in.Mode, CalendarID: in.CalendarID, Tasks: []Task{}, Links: []Link{}, People: []Participation{}}
+	p := Project{ID: newID(), Title: strings.TrimSpace(in.Title), Start: in.Start, Mode: in.Mode, CalendarID: in.CalendarID, CalendarVersions: in.CalendarVersions, Tasks: []Task{}, Links: []Link{}, People: []Participation{}}
 	if _, e := validateProject(&p); e != nil {
 		return bad(e.Error())
 	}
@@ -89,10 +101,17 @@ func (a *App) createProject(w http.ResponseWriter, r *http.Request, u Principal)
 	if _, e = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(789503)"); e != nil {
 		return e
 	}
-	if _, e = readCalendar(ctx, tx, p.CalendarID); e != nil {
-		return bad("Выберите календарь")
+	if p.CalendarVersions == nil {
+		p.CalendarVersions = map[string]string{}
 	}
-	_, e = tx.Exec(ctx, "INSERT INTO projects(id,title,start_date,duration_mode,calendar_id) VALUES($1,$2,$3,$4,$5)", p.ID, p.Title, p.Start, p.Mode, p.CalendarID)
+	if _, e = readProjectCalendar(ctx, tx, &p); e != nil {
+		return calculationFailure(e)
+	}
+	pins, e := json.Marshal(p.CalendarVersions)
+	if e != nil {
+		return e
+	}
+	_, e = tx.Exec(ctx, "INSERT INTO projects(id,title,start_date,duration_mode,calendar_id,calendar_versions) VALUES($1,$2,$3,$4,$5,$6)", p.ID, p.Title, p.Start, p.Mode, p.CalendarID, pins)
 	if e != nil {
 		return e
 	}
@@ -136,6 +155,12 @@ func (a *App) previewProject(w http.ResponseWriter, r *http.Request, u Principal
 	if in.Project.ID != old.ID || in.Project.Revision != old.Revision {
 		return conflict()
 	}
+	if role != "manager" && in.Project.CalendarID != old.CalendarID {
+		return denied()
+	}
+	if e = inheritCalendarVersions(ctx, tx, old, &in.Project); e != nil {
+		return e
+	}
 	if e = memberChange(u, role, old, in.Project); e != nil {
 		return e
 	}
@@ -149,7 +174,7 @@ func (a *App) previewProject(w http.ResponseWriter, r *http.Request, u Principal
 		return bad(e.Error())
 	}
 	if e = a.Store.prepare(ctx, tx, &in.Project); e != nil {
-		return bad(e.Error())
+		return calculationFailure(e)
 	}
 	jsonResponse(w, 200, in.Project)
 	return nil
@@ -168,6 +193,8 @@ func memberChange(u Principal, role string, old, p Project) error {
 	after.Warnings = nil
 	before.Loads = nil
 	after.Loads = nil
+	before.ProvisionalYears = nil
+	after.ProvisionalYears = nil
 	before.Tasks = nil
 	after.Tasks = nil
 	if !reflect.DeepEqual(before, after) || len(old.Tasks) != len(p.Tasks) {
@@ -237,6 +264,15 @@ func (a *App) commitProject(w http.ResponseWriter, r *http.Request, u Principal,
 	if p.ID != id || p.Revision != rev {
 		return conflict()
 	}
+	if undo && p.CalendarVersions == nil {
+		p.CalendarVersions = map[string]string{}
+	}
+	if role != "manager" && p.CalendarID != old.CalendarID {
+		return denied()
+	}
+	if e = inheritCalendarVersions(ctx, tx, old, &p); e != nil {
+		return e
+	}
 	if e = memberChange(u, role, old, p); e != nil {
 		return e
 	}
@@ -272,7 +308,7 @@ func (a *App) commitProject(w http.ResponseWriter, r *http.Request, u Principal,
 		}
 	}
 	if e = a.Store.prepare(ctx, tx, &p); e != nil {
-		return bad(e.Error())
+		return calculationFailure(e)
 	}
 	for _, t := range p.Tasks {
 		if !t.Summary && t.Blocked && t.Status != "todo" && t.Status != oldStatus[t.ID] {
@@ -281,7 +317,7 @@ func (a *App) commitProject(w http.ResponseWriter, r *http.Request, u Principal,
 			}
 		}
 	}
-	raw, _ := json.Marshal(old)
+	raw, _ := json.Marshal(snapshotProject(old))
 	if _, e = tx.Exec(ctx, "INSERT INTO snapshots(project_id,revision,payload) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", id, rev, raw); e != nil {
 		return e
 	}

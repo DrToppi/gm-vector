@@ -546,5 +546,15 @@
   "updates.phase.verify": "Checking installation",
   "updates.phase.restore": "Restoring previous state",
   "updates.phase.complete": "Completed",
-  "updates.phase.working": "Working"
+  "updates.phase.working": "Working",
+  "calendar.provisionalTitle": "Provisional working calendar",
+  "calendar.provisionalNotice": "Years {{years}} use a provisional Monday–Friday schedule. Holidays and transferred working days are not yet verified.",
+  "calendar.annualTitle": "Verified annual calendars",
+  "calendar.annualHelp": "Choose a fixed calendar version for each available year. Unselected years use provisional weekdays; importing a calendar does not select it automatically.",
+  "calendar.year": "Year {{year}}",
+  "calendar.provisionalOption": "Provisional Monday–Friday schedule",
+  "calendar.unavailableVersion": "Unavailable calendar version: {{id}}",
+  "calendar.anchorHelp": "This year comes from the project’s primary calendar. Choose another verified version to replace it.",
+  "calendar.replacementPreview": "Calendar changes open a date preview. Review and explicitly apply the changes before saving.",
+  "calendar.budgetExceeded": "The schedule exceeds its calculation or result-size budget. Reduce the amount of scheduled work or split the project, then try again. No partial schedule was saved."
 }

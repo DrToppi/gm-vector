@@ -1,6 +1,7 @@
 package planner
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -17,11 +18,20 @@ type graph struct {
 }
 
 func validateProject(p *Project) (graph, error) {
+	return validateProjectBudget(p, newCalculationBudget(context.Background()))
+}
+func validateProjectBudget(p *Project, budget *calculationBudget) (graph, error) {
 	g := graph{index: map[string]int{}, children: map[string][]string{}, leaves: map[string][]string{}, incoming: map[string][]Link{}}
 	if checkText(p.Title, 200, true) != nil || checkText(p.Brief, 4000, false) != nil {
 		return g, errors.New("проверьте название и описание проекта")
 	}
 	if _, e := date(p.Start); e != nil {
+		return g, e
+	}
+	if e := validateCalendarVersions(p); e != nil {
+		return g, e
+	}
+	if e := budget.take(1); e != nil {
 		return g, e
 	}
 	if !contains([]string{"working", "calendar"}, p.Mode) {
@@ -44,7 +54,7 @@ func validateProject(p *Project) (graph, error) {
 		if checkText(t.Title, 500, true) != nil || checkText(t.Description, 20000, false) != nil || checkText(t.Result, 20000, false) != nil || checkText(t.Brief, 4000, false) != nil || checkText(t.CustomerOwner, 300, false) != nil || len(t.OwnerLegacy) > 300 {
 			return g, errors.New("неверные текстовые поля задачи")
 		}
-		if !contains([]string{"todo", "doing", "done"}, t.Status) || !contains([]string{"internal", "customer"}, t.Responsibility) || t.Planned < 0 || t.Planned > 60000000 || t.DurationDays < 0 || t.DurationDays > 730 {
+		if !contains([]string{"todo", "doing", "done"}, t.Status) || !contains([]string{"internal", "customer"}, t.Responsibility) || t.Planned < 0 || t.Planned > 60000000 || t.DurationDays < 0 || t.DurationDays > maxDurationDays {
 			return g, errors.New("неверный статус, сторона или часы")
 		}
 		for _, s := range []string{t.RequestedStart, t.Start, t.End, t.CustomerDue, t.LegacyStart, t.LegacyEnd} {
@@ -119,6 +129,9 @@ func validateProject(p *Project) (graph, error) {
 		for _, to := range leaves(l.To) {
 			g.incoming[to] = append(g.incoming[to], l)
 			for _, from := range leaves(l.From) {
+				if e := budget.take(1); e != nil {
+					return g, e
+				}
 				if from == to {
 					return g, errors.New("контейнер связан со своим потомком")
 				}
@@ -268,17 +281,41 @@ func invalidateSchedule(p *Project, state, warning string) {
 	sort.Strings(p.Warnings)
 }
 
-func Calculate(p *Project, cal Calendar, employees map[string]Employee, now time.Time) (result error) {
-	g, e := validateProject(p)
+func Calculate(p *Project, cal Calendar, employees map[string]Employee, now time.Time) error {
+	return calculate(p, cal, employees, now, newCalculationBudget(context.Background()))
+}
+func calculate(p *Project, cal Calendar, employees map[string]Employee, now time.Time, budget *calculationBudget) (result error) {
+	customerDates := customerInputRanges(p)
+	// The cleanup must cover graph validation/budget failure as well as allocation.
+	defer func() {
+		if result != nil {
+			invalidateSchedule(p, "blocked_capacity", result.Error())
+			p.ProvisionalYears = nil
+			restoreCustomerInputRanges(p, customerDates)
+		}
+	}()
+	g, e := validateProjectBudget(p, budget)
 	if e != nil {
 		return e
 	}
 	p.Warnings = nil
 	p.Loads = []Load{}
 	p.CalculationState = "ready"
+	p.ProvisionalYears = nil
+	provisional := map[int]bool{}
 	defer func() {
-		if result != nil {
-			invalidateSchedule(p, "blocked_capacity", result.Error())
+		if result == nil {
+			for year := range provisional {
+				p.ProvisionalYears = append(p.ProvisionalYears, year)
+			}
+			sort.Ints(p.ProvisionalYears)
+			for _, year := range p.ProvisionalYears {
+				p.Warnings = append(p.Warnings, fmt.Sprintf("%d: provisional Monday–Friday calendar; verified holidays and transfers are not available", year))
+			}
+			sort.Strings(p.Warnings)
+			if e := checkProjectResultSize(p, budget); e != nil {
+				result = e
+			}
 		}
 	}()
 	ps := map[string]Participation{}
@@ -317,17 +354,20 @@ func Calculate(p *Project, cal Calendar, employees map[string]Employee, now time
 		}
 		future[id] = availability
 	}
-	hasFutureCapacity := func(t Task, from time.Time) bool {
+	hasFutureCapacity := func(t Task, from time.Time) (bool, error) {
 		for _, assignment := range t.Assignments {
+			if e := budget.take(1); e != nil {
+				return false, e
+			}
 			if employees[assignment.EmployeeID].Daily <= 0 {
 				continue
 			}
 			availability := future[assignment.EmployeeID]
 			if availability.recurring || availability.lastException >= fmtDate(from) {
-				return true
+				return true, nil
 			}
 		}
-		return false
+		return false, nil
 	}
 	unavailable := func(title string) error {
 		rollupProject(p, g)
@@ -335,14 +375,20 @@ func Calculate(p *Project, cal Calendar, employees map[string]Employee, now time
 		return nil
 	}
 	working := func(d time.Time) (bool, error) {
-		v, ok := cal.Days[fmtDate(d)]
-		if !ok {
-			return false, fmt.Errorf("нет проверенного календаря на %s", fmtDate(d))
+		if e := budget.take(1); e != nil {
+			return false, e
+		}
+		v, preliminary, e := cal.schedulingDay(d)
+		if e != nil {
+			return false, e
+		}
+		if preliminary {
+			provisional[d.Year()] = true
 		}
 		return v.Working, nil
 	}
 	nextWorking := func(d time.Time) (time.Time, error) {
-		for i := 0; i < 730; i++ {
+		for d.Year() <= lastCalendarYear {
 			ok, e := working(d)
 			if e != nil {
 				return d, e
@@ -352,7 +398,7 @@ func Calculate(p *Project, cal Calendar, employees map[string]Employee, now time
 			}
 			d = d.AddDate(0, 0, 1)
 		}
-		return d, errors.New("нет рабочих дат на горизонте 730 дней")
+		return d, bad("No working date within supported calendar coverage")
 	}
 	for _, id := range g.order {
 		t := &p.Tasks[g.index[id]]
@@ -398,6 +444,9 @@ func Calculate(p *Project, cal Calendar, employees map[string]Employee, now time
 			if l.Mode == "delay" {
 				for n := 0; n < l.Days; {
 					if p.Mode == "calendar" {
+						if _, err := working(d); err != nil {
+							return err
+						}
 						d = d.AddDate(0, 0, 1)
 						n++
 					} else {
@@ -436,8 +485,14 @@ func Calculate(p *Project, cal Calendar, employees map[string]Employee, now time
 			}
 			p.Warnings = append(p.Warnings, t.Title+": ручной срок предварительный до расчёта предшественника")
 		}
-		if t.Planned > 0 && len(t.Assignments) > 0 && !hasFutureCapacity(*t, start) {
-			return unavailable(t.Title)
+		if t.Planned > 0 && len(t.Assignments) > 0 {
+			available, err := hasFutureCapacity(*t, start)
+			if err != nil {
+				return err
+			}
+			if !available {
+				return unavailable(t.Title)
+			}
 		}
 		var manualEnd time.Time
 		if t.DurationDays > 0 {
@@ -448,6 +503,11 @@ func Calculate(p *Project, cal Calendar, employees map[string]Employee, now time
 			manualEnd = start
 			for n := 1; n < t.DurationDays; n++ {
 				manualEnd = manualEnd.AddDate(0, 0, 1)
+				if p.Mode == "calendar" {
+					if _, err := working(manualEnd); err != nil {
+						return err
+					}
+				}
 				if p.Mode == "working" {
 					manualEnd, e = nextWorking(manualEnd)
 					if e != nil {
@@ -491,9 +551,13 @@ func Calculate(p *Project, cal Calendar, employees map[string]Employee, now time
 		remaining := t.Planned
 		assignments := append([]Assignment(nil), t.Assignments...)
 		sort.Slice(assignments, func(i, j int) bool { return assignments[i].EmployeeID < assignments[j].EmployeeID })
-		for n := 0; n < 730 && remaining > 0; n++ {
+		for n := 0; remaining > 0; n++ {
 			d := start.AddDate(0, 0, n)
-			if !hasFutureCapacity(*t, d) {
+			availableFuture, err := hasFutureCapacity(*t, d)
+			if err != nil {
+				return err
+			}
+			if !availableFuture {
 				return unavailable(t.Title)
 			}
 			ok, err := working(d)
@@ -506,6 +570,9 @@ func Calculate(p *Project, cal Calendar, employees map[string]Employee, now time
 			available := []Assignment{}
 			total := 0
 			for _, a := range assignments {
+				if e := budget.take(1); e != nil {
+					return e
+				}
 				quota, err := activityCapacity(participationActivity(ps[a.EmployeeID], d))
 				if err != nil {
 					return err
@@ -547,6 +614,9 @@ func Calculate(p *Project, cal Calendar, employees map[string]Employee, now time
 			remaining -= work
 			for i, a := range available {
 				if shares[i] > 0 {
+					if len(p.Loads) >= budget.maxLoads {
+						return budgetExceeded()
+					}
 					p.Loads = append(p.Loads, Load{a.EmployeeID, t.ID, fmtDate(d), shares[i]})
 					usedCapacity[a.EmployeeID+"/"+fmtDate(d)] += shares[i]
 				}
