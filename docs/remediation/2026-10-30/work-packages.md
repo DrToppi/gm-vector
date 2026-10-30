@@ -97,7 +97,8 @@ query counts/plans, CPU/RAM/goroutine series and regression comparison.
 Allowed: time-entry pagination contract/UI/export, stable sorting/filtering,
 explicit timezone/date semantics and compatible migrations. Excluded: changing
 billing, rounding, working-hours or employee-allocation policies without approval.
-Decisions: D05 pagination consistency; D06 timezone ownership and migration.
+Decisions: accepted D05 B pagination/revision consistency, D06 A installation
+timezone and D12 A optional metadata JSON. See the [bounded plan](wp-04-implementation.md).
 
 Invariants: no silent1000-row truncation; deterministic total order with unique
 tie-breaker; totals do not depend on loaded page count; access checked on every
@@ -106,15 +107,15 @@ instants and local calendar dates are distinct types/semantics in API contracts.
 
 | Test ID | Fixture / action | Required assertions |
 | --- | --- | --- |
-| 04-01 | 0,1,999,1000,1001,10000 entries; many same-date rows | All accessible rows traversable exactly once under approved snapshot policy |
+| 04-01 | 0,1,999,1000,1001,10000 entries; many same-date rows | All accessible rows traversable exactly once while the revision is unchanged; an intervening revision requires explicit refresh |
 | 04-02 | First/last/empty page, invalid/tampered/foreign cursor and page-size bounds | Defined error, bounded resource use, no cross-project leak |
-| 04-03 | Insert/update/delete while paging and exporting | Explicit live/snapshot semantics; no unexplained duplicates/gaps or mixed export |
+| 04-03 | Insert/update/delete while paging and exporting | Revision-guarded pages fail explicitly on change; one coherent full export, no unexplained duplicates/gaps or mixed export |
 | 04-04 | Filter/sort/page navigation then reload | Stable ordering, correct filtered totals and cursor reset; last-page behaviour defined |
 | 04-05 | HTML/CSV/JSON/PDF exports with >1000 entries | Complete agreed dataset, totals reconcile; escaping/formula injection controls retained |
 | 04-06 | UTC vs Europe/Moscow vs America/New_York vs Asia/Kathmandu | Approved timezone decides today/overdue/day boundary; date-only values preserved |
 | 04-07 | DST gap/fold, leap day, year boundary, midnight, different browser/server TZ | Deterministic intended dates; timestamps roundtrip; no skipped/doubled effort |
 | 04-08 | Existing projects with no timezone metadata; migration twice | Explicit compatible default; no rewrite of historical work_date or UTC audit timestamps |
-| 04-09 | Backup/import/export between hosts with different timezone settings | Same project semantics and history; timezone stored/carried where approved |
+| 04-09 | Backup/import/export between hosts with different timezone settings | Backup preserves history/config; legacy project JSON remains compatible without facts; portable JSON carries zone and requires source/target mismatch acknowledgement without rewriting dates |
 
 Acceptance: history completeness, exact aggregate reconciliation and timezone
 reference table pass API/browser/export/restore checks. Evidence includes expected

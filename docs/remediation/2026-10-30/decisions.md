@@ -25,7 +25,14 @@ alternatives, affected contracts, migration and verification consequences.
 | D11 Project/fact read coherence | Include fact add/delete in the established exclusive portfolio lock: minimal compatible change; global contention must be measured | Shared project-row locks in explicit read transactions: per-project contention; broader path/order audit | Repeatable-read input snapshot: coherent views; different isolation/retry/freshness semantics | A accepted by the user on 2026-10-30 after actual failing race; end the materialized read transaction before network output; [decision](wp-02-consistency.md) |
 | D12 Project export timezone provenance | Keep legacy JSON default and offer optional portable versioned JSON: compatible workflow; two labelled choices | Portable JSON UI default with explicit legacy choice/API: metadata by default; old importers reject new files | ZIP with unchanged project and metadata sidecar: self-contained; new archive parser/security/resource surface | A accepted by the user on 2026-10-30; legacy default remains, optional portable format has explicit version/zone metadata; [analysis](wp-04-decisions.md) |
 
-## Open acceptance parameters
+## Acceptance parameter checklist
+
+The list below was originally open. D02 is now frozen and verified in WP-01;
+D04 is frozen and verified in WP-02. D05/D06 contracts are fixed by the accepted
+[WP-04 packet](wp-04-decisions.md) and [bounded plan](wp-04-implementation.md),
+with engineering resource guards still requiring measured verification. D10 remains
+unselected; do not treat the following historical checklist as a new approval gate
+for already accepted choices.
 
 - D02: supported year range, maximum per-task duration, calendar coverage cap,
   maximum calculation operations, load-array size and cancellation deadline.

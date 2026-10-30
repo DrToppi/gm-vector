@@ -1,6 +1,6 @@
 # WP-04 history and timezone decisions
 
-Status: **D05 B / D06 A ACCEPTED BY THE USER ON 2026-10-30**.
+Status: **D05 B / D06 A / D12 A ACCEPTED BY THE USER ON 2026-10-30**.
 Prepared during the quiet WP-02 reference run. Implementation begins only after
 WP-02 acceptance and a bounded WP-04 plan. The general programme is authorized;
 accepting these choices does not waive verification or authorize deployment.

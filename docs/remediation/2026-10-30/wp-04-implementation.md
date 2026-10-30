@@ -1,6 +1,6 @@
 # WP-04 bounded implementation contract
 
-Status: **PLAN PREPARATION; WAITING FOR WP-02 ACCEPTANCE**.
+Status: **PLAN PREPARATION; WP-02 ACCEPTED AT 400ae188**.
 The user accepted D05 B, D06 A and D12 A in the
 [decision packet](wp-04-decisions.md). No deployment or main merge is implied.
 
@@ -30,6 +30,41 @@ An absent task filter means all project records. Filters apply before paging, an
 must not require current assignment/participation or the current project date span.
 Retained facts can concern removed assignees and historical dates outside a plan.
 
+Freeze these shared DTOs (empty filter strings mean unbounded):
+
+```ts
+type HistoryFilters = {
+  task_id: string; employee_id: string; date_from: string; date_to: string;
+};
+type HistoryItem = TimeEntry & {task_title: string; employee_name: string};
+type HistoryCommon = {
+  project_id: string; project_title: string; revision: number;
+  planning_timezone: string; filters: HistoryFilters;
+  order: 'work_date_desc_id_asc'; total_count: number; recorded_minutes: number;
+  legacy_unattributed: {
+    minutes: number; scope: 'project' | 'task_subtree';
+    employee_date_attribution: 'unavailable';
+  };
+};
+type HistoryPage = HistoryCommon & {
+  limit: number; items: HistoryItem[]; next_cursor: string | null;
+};
+type HistoryExport = HistoryCommon & {
+  format: 'gm-vector-time-history'; schema_version: 1;
+  generated_at: string; items: HistoryItem[];
+};
+```
+
+Source names are current labels, not historical-name snapshots. Legacy minutes
+cover the selected root/subtree or project, independently of employee/date filters;
+the UI must label that distinction rather than pretending those minutes match
+the filters. Precisely: sum raw tasks.legacy_actual_minutes once per distinct task
+in that selected scope, including root and descendants; never compute this as
+summary Actual minus recorded minutes or roll up parent/child values a second time.
+Keep the existing TimeEntry shape unchanged. Valid retained rows can have NULL
+employee_id: preserve them with LEFT JOIN/COALESCE, empty employee_id/name fields
+and a localized unknown-employee label, without inventing an identity.
+
 Return a documented envelope with items, next_cursor, current revision, exact
 filtered total_count and recorded_minutes. Totals exclude the cursor position and
 are independent of loaded pages. Legacy minutes remain separate and explicitly
@@ -53,9 +88,9 @@ signing provides integrity, not confidentiality. Key rotation invalidates cursor
 Malformed/tampered/expired/foreign cursors fail explicitly; changed revision returns
 409 history_changed. It is revision-guarded traversal, not a retained snapshot.
 
-The legacy `GET /projects/{id}/time-entries` stays a bare array with its1000-row
+The legacy `GET /projects/{id}/time-entries` stays a bare array with its 1000-row
 compatibility limit. Add explicit total/returned/truncated/revision/paging headers;
-exactly1000 does not mean truncated. Preserve documented legacy existence/archive
+exactly 1000 does not mean truncated. Preserve documented legacy existence/archive
 edge behaviour rather than silently changing it while introducing the new route.
 Move current UI to the paged API. Preserve drafts and D03 request/session intent
 guards, including late pages, fact refreshes, project switches and archived tasks.
@@ -72,13 +107,20 @@ ordinary Project JSON or create identities through import.
 Read metadata and entries coherently in one protected operation, not by traversing
 public cursors and pretending those requests are an atomic export. Materialize before
 headers, release before download. Engineering guards to validate: one concurrent
-export, at most100000 rows, at most64 MiB encoded output, bounded context/time.
+export per API process, at most 100000 rows, at most 64 MiB encoded output and a
+20-second materialization deadline. The existing server 30-second write deadline
+remains. Keep the export slot until the encoded buffer's network-write/cancel
+lifetime ends, although the database transaction/locks end before output. Do not
+queue waiting exports: 429 history_export_busy. Resource exhaustion returns
+422 history_export_limit; pre-output deadline exhaustion returns
+504 history_export_timeout. Request cancellation does not produce a partial
+successful document. These are engineering guards, not history retention limits.
 Fail explicitly before output if exceeded, with filter/narrow-range guidance;
 never truncate a file. Do not accumulate an unbounded row slice before checking
-bytes or spill plaintext history into the32 MiB container tmpfs. Verify ordinary
+bytes or spill plaintext history into the 32 MiB container tmpfs. Verify ordinary
 10000-row exports and worst legal individual comments/escaping, byte/row limits,
 cancellation, concurrent changes and slow downloads; revise engineering guards
-only with measured memory/correctness evidence. The API container limit is768 MiB.
+only with measured memory/correctness evidence. The API container limit is 768 MiB.
 All history remains traversable through bounded pages beyond a single-export budget.
 
 ## Installation timezone
@@ -89,7 +131,7 @@ values; reject host-dependent Local fallback. Bind one immutable resolved policy
 to a request/calculation, including related projects. Do not mutate a shared Store
 clock from unrelated App instances. Ensure packaged runtime timezone data works.
 
-Publish the zone through authenticated metadata. Backend today, UI defaults/overdue,
+Publish planning_timezone through authenticated `/auth/me` metadata. Backend today, UI defaults/overdue,
 reports and labelled timestamp presentation use that same zone. Preserve UTC
 instants/security elapsed durations and ISO DATE strings/nominal minute arithmetic.
 Guard timezone metadata against stale/session-crossing responses like other state.
@@ -109,10 +151,33 @@ Offer an explicit optional portable JSON format/resource with versioned metadata
 containing planning_timezone and the same protected project payload. New import
 supports both formats; an old importer is not expected to accept the optional new
 envelope. Reuse existing identity/assignment/external-reference normalization.
+
+Use `GET /projects/{id}/portable/export` for the optional document:
+
+```ts
+type PortableProject = {
+  format: 'gm-vector-project'; schema_version: 1;
+  metadata: {planning_timezone: string; generated_at: string};
+  project: Project; // The same protected object as the legacy export.
+};
+type PortableImportRequest = {
+  document: PortableProject; preview: boolean;
+  timezone_acknowledgement?: {source: string; target: string};
+};
+```
+
+New `POST /import/portable` strictly accepts this request with the same preview
+option as legacy import; keep legacy `/import` decoding and default `/export` unchanged. UI format
+detection chooses the correct endpoint. The new export route retains the existing
+export-scope suffix guard. Request and OpenAPI schemas must describe actual objects.
 Declared zone mismatch requires a server-validated explicit acknowledgement and
 keeps date labels unchanged. Legacy files are labelled as lacking proven zone
 metadata; do not fabricate provenance or silently convert them. No ZIP parser,
 embedded time facts or weakened unknown-field/request-size checks.
+Bind mismatch acknowledgement to both source and current target zone using
+`timezone_acknowledgement: {source: string, target: string}`. Recheck it on import
+so an earlier confirmation cannot silently survive a target-zone configuration
+change. Do not require fictitious acknowledgement for a matching zone.
 
 ## Evidence and file ownership
 
