@@ -94,6 +94,9 @@ deployed there and main has not been merged.
 The user selected D03 A (ordered/versioned polling, one active refresh and hidden
 pause) and D04 A (profile then optimize the existing on-demand calculation).
 Continue with the [WP-02 bounded contract](remediation/2026-10-30/wp-02-implementation.md).
-Numeric load/SLO acceptance is still pending; do not infer it from a benchmark.
+After the first baseline, the user accepted the five-project/ten-user reference
+criteria: read p95 ≤500 ms, preview/save p95 ≤2 seconds, no unexpected errors,
+ten minutes of mixed load and fifteen minutes of soak. The sixty-minute soak is
+reserved for final WP-05. Do not infer an acceptance result from short benchmarks.
 Keep the prior unexplained E2E failure and generic server diagnostic visible for
 the broader WP-05 stability/diagnostic work.

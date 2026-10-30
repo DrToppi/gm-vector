@@ -15,7 +15,7 @@ alternatives, affected contracts, migration and verification consequences.
 | D01 Multi-year calendar coverage | Explicit immutable calendar version per year: reproducible official dates; blocks if a required year is unavailable | Verified years plus clearly provisional weekday fallback: supports long-range plans; holidays/transfers unknown, requires visible provenance and reviewed replacement | Project-owned multi-year manual calendar: flexible; maintenance and versioning burden, risk of incorrect holidays | B accepted by the user on 2026-10-30; verified calendars replace provisional dates through preview |
 | D02 Scheduling bounds | Documented fixed multi-year horizon: predictable resource ceiling; still rejects longer legitimate work | Calendar-coverage-driven horizon with explicit operation/memory budget: accommodates multiple years; budget exhaustion/retry and sparse availability need defined semantics | Background calculation jobs with resource quotas: larger workloads; queues, cancellation, status and consistency significantly expand scope | B accepted by the user on 2026-10-30; explicit budget, no unlimited loop or silent truncation |
 | D03 Refresh correctness | Ordered/versioned polling with in-flight deduplication and visibility backoff: small change; bounded freshness delay remains | Conditional requests plus versioned cache: less transfer/work; validators/invalidation contracts must be correct | Server events plus catch-up reads: low update latency; persistent connections and reconnect ordering add complexity | A accepted by the user on 2026-10-30; one active refresh, revision checks and pause while hidden |
-| D04 Derived capacity/read path | Keep on-demand calculation, optimize queries and batch reads: simple consistency; repeated CPU cost | Cache by all input revisions: lower warm cost; invalidation across project/calendar/employee inputs is complex | Persist/materialize derived schedules on writes: cheap reads; larger transaction/migration and rebuild contract | A accepted by the user on 2026-10-30; measure first, then reduce queries/repeated work; numeric performance targets remain unapproved |
+| D04 Derived capacity/read path | Keep on-demand calculation, optimize queries and batch reads: simple consistency; repeated CPU cost | Cache by all input revisions: lower warm cost; invalidation across project/calendar/employee inputs is complex | Persist/materialize derived schedules on writes: cheap reads; larger transaction/migration and rebuild contract | A accepted by the user on 2026-10-30; measure first, then reduce queries/repeated work; reference criteria accepted after the first baseline, below |
 | D05 Time history pagination | Offset with bounded page size and stable order: simple page numbers; deep offsets and concurrent inserts cause drift | Keyset cursor with stable composite ordering and documented snapshot/watermark semantics: efficient traversal; cursor lifecycle and updates/deletes need specification | Export job/snapshot-only history access: consistent large reports; asynchronous machinery and less convenient browsing | B; define updates/deletes consistency and full export snapshot before coding |
 | D06 Timezone ownership | Installation timezone with explicit compatibility default: simplest; multinational projects share one zone | Project IANA timezone, user zone only for timestamp display: clearer project dates; needs migration and cross-project allocation-day definition | Employee-specific scheduling timezone: flexible global teams; complex overlaps/DST/cross-project capacity | B only after defining cross-project daily-ceiling semantics; A is lower-risk if one planning zone suffices |
 | D07 Frontend test tooling | Vitest + Testing Library + ESLint + Prettier: fits Vite and component tests; new dependencies/configuration to maintain | Existing Node/CDP harness plus ESLint/Prettier: fewer new runtime tools; component isolation needs manual harnesses | Playwright component tests plus lint/format: real browser rendering; heavier/slower setup and experimental surface must be assessed | A proposed; verify current compatibility/licensing/security before accepting dependency versions |
@@ -28,8 +28,9 @@ alternatives, affected contracts, migration and verification consequences.
 - D02: supported year range, maximum per-task duration, calendar coverage cap,
   maximum calculation operations, load-array size and cancellation deadline.
 - D04: test machine resources, number of projects/employees, read/write mix,
-  p95/p99/throughput/error budgets and soak duration. Historical envelope is up to
-  10 concurrent users and 300 tasks/project; other numbers are still proposals.
+  p99/throughput/resource reporting and exact request mix. The user accepted
+  the WP-02 numeric profile below; freeze its remaining experimental controls
+  before executing the long run.
 - D05: cursor expiry, response envelope/backward compatibility, snapshot consistency,
   export completeness and UI pagination controls.
 - D06: semantics of date-only work_date, overdue/today, audit instants, exports,
@@ -44,8 +45,23 @@ and existing identity/authorization checks; it does not introduce server events 
 a new cache contract. D04 retains on-demand schedule calculation and its current
 correctness rules. Baseline profiling must precede query or repeated-work changes.
 Neither selection approves new dependencies, materialized schedules, cross-request
-caches, or the proposed numeric workload/latency/soak thresholds. WP-02 starts only
-after WP-01 acceptance and its own bounded implementation plan.
+caches. WP-02 starts after WP-01 acceptance and its own bounded implementation plan.
+
+### Accepted WP-02 performance criteria
+
+After the first actual baseline (1280 authenticated reads, zero errors, five-project
+ten-user read p95 about 164 ms), the user explicitly selected option A on 2026-10-30:
+five projects × 300 tasks, 30 shared employees and ten distinct concurrent users;
+read p95 ≤500 ms, preview/save p95 ≤2 seconds, no unexpected errors; ten minutes of
+mixed load plus fifteen minutes of soak. The sixty-minute soak remains a final
+WP-05 gate. Option B used the same thresholds with a sixty-minute WP-02 soak
+(more observation time, slower completion); option C deferred SLO approval and
+would have left performance acceptance open. Neither was selected.
+
+Record the reference machine resources, toolchain, seed, request mix/rate, actual
+sample counts/throughput, latency definition, expected conflict responses and
+resource series before treating the measured results as acceptance. These are
+reference-installation targets, not a hardware-independent performance promise.
 
 ## Source verification requirements
 

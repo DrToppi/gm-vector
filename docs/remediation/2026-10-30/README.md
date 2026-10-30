@@ -19,7 +19,7 @@ WP-02 progress and actual baseline failures are in its
 | WP | Priority | Outcome | Status |
 | --- | --- | --- | --- |
 | WP-01 | P1 | Reproducible multi-year schedules, including 2025–2027 | PASS — INDEPENDENTLY VERIFIED at 5812b2c |
-| WP-02 | P1 | No stale UI commits; measured read-path performance | D03 A/D04 A accepted; bounded implementation starting; numeric SLO pending |
+| WP-02 | P1 | No stale UI commits; measured read-path performance | D03 A/D04 A and numeric reference criteria accepted; implementation/profile in progress |
 | WP-04 | P2 | Complete time history and explicit time-zone semantics | Proposed; API/time-zone decisions pending |
 | WP-03 | P2 | Bounded frontend modularisation and enforceable checks | Proposed; tools/module boundaries pending |
 | WP-05 | P2 | All-image scanning, restore evidence, cross-browser/security gates | Proposed; release policy pending |

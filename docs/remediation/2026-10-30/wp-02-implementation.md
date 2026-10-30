@@ -2,8 +2,8 @@
 
 Status: **IMPLEMENTATION STARTING AFTER WP-01 ACCEPTANCE**.
 The user explicitly selected [D03 A/D04 A](decisions.md). This document bounds
-this package. WP-01 was independently accepted at 5812b2c; numeric performance
-SLOs still require explicit agreement after baseline measurements.
+this package. WP-01 was independently accepted at 5812b2c. Following the first
+baseline, the user approved the numeric criteria recorded below.
 
 ## Refresh contract
 
@@ -70,12 +70,13 @@ headers before withholding JSON bodies. Keep existing identity and capacity E2E
 coverage. Backend evidence includes actual query counters/plans, persisted-state
 digests, cold/repeated reads, changed calendars/quotas and concurrent saves.
 
-The accepted product envelope is up to 10 simultaneous users and 300 tasks per
-project. The proposed five projects/30 employees, p95 limits and long soak duration
-are not approved gates. Measure a clearly labelled baseline first, report actual
-sample counts/errors/distributions, then obtain explicit agreement on numeric
-performance acceptance before claiming WP-02 PASS. No implementer may turn
-engineering observations into a negotiated SLO.
+The accepted WP-02 reference workload is five projects × 300 tasks, 30 shared
+employees and ten distinct concurrent users. The user approved read p95 ≤500 ms,
+preview/save p95 ≤2 seconds and zero unexpected errors, with ten minutes of mixed
+load plus fifteen minutes of soak. Keep the sixty-minute soak in final WP-05.
+Freeze the remaining reproducibility controls before executing the long run;
+report actual sample counts/errors/distributions. No implementer may silently
+weaken thresholds or turn a different experiment into an accepted SLO.
 
 ## Baseline experiments (not acceptance targets)
 

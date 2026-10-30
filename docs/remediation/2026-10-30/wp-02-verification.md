@@ -38,16 +38,43 @@ mail server or directory is used. Private raw evidence is retained outside Git.
 
 ## Backend baseline
 
-The test-only ready-portfolio profile is being prepared. Query counts, timing
-distributions and coherence/slow-consumer hypotheses have not yet been measured
-or accepted. The historical opt-in stress test is not a WP-02 performance gate.
-No numeric SLO has been approved; do not infer one from engineering experiments.
+The first test-only ready-portfolio profile actually ran with production Go
+unchanged from d932046: 1280 authenticated loopback-TLS GETs, zero errors and
+unchanged persisted project digests. Fixtures had one/five projects × 300 tasks,
+30 employees, 600 loads/project, two selected years and zero/3000 time facts per
+project. Ten-user cohorts each contained 200 samples:
+
+| Projects | Facts/project | Read p95 (ms) | SQL calls/request |
+| --- | --- | --- | --- |
+| 1 | 0 | 61.251 | 16 |
+| 1 | 3000 | 50.566 | 16 |
+| 5 | 0 | 149.758 | 48 |
+| 5 | 3000 | 164.067 | 48 |
+
+The harness also ran one/five-user cohorts, component phases and actual synthetic
+query plans. Repeated two-year calendar reads and validation occur for each of
+five relevant projects. Baseline allocations are for the combined in-process
+client/server, not server-only memory. pgx acquisition duration includes all pool
+acquisition time; do not call it pure queue wait. Phase warmup precedes HTTP reads,
+so first_completed_ms is not a cold-cache measurement. No hardware/cache flushing
+is claimed. Reference workstation: 12 available logical CPUs, GOMAXPROCS 12,
+about 31.3 GiB RAM, Go 1.27.3, PostgreSQL through the disposable local test database.
+TLS, authentication and authorization are exercised; nginx and external networking
+are excluded from these API latency figures. The historical opt-in stress harness
+is not a WP-02 performance gate.
+
+The user subsequently accepted reference SLO option A: five projects, 30 shared
+employees, ten distinct concurrent users; read p95 ≤500 ms, preview/save p95
+≤2 seconds and zero unexpected errors; ten minutes of mixed load plus fifteen
+minutes of soak. The sixty-minute soak remains in final WP-05. The short baseline
+above is not proof that these duration/mixed-write acceptance criteria passed.
+Coherence and slow-response hypotheses still require controlled reproduction.
 
 ## Remaining work
 
 Implement and verify selection/session/revision/resource guards, one background
 refresh batch, editor/write/visibility/offline pause and catch-up, plus actual
-read-path baseline measurements before optimization. Reproduce backend hypotheses
-before calling them defects. Obtain explicit numeric performance acceptance, run
-the agreed profile, then independent exact-SHA review and final CI. Preserve
+read-path comparisons before/after optimization. Reproduce backend hypotheses
+before calling them defects. Freeze the remaining profile controls, run the
+agreed duration/mix, then independent exact-SHA review and final CI. Preserve
 WP-01 behaviour and all prior identity/security tests.
