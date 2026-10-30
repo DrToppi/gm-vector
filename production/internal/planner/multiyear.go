@@ -188,6 +188,18 @@ func inheritCalendarVersions(ctx context.Context, q DBTX, old Project, next *Pro
 		if err != nil {
 			return bad("Calendar anchor is unavailable")
 		}
+		previous, err := readCalendar(ctx, q, old.CalendarID)
+		if err != nil {
+			return bad("Previous calendar anchor is unavailable")
+		}
+		if previous.Year != anchor.Year {
+			// The former anchor was an implicit verified annual selection. A
+			// legacy client changing years cannot explicitly carry that pin.
+			previousYear := strconv.Itoa(previous.Year)
+			if _, selected := next.CalendarVersions[previousYear]; !selected {
+				next.CalendarVersions[previousYear] = previous.ID
+			}
+		}
 		key := strconv.Itoa(anchor.Year)
 		if next.CalendarVersions[key] == old.CalendarID {
 			next.CalendarVersions[key] = next.CalendarID

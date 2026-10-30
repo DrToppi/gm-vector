@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Real host IPC, maintenance and DB rollback using a disposable installation."""
-import argparse, base64, hashlib, hmac, http.cookiejar, importlib.util, json, os, secrets, socket, ssl, struct, subprocess, sys, tempfile, time
+import argparse, base64, datetime, hashlib, hmac, http.cookiejar, importlib.util, json, os, secrets, socket, ssl, struct, subprocess, sys, tempfile, time
 from pathlib import Path
 from urllib.request import Request, build_opener, HTTPSHandler, HTTPCookieProcessor
 parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--fetch-ref');parser.add_argument('--baseline-source',type=Path);parser.add_argument('--multiyear',action='store_true');args=parser.parse_args()
@@ -69,6 +69,19 @@ with tempfile.TemporaryDirectory(prefix='gm-vector-updater-fixture-') as temp:
    me=call('/auth/me');csrf=me['csrf']
    saved=call('/projects/update-fixture',{'project':migrated,'override_reason':''},csrf,method='PUT')
    assert saved['tasks'][0]['duration_days']==731 and saved['tasks'][0]['end']>='2028-01-01'
+   # Pin an independently constructed next-year version before the encrypted
+   # snapshot. Recovery must preserve provenance as well as the numeric span.
+   first=datetime.date(2027,1,1)
+   days={(first+datetime.timedelta(days=n)).isoformat():{'working':(first+datetime.timedelta(days=n)).weekday()<5 and n!=0,'shortened':False} for n in range(365)}
+   calendar={'id':'synthetic-upgrade-2027','year':2027,'title':'Synthetic upgrade year; not an official calendar','source':'isolated fixture','days':days}
+   call('/calendars',calendar,csrf)
+   saved['calendar_versions']={'2027':calendar['id']}
+   for key in ('loads','warnings','provisional_years','calculation_state'):saved.pop(key,None)
+   saved=call('/projects/update-fixture',{'project':saved,'override_reason':''},csrf,method='PUT')
+   assert saved['calendar_versions']=={'2027':calendar['id']}
+   assert 2027 not in saved.get('provisional_years',[])
+   restored_fields=('calendar_id','calendar_versions','tasks','links','people')
+   multiyear_before={key:saved[key] for key in restored_fields}
   # Inject an actual post-migration DB change, then fail activation. Recovery must
   # restore the stopped-writer snapshot, not run an old image on the modified DB.
   previous=engine.manifest();sha=previous['commit'];engine.record={'state':'updating','id':secrets.token_hex(16),'commit':sha,'source':str(ROOT.parent),'previous_source':str(ROOT.parent),'previous':previous,'images':manifest['images']}
@@ -84,7 +97,11 @@ with tempfile.TemporaryDirectory(prefix='gm-vector-updater-fixture-') as temp:
   assert query("SELECT to_regclass('public.updater_failed_migration') IS NULL")=='t'
   assert query("SELECT encode(totp,'hex') FROM users WHERE username='synthetic-updater-admin'")==totp_before
   assert call('/auth/status')['setup_required'] is False
-  if args.multiyear: assert query("SELECT duration_days FROM tasks WHERE id='legacy-long-task'")=='731'
+  if args.multiyear:
+   assert query("SELECT duration_days FROM tasks WHERE id='legacy-long-task'")=='731'
+   recovered=call('/projects/update-fixture')['project']
+   assert {key:recovered[key] for key in restored_fields}==multiyear_before,'multi-year calendar/task roundtrip changed'
+   assert 2027 not in recovered.get('provisional_years',[])
   assert (state/'config/encryption.key').read_bytes()==engine.archive('backup')[0]['secrets/encryption.key']
   assert engine.status()['state']=='succeeded'
   # Repeating recovery after a committed switch does not restore/switch again.

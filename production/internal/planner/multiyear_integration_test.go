@@ -110,6 +110,14 @@ func testMultiYearAPI(t *testing.T, store *Store, request multiYearRequest, admi
 	if _, err := store.DB.Exec(ctx, "INSERT INTO memberships VALUES($1,$2,'member')", p.ID, memberID); err != nil {
 		t.Fatal(err)
 	}
+	// A legacy member can save without changing the anchor or supplying pins.
+	transport, _ = json.Marshal(p)
+	json.Unmarshal(transport, &legacy)
+	delete(legacy, "calendar_versions")
+	p = decode(call(200, "PUT", path, map[string]any{"project": legacy}, &member))
+	if p.CalendarVersions["2027"] != calendars[2027].ID {
+		t.Fatal("unchanged-anchor legacy member save lost an annual selection")
+	}
 	changed := p
 	changed.CalendarVersions = map[string]string{}
 	call(403, "POST", path+"/preview", saveRequest{Project: changed}, &member)
@@ -151,8 +159,79 @@ func testMultiYearAPI(t *testing.T, store *Store, request multiYearRequest, admi
 	if err := store.DB.QueryRow(ctx, "SELECT count(*) FROM snapshots WHERE project_id=$1 AND payload->'calendar_versions'='{}'::jsonb", p.ID).Scan(&emptyPinSnapshot); err != nil || emptyPinSnapshot == 0 {
 		t.Fatal("empty map snapshot omitted", emptyPinSnapshot, err)
 	}
+	testMultiYearLegacyAnchorChanges(t, call, admin, calendars[2027])
 	testMultiYearBudgetGET(t, store, call, admin, calendars[2026].ID)
 }
+
+func testMultiYearLegacyAnchorChanges(t *testing.T, call func(int, string, string, any, *testSession) json.RawMessage, admin *testSession, c27 Calendar) {
+	t.Helper()
+	decode := func(raw json.RawMessage) Project {
+		t.Helper()
+		var p Project
+		if err := json.Unmarshal(raw, &p); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	legacyBody := func(p Project) any {
+		t.Helper()
+		raw, err := json.Marshal(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fields map[string]any
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			t.Fatal(err)
+		}
+		delete(fields, "calendar_versions")
+		return map[string]any{"project": fields}
+	}
+	c26 := annualFixture(t, 2026)
+	c26.ID = "synthetic-2026-legacy-anchor"
+	c26.Days["2026-04-01"] = Day{}
+	recalculateChecksum(t, &c26)
+	call(201, "POST", "/calendars", c26, admin)
+	p := decode(call(201, "POST", "/projects", map[string]any{"title": "Synthetic legacy anchor compatibility", "start": "2026-04-01", "duration_mode": "working", "calendar_id": c26.ID}, admin))
+	path := "/projects/" + p.ID
+	p.Tasks = []Task{{ID: "anchor-holiday", Title: "Verified holiday compatibility", Status: "todo", Responsibility: "internal", RequestedStart: "2026-04-01", DurationDays: 1, Assignments: []Assignment{}}}
+	p = decode(call(200, "PUT", path, saveRequest{Project: p}, admin))
+	if len(p.CalendarVersions) != 0 || p.Tasks[0].End != "2026-04-02" {
+		t.Fatal("legacy anchor fixture did not retain its verified holiday", p.CalendarVersions, p.Tasks[0].End)
+	}
+	p.CalendarID = c27.ID
+	preview := decode(call(200, "POST", path+"/preview", legacyBody(p), admin))
+	if preview.CalendarVersions["2026"] != c26.ID || preview.Tasks[0].End != "2026-04-02" || len(preview.ProvisionalYears) != 0 {
+		t.Fatal("legacy cross-year anchor preview lost the old verified year", preview.CalendarVersions, preview.Tasks[0].End, preview.ProvisionalYears)
+	}
+	p = decode(call(200, "PUT", path, legacyBody(p), admin))
+	if p.CalendarVersions["2026"] != c26.ID || p.Tasks[0].End != "2026-04-02" || len(p.ProvisionalYears) != 0 {
+		t.Fatal("legacy cross-year anchor save lost the old verified year", p.CalendarVersions, p.Tasks[0].End, p.ProvisionalYears)
+	}
+	// An explicit empty map remains an intentional clearing operation.
+	p.CalendarVersions = map[string]string{}
+	p = decode(call(200, "PUT", path, saveRequest{Project: p}, admin))
+	if len(p.CalendarVersions) != 0 || p.Tasks[0].End != "2026-04-01" || !reflect.DeepEqual(p.ProvisionalYears, []int{2026}) {
+		t.Fatal("explicit empty pins did not clear the former anchor year", p.CalendarVersions, p.Tasks[0].End, p.ProvisionalYears)
+	}
+	// Keep the existing same-year inherited-pin replacement contract.
+	p.CalendarVersions = map[string]string{"2027": c27.ID}
+	p.Tasks[0].RequestedStart = "2027-01-01"
+	p = decode(call(200, "PUT", path, saveRequest{Project: p}, admin))
+	if p.Tasks[0].End != "2027-01-04" {
+		t.Fatal("same-year anchor fixture", p.Tasks[0].End)
+	}
+	replacement := annualFixture(t, 2027)
+	replacement.ID = "synthetic-2027-legacy-replacement"
+	replacement.Days["2027-01-01"], replacement.Days["2027-01-04"] = Day{}, Day{}
+	recalculateChecksum(t, &replacement)
+	call(201, "POST", "/calendars", replacement, admin)
+	p.CalendarID = replacement.ID
+	p = decode(call(200, "PUT", path, legacyBody(p), admin))
+	if p.CalendarVersions["2027"] != replacement.ID || p.Tasks[0].End != "2027-01-05" || len(p.ProvisionalYears) != 0 {
+		t.Fatal("same-year legacy anchor replacement lost inherited-pin normalization", p.CalendarVersions, p.Tasks[0].End)
+	}
+}
+
 func testMultiYearBudgetGET(t *testing.T, store *Store, call func(int, string, string, any, *testSession) json.RawMessage, admin *testSession, calendarID string) {
 	ctx := context.Background()
 	id := newID()
