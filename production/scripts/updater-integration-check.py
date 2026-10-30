@@ -71,16 +71,34 @@ with tempfile.TemporaryDirectory(prefix='gm-vector-updater-fixture-') as temp:
    assert saved['tasks'][0]['duration_days']==731 and saved['tasks'][0]['end']>='2028-01-01'
    # Pin an independently constructed next-year version before the encrypted
    # snapshot. Recovery must preserve provenance as well as the numeric span.
-   first=datetime.date(2027,1,1)
-   days={(first+datetime.timedelta(days=n)).isoformat():{'working':(first+datetime.timedelta(days=n)).weekday()<5 and n!=0,'shortened':False} for n in range(365)}
-   calendar={'id':'synthetic-upgrade-2027','year':2027,'title':'Synthetic upgrade year; not an official calendar','source':'isolated fixture','days':days}
-   call('/calendars',calendar,csrf)
+   for year in (2026,2027):
+    first=datetime.date(year,1,1)
+    days={(first+datetime.timedelta(days=n)).isoformat():{'working':(first+datetime.timedelta(days=n)).weekday()<5 and not(year==2027 and n==0),'shortened':False} for n in range(365)}
+    calendar={'id':'synthetic-upgrade-'+str(year),'year':year,'title':'Synthetic upgrade year; not an official calendar','source':'isolated fixture','days':days}
+    call('/calendars',calendar,csrf)
+   saved['calendar_id']='synthetic-upgrade-2026'
    saved['calendar_versions']={'2027':calendar['id']}
    for key in ('loads','warnings','provisional_years','calculation_state'):saved.pop(key,None)
    saved=call('/projects/update-fixture',{'project':saved,'override_reason':''},csrf,method='PUT')
    assert saved['calendar_versions']=={'2027':calendar['id']}
    assert 2027 not in saved.get('provisional_years',[])
-   restored_fields=('calendar_id','calendar_versions','tasks','links','people')
+   employee='synthetic-upgrade-employee'
+   call('/employees',{'id':employee,'name':'Synthetic recovery employee','daily_minutes':480},csrf)
+   saved['people']=[{'employee_id':employee,'weekdays':[1,2,3,4,5],'window_start':'09:00','window_end':'17:00','exceptions':{},'week':{str(n):{'active':True,'start':'09:00','end':'17:00','daily_minutes':480} for n in range(1,6)}}]
+   for task_id,minutes in [('recovery-work',480),('recovery-follow',120)]:
+    saved['tasks'].append({'id':task_id,'title':'Synthetic recovery work','status':'todo','responsibility':'internal','requested_start':'2026-12-31','planned_minutes':minutes,'duration_days':0,'assignments':[{'employee_id':employee,'daily_minutes':240}]})
+   saved['links']=[{'from':'recovery-work','to':'recovery-follow','mode':'after','days':0}]
+   for key in ('loads','warnings','provisional_years','calculation_state'):saved.pop(key,None)
+   saved=call('/projects/update-fixture',{'project':saved,'override_reason':''},csrf,method='PUT')
+   work=next(task for task in saved['tasks'] if task['id']=='recovery-work')
+   follow=next(task for task in saved['tasks'] if task['id']=='recovery-follow')
+   assert (work['start'],work['end'],follow['start'])==('2026-12-31','2027-01-04','2027-01-05')
+   entry=call('/projects/update-fixture/time-entries',{'task_id':'recovery-work','employee_id':employee,'date':'2026-12-31','minutes':45,'comment':'Synthetic recovery fact'},csrf)
+   saved=call('/projects/update-fixture')['project']
+   assert next(task for task in saved['tasks'] if task['id']=='recovery-work')['actual_minutes']==45
+   time_before=call('/projects/update-fixture/time-entries')
+   assert len(time_before)==1 and time_before[0]['id']==entry['id']
+   restored_fields=('calendar_id','calendar_versions','revision','tasks','links','people','loads')
    multiyear_before={key:saved[key] for key in restored_fields}
   # Inject an actual post-migration DB change, then fail activation. Recovery must
   # restore the stopped-writer snapshot, not run an old image on the modified DB.
@@ -102,6 +120,7 @@ with tempfile.TemporaryDirectory(prefix='gm-vector-updater-fixture-') as temp:
    recovered=call('/projects/update-fixture')['project']
    assert {key:recovered[key] for key in restored_fields}==multiyear_before,'multi-year calendar/task roundtrip changed'
    assert 2027 not in recovered.get('provisional_years',[])
+   assert call('/projects/update-fixture/time-entries')==time_before,'time-entry history roundtrip changed'
   assert (state/'config/encryption.key').read_bytes()==engine.archive('backup')[0]['secrets/encryption.key']
   assert engine.status()['state']=='succeeded'
   # Repeating recovery after a committed switch does not restore/switch again.
