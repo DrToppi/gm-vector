@@ -76,16 +76,19 @@ establish ordering correctness; both revision and identity boundaries need tests
 | 02-11 | Burst and sustained soak; one slow/dead client; timeout/cancel | Bounded goroutines/connections/memory, recovery to baseline; no race detector failures |
 | 02-12 | EXPLAIN(ANALYZE,BUFFERS) on representative synthetic dataset before/after | Index benefit demonstrated; no unbounded N+1 or regression in writes/migrations |
 
-Workload proposal, **not yet agreed**:10 concurrent users,5 projects×300 tasks,
-30 employees with shared participation; mixed reads/edits,60 s warmup,10 min steady
-load,60 min soak. Test10 projects as stress, not silently redefine product capacity.
-Proposed targets: read p95≤500 ms, preview/save p95≤2 s, unexpected errors<0.1%,
-no sustained memory growth after warmup, no correctness failure. Freeze CPU/RAM,
-request mix and latency definition before treating these as gates. Report sample
-counts and p50/p95/p99, not just average; compare same machine/data/build settings.
+The user accepted the WP-02 reference profile after baseline measurements:
+10 distinct concurrent users, 5 projects×300 tasks, 30 shared employees; ten minutes
+of mixed load and fifteen minutes of soak. Read p95≤500 ms, preview/save p95≤2 s,
+zero unexpected errors and no correctness failure. The sixty-minute soak remains
+a final WP-05 requirement. Record bounded resource trends rather than mistaking
+intentional persisted writes or client/server instrumentation for an application
+leak. Ten projects remain an optional stress experiment, not product capacity.
+The exact CPU/RAM, 90/5/5 mix, pacing and loopback-TLS latency definition are frozen
+in [the bounded contract](wp-02-implementation.md). Report sample counts and
+p50/p95/p99, not just averages; compare the same machine/data/harness/build settings.
 
 Acceptance: deterministic race fixtures pass repeatedly without arbitrary sleeps;
-load targets explicitly approved and met; results match baseline scheduling logic.
+the approved load targets met; results match baseline scheduling logic.
 Evidence: replay seed, request trace with sanitized IDs, raw timing histogram,
 query counts/plans, CPU/RAM/goroutine series and regression comparison.
 
