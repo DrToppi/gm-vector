@@ -8,7 +8,7 @@ let events:DiagnosticEvent[]=[];let owner='';let epoch=0;
 const templates=[
  '/auth/me','/auth/status','/auth/login','/auth/logout','/auth/password','/auth/activation','/auth/bootstrap','/auth/bootstrap/resume','/auth/bootstrap/confirm',
  '/projects','/projects/{id}','/projects/{id}/preview','/projects/{id}/undo','/projects/{id}/export','/projects/{id}/members','/projects/{id}/member-candidates',
- '/projects/{id}/time-entries','/projects/{id}/time-entries/{entry}','/projects/{id}/tasks/{task}/comments',
+ '/projects/{id}/time-entries','/projects/{id}/time-entries/{entry}','/projects/{id}/time-history','/projects/{id}/time-history/export','/projects/{id}/portable/export','/import/portable','/projects/{id}/tasks/{task}/comments',
  '/employees','/employees/{id}/invite','/calendars','/integrations','/diagnostics','/diagnostics/events','/diagnostics/key','/audit','/trash','/trash/{id}/restore','/users','/users/{id}','/import','/tokens','/tokens/{id}','/directory/people','/directory/status','/directory/sync','/directory/ldap/sync','/openapi.json'
 ];
 export function safeRoute(path:unknown):string{

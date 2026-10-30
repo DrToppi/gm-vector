@@ -1,3 +1,4 @@
+import {usePlanningClock} from './PlanningClock';
 import {tr,currentLocale} from './i18n';
 import {useSessionScope} from './useSessionScope';
 import {useEffect, useRef, useState} from 'react';
@@ -7,7 +8,7 @@ import {hours, type Employee} from './types';
 type Invitation = {id:string; username:string; email:string; state:string; expires_at:string; delivery_state:string; delivery_error:string};
 type Access = {invitation:Invitation|null; smtp_enabled:boolean; account_active:boolean};
 
-export function EmployeeAdministration({canWrite}:{canWrite:boolean}) {const scope=useSessionScope();const api=scope.api;
+export function EmployeeAdministration({canWrite}:{canWrite:boolean}) {const clock=usePlanningClock();const scope=useSessionScope();const api=scope.api;
   const [employees,setEmployees]=useState<Employee[]>([]);
   const [error,setError]=useState('');
   useEffect(()=>{let active=true;api<Employee[]>('/employees').then(v=>{if(active)setEmployees(v)}).catch(e=>{if(active)setError(e.message)});return()=>{active=false}},[]);
@@ -19,7 +20,7 @@ export function EmployeeAdministration({canWrite}:{canWrite:boolean}) {const sco
   </section>;
 }
 
-function EmployeeRow({employee,canWrite,onSaved}:{employee:Employee;canWrite:boolean;onSaved:(e:Employee)=>void}) {const scope=useSessionScope();const api=scope.api;
+function EmployeeRow({employee,canWrite,onSaved}:{employee:Employee;canWrite:boolean;onSaved:(e:Employee)=>void}) {const clock=usePlanningClock();const scope=useSessionScope();const api=scope.api;
   const [limit,setLimit]=useState(String(hours(employee.daily_minutes)));
   const [email,setEmail]=useState(employee.email||'');
   const [saving,setSaving]=useState(false);
@@ -44,7 +45,7 @@ function EmployeeRow({employee,canWrite,onSaved}:{employee:Employee;canWrite:boo
   </article>;
 }
 
-function EmployeeAccess({employee,canWrite}:{employee:Employee;canWrite:boolean}) {const scope=useSessionScope();const api=scope.api;
+function EmployeeAccess({employee,canWrite}:{employee:Employee;canWrite:boolean}) {const clock=usePlanningClock();const scope=useSessionScope();const api=scope.api;
   const [access,setAccess]=useState<Access|null>(null);
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
@@ -71,7 +72,7 @@ function EmployeeAccess({employee,canWrite}:{employee:Employee;canWrite:boolean}
   return <div className="employee-access" data-employee-access={employee.id}>
     <h4>{tr('m3c4354f395')}</h4>
     {access?.account_active?<p>{tr('mae24a63d50')}</p>:<>
-      {invitation&&<p data-invitation-state={invitation.state}>{stateNames[invitation.state]||tr('mc8558deeb5')} · {invitation.username} · {invitation.email}<br/>{deliveryNames[invitation.delivery_state]||tr('m1381e73409')} {tr('me0b8747e03')} {new Date(invitation.expires_at).toLocaleString(currentLocale())}</p>}
+      {invitation&&<p data-invitation-state={invitation.state}>{stateNames[invitation.state]||tr('mc8558deeb5')} · {invitation.username} · {invitation.email}<br/>{deliveryNames[invitation.delivery_state]||tr('m1381e73409')} {tr('me0b8747e03')} {clock.timestamp(invitation.expires_at)}</p>}
       <button type="button" onClick={()=>void invite(!!invitation)} disabled={!canWrite||busy||!access?.smtp_enabled||!employee.email}>{busy?tr('m2059873933'):invitation?tr('mc18dc528f5'):tr('m1455c927c0')}</button>
       {invitation&&<p className="muted">{tr('m891d601017')}</p>}
     </>}

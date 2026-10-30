@@ -1,3 +1,4 @@
+import {usePlanningClock} from './PlanningClock';
 import {tr} from './i18n';
 import {useSessionScope} from './useSessionScope';
 import {TaskEffort} from './TaskEffort';
@@ -38,7 +39,7 @@ export function PeoplePanel({project,employees,admin,canEdit,onChange,onRefresh,
 }
 function ActivityEditor({value,employee,isNew,requestError,onSave,onClose}:{value:Participation;employee?:Employee;isNew:boolean;requestError?:string;onSave:(v:Participation)=>Promise<boolean>;onClose:()=>void}){
  const[v,set]=useState<Participation>(()=>{const next=clone(value);next.exceptions=next.exceptions||{};if(!hasParticipation(next))next.week=Object.fromEntries(weekdays.map(day=>[String(day),{active:(next.weekdays||[]).includes(day),start:next.window_start||'',end:next.window_end||'',daily_minutes:0}]));return next});
- const[d,setD]=useState(today());const[error,setError]=useState('');const[saving,setSaving]=useState(false);
+ const clock=usePlanningClock();const[d,setD]=useState(()=>clock.today());const[error,setError]=useState('');const[saving,setSaving]=useState(false);
  const changeDay=(day:string,change:Partial<Activity>)=>set(current=>({...current,week:{...current.week,[day]:{...(current.week?.[day]||emptyActivity()),...change}}}));
  const changeException=(day:string,change:Partial<Activity>)=>set(current=>({...current,exceptions:{...current.exceptions,[day]:{...current.exceptions[day],...change}}}));
  function validate(){const entries=[...Object.entries(v.week||{}).map(([day,a])=>[weekdayNames()[Number(day)],a] as const),...Object.entries(v.exceptions||{})];if(isNew&&!entries.some(([,a])=>a.active))return tr('m066ff0a965');for(const[label,a] of entries){if(!a.active)continue;const cap=activityCapacity(a);if(!a.start||!a.end||a.end<=a.start)return label+tr('m5b6f80b127');if(!Number.isInteger(a.daily_minutes)||!a.daily_minutes||a.daily_minutes<1||a.daily_minutes>1440)return label+tr('m5cadadb3cb');if(cap<a.daily_minutes)return label+tr('mb414d6bf5b')}return ''}

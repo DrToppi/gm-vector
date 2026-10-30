@@ -1,3 +1,4 @@
+import {usePlanningClock} from './PlanningClock';
 import {tr,currentLocale} from './i18n';
 import {useSessionScope} from './useSessionScope';
 import {useEffect, useRef, useState, type FormEvent} from 'react';
@@ -52,7 +53,7 @@ export function TaskComments({projectId, taskId, recipientChanged}: {
   projectId: string;
   taskId: string;
   recipientChanged: boolean;
-}) {const scope=useSessionScope();const api=scope.api;
+}) {const clock=usePlanningClock();const scope=useSessionScope();const api=scope.api;
   const [data, setData] = useState<CommentList | null>(null);
   const [text, setText] = useState('');
   const [send, setSend] = useState(false);
@@ -135,7 +136,7 @@ export function TaskComments({projectId, taskId, recipientChanged}: {
       <div className="task-comments-list" aria-label={tr('mfe53a02758')}>
         {data.comments.length === 0 && <p className="muted">{tr('m3247cd32ea')}</p>}
         {data.comments.map(comment => <article key={comment.id} data-comment-id={comment.id}>
-          <div className="task-comment-heading"><strong>{comment.author_name}</strong><time dateTime={comment.created_at}>{new Date(comment.created_at).toLocaleString(currentLocale())}</time></div>
+          <div className="task-comment-heading"><strong>{comment.author_name}</strong><time dateTime={comment.created_at}>{clock.timestamp(comment.created_at)}</time></div>
           <p className="task-comment-text">{comment.text}</p>
           <div className="task-comment-delivery" data-delivery-state={comment.delivery_state}>
             <span>{deliveryLabels[comment.delivery_state] || tr('m293e95311f')}</span>

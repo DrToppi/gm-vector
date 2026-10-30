@@ -1,4 +1,5 @@
 import {tr} from './i18n';
+import {COMPATIBILITY_ZONE,planningToday} from './planningTime';
 export type Assignment={employee_id:string;daily_minutes:number};
 export type Task={duration_days:number;id:string;parent:string;title:string;description:string;result:string;brief:string;status:'todo'|'doing'|'done';requested_start:string;start:string;end:string;planned_minutes:number;actual_minutes:number;legacy_actual_minutes:number;responsibility:'internal'|'customer';customer_owner:string;customer_email?:string;customer_due:string;owner_legacy:string;legacy_start:string;legacy_end:string;assignments:Assignment[];summary:boolean;blocked:boolean};
 export type Link={from:string;to:string;mode:'together'|'after'|'delay';days:number};
@@ -12,7 +13,7 @@ export type TimeEntry={id:string;task_id:string;employee_id:string;date:string;m
 export const statuses={get todo(){return tr('mc6cc849619')},get doing(){return tr('m59a28f1b11')},get done(){return tr('mef05d57959')}};
 export const dateNum=(s:string)=>Math.floor(Date.parse(s+'T00:00:00Z')/86400000);
 export const dateStr=(n:number)=>new Date(n*86400000).toISOString().slice(0,10);
-export const today=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Moscow'});
+export const today=(zone=COMPATIBILITY_ZONE)=>planningToday(zone);
 export const hours=(n:number)=>Number((n/60).toFixed(2));
 export const clone=<T,>(v:T):T=>structuredClone(v);
 export function blankTask(parent='',start=today()):Task{return {duration_days:0,id:crypto.randomUUID(),parent,title:tr('m756c6c64e2'),description:'',result:'',brief:'',status:'todo',requested_start:start,start:'',end:'',planned_minutes:0,actual_minutes:0,legacy_actual_minutes:0,responsibility:'internal',customer_owner:'',customer_email:'',customer_due:'',owner_legacy:'',legacy_start:'',legacy_end:'',assignments:[],summary:false,blocked:false}}
