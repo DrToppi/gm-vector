@@ -13,6 +13,8 @@ Address demonstrated architectural, functional and operational defects without
 rewriting the application. Sequence: **WP-01 → WP-02 → WP-04 → WP-03 → WP-05**.
 Freeze scope and acceptance before each WP; deliver independently reviewable commits.
 See [WP-01 evidence and acceptance](wp-01-verification.md).
+WP-02 progress and actual baseline failures are in its
+[verification record](wp-02-verification.md).
 
 | WP | Priority | Outcome | Status |
 | --- | --- | --- | --- |
