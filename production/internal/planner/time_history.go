@@ -70,7 +70,7 @@ func parseHistoryFilters(q url.Values, paged bool) (HistoryFilters, int, error) 
 	}
 	for _, s := range []string{f.DateFrom, f.DateTo} {
 		if s != "" {
-			if _, err := date(s); err != nil {
+			if parsed, err := date(s); err != nil || parsed.Year() < 1 || fmtDate(parsed) != s {
 				return f, 0, bad("Invalid history date")
 			}
 		}
