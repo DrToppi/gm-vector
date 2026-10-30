@@ -98,6 +98,11 @@ and 422 cursor_expired for valid signed expired cursors. Authorization precedes
 cursor/data details; revision invalidation precedes current subtree lookup.
 Malformed filters/limits or reversed inclusive date ranges return 422 validation,
 with no clamping. A fresh hidden/inactive project or unknown task root returns 404.
+Parse RawQuery with explicit parse-error handling on both new history resources.
+Malformed percent encoding or unescaped semicolon separators return422 validation;
+never silently drop a broken filter and turn the request into an unfiltered read.
+Keep valid percent-encoding and strict duplicate/unknown-key checks. This refines
+the existing malformed-query invariant; the legacy resource keeps its old contract.
 Repeat normalized filters and limit on continuation requests. An employee ID with
 no retained matches produces an empty result without a global-directory lookup.
 

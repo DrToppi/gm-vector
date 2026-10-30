@@ -32,6 +32,10 @@ Query parameters:
 | limit | Default 100, maximum 500; invalid values are rejected |
 | cursor | Opaque continuation context from the preceding page |
 
+Malformed percent encoding, unescaped semicolon separators, duplicate/unknown
+parameters and reversed date ranges are rejected with422 validation. The server
+does not discard a broken filter and return unfiltered data.
+
 The response includes items, next_cursor, revision, filters, limit, project context,
 planning_timezone, total_count, recorded_minutes and legacy_unattributed. Order is
 `work_date DESC, id ASC`. An empty next_cursor ends traversal. Retain normalized

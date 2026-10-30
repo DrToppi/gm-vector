@@ -40,6 +40,17 @@ class MandatoryTestEvidence(unittest.TestCase):
         with self.assertRaises(json.JSONDecodeError):
             require_go_test('not JSON', 'TestBrowserE2E')
 
+    def test_parent_pass_does_not_hide_a_skipped_required_child(self):
+        with self.assertRaises(RuntimeError):
+            require_go_test(self.events(
+                {'Action': 'skip', 'Test': 'TestBrowserE2E/required_case'},
+                {'Action': 'pass', 'Test': 'TestBrowserE2E'}), 'TestBrowserE2E')
+
+    def test_unrelated_optional_skip_does_not_invalidate_the_named_test(self):
+        require_go_test(self.events(
+            {'Action': 'skip', 'Test': 'TestOptionalProfile'},
+            {'Action': 'pass', 'Test': 'TestBrowserE2E'}), 'TestBrowserE2E')
+
 
 class FocusedHistoryVerification(unittest.TestCase):
     def test_evidence_is_private_and_never_overwrites_an_existing_file(self):

@@ -113,7 +113,8 @@ encryption/bootstrap keys. Keep private backups outside distributable archives.
 Installer unit tests live in `production/deploy`; HTTPS integration checks use
 `production/scripts/https-check.py` with the locally built nginx proxy image.
 The Go proxy integration test also needs native `nginx` on PATH or the
-`GMA_NGINX_BIN` environment variable set to its executable. CI installs nginx in
+`GMA_NGINX_BIN` environment variable set to its executable, or pass `--nginx-bin`
+to the unified verification runner. CI installs nginx in
 its disposable runner. The disposable installation check is `production/scripts/install-check.py`.
 These checks cover synthetic TLS and installation behavior, not your public DNS,
 certificate authority account or renewal scheduler.

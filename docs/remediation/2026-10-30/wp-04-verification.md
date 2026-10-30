@@ -1,6 +1,6 @@
 # WP-04 verification record
 
-Status: **IMPLEMENTATION STARTING — NO WP-04 IMPLEMENTATION ACCEPTANCE**.
+Status: **IMPLEMENTATION AND VERIFICATION IN PROGRESS — NOT ACCEPTED**.
 Baseline: `d656d65`, containing independently accepted WP-02 implementation
 `400ae188b6c059170dacfba7b3c8aec4a8af13af` and its documentation closure.
 Task branch: `feature/history-and-timezones`.
@@ -66,6 +66,68 @@ prove tmpfs exhaustion. The bounded plan now specifies per-response nginx
 buffering control; a corrected actual-image replay remains required. This image's
 web bundle was a development snapshot, so the probe is API/proxy evidence only,
 not a final frontend or exact-final-release acceptance.
+
+## Executed focused checks
+
+The following component runs actually passed before the final combined freeze.
+They do not substitute for final exact-SHA CI and independent acceptance.
+
+| Check | Executed outcome |
+| --- | --- |
+| Pagination with race instrumentation | PASS 29.461s ; 0/1/999/1000/1001/10000, exact tied-date ID traversal, NULL employee, legacy headers, inclusive subtree, removed assignments and 1999 facts |
+| Current authorization and cursor revision | PASS 3.982s; viewers, principal/auth-kind/filter binding, expiry/tampering, revocation, NULL ownership and revision invalidation |
+| Strict portable/legacy project formats | PASS 2.826s; preview/apply source-target acknowledgement, unknown/version/size failures, no fabricated identities/facts |
+| Installation clock integration | PASS 2.961s; four App zones on one Store, direct Import clock binding, related-project reuse, unchanged dates and audit instants |
+| Export boundary units | PASS 1.024s; exact encoded length, overflow without mutation and legal 4000-byte control-text expansion |
+| Export integration with race instrumentation | PASS 44.842s; complete 10000 rows, actual 100001 rejection/100000 boundary, actual escaped 64MiB rejection, observed database lock wait with an actual API fact writer, held output/slot, cancellation and header/row deadlines |
+| Installer defaults | Five tests PASS; explicit compatible initialization |
+| Runner acceptance guards | Ten tests PASS; focused mode cannot masquerade as all, production DB refused, skipped roots/required children rejected and private logs cannot overwrite existing files |
+| Frontend checkpoints513edc3/7fcfbdc | Build/TypeScript/seven locales and pure checks PASS;20 asserted browser scenarios plus optional screenshot artifact case; former-ID absent from catalog demonstrated RED→GREEN and independently reproduced |
+| Expanded security matrix | PASS33.691s;448 cells covering59 routes/seven roles and35 explicit token/CSRF/strict-body/no-side-effect variants |
+
+The deliberately cancelled export construction emits the existing generic
+operation_failed diagnostic. This is a controlled cancellation, not evidence
+resolving the unrelated older diagnostic investigation reserved for WP-05.
+
+## Packaged backpressure control and successful replay
+
+After the narrow response-header correction, the first replay passed both busy
+checks and concurrent read/write controls, then timed out while draining with an
+artificially shrunken TCP receive buffer. That run is retained as a failed fixture
+control, not a full export pass. A one-variable replay used the same 99a102c image
+and ordinary receive window, still leaving the body unread during both busy checks.
+No application timeout or resource limit was increased.
+
+The replay completed a 41660487-byte JSON document with exact 10000 IDs, dates,
+minutes and legal 4000-byte comments. Both concurrent export requests returned 429;
+ordinary project GET and an exclusive capacity edit completed before body draining.
+The actual API enforced 805306368-byte memory limit, remained running and recorded
+no OOM/restart. This is a successful operation under the container limit, not a
+continuous memory-peak measurement or proof for every dataset/network.
+
+The same disposable installation passed actual packaged UTC/Moscow/New_York/
+Kathmandu configuration, nonroot image identity and observed stable API/worker
+startup, same-service valid/invalid/valid controls, omitted-setting compatibility,
+repeated preparation, unchanged secrets, real TOTP and credential-revoking recovery.
+Later runtime hardening and the final frontend still require final-image CI.
+
+## Combined verification still open
+
+The first broad integration invocation stopped because native nginx was not on
+PATH; completed API/diagnostic checks are not called a complete suite. The corrected
+runner accepts an explicit `--nginx-bin` and keeps that failed prerequisite record.
+The full server/security/recovery suite, frontend final gate and independent
+exact-source review remain in progress. No main merge or deployment occurred.
+
+The next broad server run passed the proxy prerequisite but stopped at the old
+security inventory guard (new59 routes). The owner added explicit route/role and
+denied-state coverage rather than only changing a count; its focused448-cell
+matrix then passed. A new READ-ONLY review regression also actually demonstrated
+that malformed raw query encoding was being dropped: both history routes returned
+HTTP200/all3 records for a broken employee filter instead of422. Valid encoded
+filter controls returned2 records. The plan now requires strict raw-query parsing;
+no role/scope escalation is claimed. Its corrected run and the combined final gate
+remain pending at this checkpoint.
 
 ## Required evidence before acceptance
 

@@ -14,19 +14,24 @@ FOCUSED_HISTORY_TESTS = (
     'TestTimeHistoryLegacyMetadataRegression', 'TestTimeHistoryPaginationIntegration',
     'TestTimeHistoryRevisionAccessIntegration', 'TestTimeHistoryExportIntegration',
     'TestPortableProjectIntegration', 'TestPlanningTimezoneIntegration',
+    'TestTimeHistoryRawQueryIntegration',
 )
+FOCUSED_INTEGRATION_TESTS = FOCUSED_HISTORY_TESTS + ('TestSecurityAuditMatrix',)
 
 
 def require_go_test(stdout, expected_test):
     """An exit code alone also accepts missing or skipped Go tests."""
     terminal = []
+    skipped_children = []
     for line in stdout.splitlines():
         event = json.loads(line)
         if 'Output' in event:
             print(event['Output'], end='', flush=True)
         if event.get('Test') == expected_test and event.get('Action') in ('pass', 'fail', 'skip'):
             terminal.append(event['Action'])
-    if terminal != ['pass']:
+        if event.get('Action') == 'skip' and str(event.get('Test', '')).startswith(expected_test + '/'):
+            skipped_children.append(event['Test'])
+    if terminal != ['pass'] or skipped_children:
         raise RuntimeError(f'{expected_test} must run and pass; missing/skipped/failed is not success')
 
 
@@ -35,10 +40,12 @@ def main():
     parser.add_argument('suite', choices=('unit', 'integration', 'e2e', 'all'))
     parser.add_argument('--dsn-file', type=Path,
                         help='explicit file with disposable gma_planner_test DSN; otherwise GMA_TEST_DSN')
-    parser.add_argument('--only-test', choices=FOCUSED_HISTORY_TESTS,
-                        help='run one named history integration check; never a full-suite acceptance')
+    parser.add_argument('--only-test', choices=FOCUSED_INTEGRATION_TESTS,
+                        help='run one named integration check; never a full-suite acceptance')
     parser.add_argument('--evidence-file', type=Path,
                         help='new private log file for all child output; existing files are refused')
+    parser.add_argument('--nginx-bin', type=Path,
+                        help='explicit native nginx binary for the real proxy regression; otherwise PATH/GMA_NGINX_BIN')
     args = parser.parse_args()
     if args.only_test and args.suite != 'integration':
         parser.error('--only-test requires the integration suite; all/unit/e2e stay complete')
@@ -53,6 +60,8 @@ def main():
     for name in ('GMA_TEST_DSN', 'GMA_E2E', 'GMA_PERFORMANCE'):
         env.pop(name, None)
     env['CGO_ENABLED'] = '1'
+    if args.nginx_bin:
+        env['GMA_NGINX_BIN'] = str(args.nginx_bin.expanduser().resolve())
     go = os.environ.get('GMA_GO_BIN') or shutil.which('go')
     if not go:
         candidate = Path.home() / '.local/share/gma-toolchain/go/bin/go'
