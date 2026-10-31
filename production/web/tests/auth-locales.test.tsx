@@ -8,10 +8,11 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import { useTranslation } from "react-i18next";
 import { Auth } from "../src/Auth";
+import { PeoplePanel } from "../src/Editors";
 import { advanceSession, setCSRF } from "../src/api";
 import { useSessionScope } from "../src/useSessionScope";
 import { changeLocale, tr, type Locale } from "../src/i18n";
-import { reply, scenario } from "./fixtures";
+import { employee, project, reply, scenario } from "./fixtures";
 
 describe("initial access lifecycle and translated rendering", () => {
   const current = scenario();
@@ -115,22 +116,37 @@ describe("initial access lifecycle and translated rendering", () => {
     freshScope.unmount();
   });
 
-  const labels: Record<Locale, string> = {
-    en: "Username",
-    ru: "Логин",
-    de: "Benutzername",
-    fr: "Identifiant",
-    es: "Nombre de usuario",
-    "pt-BR": "Usuário",
-    "zh-Hans": "用户名",
+  const labels: Record<Locale, { login: string; monday: string }> = {
+    en: { login: "Username", monday: "Mon" },
+    ru: { login: "Логин", monday: "Пн" },
+    de: { login: "Benutzername", monday: "Mo" },
+    fr: { login: "Identifiant", monday: "Lun" },
+    es: { login: "Nombre de usuario", monday: "Lun" },
+    "pt-BR": { login: "Usuário", monday: "Seg" },
+    "zh-Hans": { login: "用户名", monday: "周一" },
   };
-  it.each(Object.entries(labels) as [Locale, string][])(
+  it.each(
+    Object.entries(labels) as [Locale, { login: string; monday: string }][],
+  )(
     "updates the actual form in %s without issuing access requests",
     async (locale, label) => {
       const f = current();
+      const p = project();
       function TranslatedAccess() {
         useTranslation();
-        return <Auth setup={false} onReady={vi.fn()} />;
+        return (
+          <>
+            <Auth setup={false} onReady={vi.fn()} />
+            <PeoplePanel
+              project={p}
+              employees={[employee]}
+              admin={false}
+              canEdit={false}
+              onChange={async () => false}
+              onRefresh={async () => {}}
+            />
+          </>
+        );
       }
       const view = render(<TranslatedAccess />);
       const literal =
@@ -140,9 +156,12 @@ describe("initial access lifecycle and translated rendering", () => {
       });
       await act(async () => changeLocale(locale));
       expect(document.documentElement.lang).toBe(locale);
-      expect((screen.getByLabelText(label) as HTMLInputElement).value).toBe(
-        literal,
-      );
+      expect(
+        (screen.getByLabelText(label.login) as HTMLInputElement).value,
+      ).toBe(literal);
+      expect(
+        view.container.querySelector(".participation-summary li")?.textContent,
+      ).toContain(label.monday + " ·");
       expect(view.container.querySelector("img")).toBeNull();
       expect(f.requests).toHaveLength(0);
     },
