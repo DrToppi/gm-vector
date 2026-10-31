@@ -1,5 +1,5 @@
 """Synthetic-only manifest regression tests; never loads user runtime configuration."""
-import base64,importlib.util,json,os,sys,tempfile,unittest
+import base64,contextlib,importlib.util,io,json,os,sys,tempfile,types,unittest
 from pathlib import Path
 from unittest.mock import patch
 spec=importlib.util.spec_from_file_location('gma_backup',Path(__file__).with_name('backup.py'))
@@ -25,6 +25,13 @@ class BackupManifestTests(unittest.TestCase):
    def records(*args,**kwargs):yield row
    with self.subTest(row=row),patch.object(b,'process_lines',records):
     with self.assertRaisesRegex(ValueError,'could not be authenticated'):b.verify_restored_secrets('synthetic',b'S'*32)
+ def test_verify_cannot_claim_runtime_for_wrong_application_key(self):
+  original=b'S'*32;nonce=b'N'*12;sealed=nonce+b.AESGCM(original).encrypt(nonce,b'synthetic-totp',b'GMA|Planner:v1')
+  def records(*args,**kwargs):yield b'user_totp|'+sealed.hex().encode()
+  values={'database.dump':b'synthetic-dump','secrets/encryption.key':b'W'*32}
+  with patch.object(b,'read_archive',return_value=(values,{'counts':'users|1'},True)),patch.object(b,'run',return_value=b''),patch.object(b,'counts',return_value='users|1'),patch.object(b,'process_lines',records),patch.object(b,'runtime_smoke') as smoke,contextlib.redirect_stdout(io.StringIO()) as output:
+   with self.assertRaisesRegex(ValueError,'could not be authenticated'):b.verify(types.SimpleNamespace(),'synthetic-path-not-read')
+   smoke.assert_not_called();self.assertNotIn('runtime_verified',output.getvalue())
  def test_dependencies_and_no_private_keys(self):
   with tempfile.TemporaryDirectory() as d:
    cfg,r=fixture(Path(d));r.update(smtp_file='/run/secrets/smtp.json',ldap_file='/run/secrets/ldap.json',report_public_key_file='/run/secrets/report-public-key.json')
