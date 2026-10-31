@@ -8,9 +8,10 @@ separate formatting, 12 extracted modules, 43 component cases, actual native
 keyboard/gesture coverage and RED→GREEN fixes for focus restoration and selection
 ordering. Full local checks, exact-source CI and READ-ONLY review passed; see the
 [WP-03 evidence](remediation/2026-10-30/wp-03-verification.md).
-Current work is [WP-05 planning](remediation/2026-10-30/wp-05-decisions.md);
-D09 A/D10 B/D13 A were subsequently selected by the user; the bounded WP-05 plan
-must be frozen and reviewed before code. No main merge, release or remediation deployment
+Current work is [WP-05 phase 1](remediation/2026-10-30/wp-05-implementation.md);
+D09 A/D10 B/D13 A were subsequently selected by the user. Its bounded plan has
+independent admission; D14 exception admission/configuration remains held.
+No main merge, release or remediation deployment
 was performed. The historical pause below does not describe the current runtime.
 
 ## Completed and verified

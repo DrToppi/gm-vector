@@ -91,7 +91,8 @@ not evidence that an unselected tool is installed or suitable:
 - [Playwright browsers](https://playwright.dev/docs/browsers)
 - [Trivy vulnerability scanning](https://trivy.dev/latest/docs/scanner/vulnerability/)
 
-D07 pins are frozen and verified in the WP-03 plan/evidence. No WP-05 package
-version is frozen yet; D09 A/D10 B/D13 A are selected and D14 remains proposed.
+D07 pins are frozen and verified in the WP-03 plan/evidence. WP-05 tool pins and
+entry points are frozen in the [admitted plan](wp-05-implementation.md);
+D09 A/D10 B/D13 A are selected and D14 remains proposed.
 Current accepted runtime contracts
 remain effective until a replacement decision is approved.

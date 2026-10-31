@@ -13,8 +13,10 @@ service enabled; WP-01 is independently accepted at 5812b2c, WP-02 at 400ae188,
 WP-04 at e97971d and WP-03 at 9b03c90. WP-03 evidence is recorded in
 docs/remediation/2026-10-30/wp-03-verification.md. The user selected WP-05 D09 A,
 D10 B and D13 A in docs/remediation/2026-10-30/wp-05-decisions.md. Work is now
-bounded-plan preparation in feature/operational-hardening. Freeze the tools,
-file ownership, required scenarios and evidence plan before WP-05 code or installs.
+phase-1 implementation in feature/operational-hardening under the independently
+admitted docs/remediation/2026-10-30/wp-05-implementation.md plan. Tools, ownership,
+required scenarios and evidence entry points are frozen there. D14 exception
+admission/configuration stays disabled until human selection and bounded review.
 No individual vulnerability exception, main merge, release or deployment is
 authorized by that selection. Existing implementation authorization remains valid
 once the bounded plan is ready; routine in-scope work needs no repeated approval.

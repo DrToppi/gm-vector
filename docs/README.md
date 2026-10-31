@@ -8,7 +8,8 @@ Current work is [resumed from the documented checkpoint](implementation-checkpoi
 The verified updater is deployed; WP-01, WP-02, WP-04 and
 [WP-03](remediation/2026-10-30/wp-03-verification.md) are independently accepted.
 The user selected [WP-05 D09 A/D10 B/D13 A](remediation/2026-10-30/wp-05-decisions.md);
-its bounded implementation plan is next.
+its [bounded implementation plan](remediation/2026-10-30/wp-05-implementation.md)
+has independent phase-1 admission. D14 exception admission remains held.
 
 ## Install and operate
 
@@ -44,10 +45,10 @@ its bounded implementation plan is next.
 ## Planned remediation
 
 The [2026-10-30 remediation programme](remediation/2026-10-30/README.md) is currently
-**in progress, now planning WP-05**. The user approved starting with the
+**in progress, now implementing WP-05 phase 1**. The user approved starting with the
 separate updater, followed by the ordered work packages. WP-01/WP-02/WP-04/WP-03
 have exact-SHA acceptance records; WP-05 A/B/A decisions are accepted and bounded
-planning is underway.
+implementation follows its admitted bounded plan; this is not operational acceptance.
 The programme defines WP-01
 through WP-05, the implementation order,
 acceptance rules and required independent review. Read its
