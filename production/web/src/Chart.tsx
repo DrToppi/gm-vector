@@ -1,60 +1,1718 @@
-import {planningDay,planningCalendarReady,resizedDuration,type PlanningCalendar} from './planningCalendar';
-import {tr} from './i18n';
-import {mapLinks} from './mapLinks';
-import {mapLayout,flowLayout,stageLayout,PROJECT_ROOT,type ManualPositions,type StageBand} from './mapLayout';
-import {useEffect,useLayoutEffect,useMemo,useRef,useState} from 'react';import {clone,dateNum,dateStr,hours,statuses,type Link,type Project,type Task} from './types';
-type Box={x:number;y:number;w:number;h:number};type MapMode='tree'|'flow'|'stages';type Camera={zoom:number;pan:{x:number;y:number}};type Drag={kind:'date'|'resize'|'node'|'link';id:string;side?:string;clientX:number;clientY:number;x:number;y:number};
-function descendants(id:string,p:Project):string[]{return p.tasks.filter(t=>t.parent===id).flatMap(t=>[t.id,...descendants(t.id,p)])}
-export function Chart({project,calendar,view,selected,setSelected,onEdit,onChild,onLink,onChange,trace,setTrace,canEdit,filter}:{project:Project;calendar?:PlanningCalendar;view:'gantt'|'map';selected:string;setSelected:(s:string)=>void;onEdit:(t:Task)=>void;onChild:(t:Task)=>void;onLink:(l:Link,index:number)=>void;onChange:(p:Project)=>void;trace:string;setTrace:(s:string)=>void;canEdit:boolean;filter:string}){
- const calendarReady=planningCalendarReady(calendar);
- const[offset,setOffset]=useState(0);const[gridViewport,setGridViewport]=useState({left:0,width:1000});const viewport=useRef<HTMLDivElement>(null);const[mapMode,setMapMode]=useState<MapMode>('tree');const[linksByMode,setLinksByMode]=useState<Record<MapMode,boolean>>({tree:false,flow:true,stages:false});const allMapLinks=linksByMode[mapMode];const setAllMapLinks=(value:boolean)=>setLinksByMode(current=>({...current,[mapMode]:value}));const[pan,setPan]=useState({x:0,y:0});const[ panning,setPanning]=useState(false);const collapseAnchor=useRef<{id:string;x:number;y:number}|null>(null);const suppressTaskClick=useRef(false);const branchClickTimer=useRef<ReturnType<typeof setTimeout>|null>(null);const panStart=useRef<{x:number;y:number;px:number;py:number}|null>(null);const isMap=view==='map'||!!trace;
- useEffect(()=>{const dismiss=(e:PointerEvent)=>{if(!(e.target as Element).closest('.wire-fan,[data-link]')){setFan(null);setHover(-1)}};const escape=(e:KeyboardEvent)=>{if(e.key==='Escape'){setFan(null);setHover(-1)}};document.addEventListener('pointerdown',dismiss);document.addEventListener('keydown',escape);return()=>{document.removeEventListener('pointerdown',dismiss);document.removeEventListener('keydown',escape)}},[]);
- useEffect(()=>()=>{if(branchClickTimer.current)clearTimeout(branchClickTimer.current)},[project.id]);
- const [collapsed,setCollapsed]=useState<Set<string>>(new Set());const[zoom,setZoom]=useState(1);const[positionSets,setPositionSets]=useState<Record<string,ManualPositions>>({});const positionKey=trace?'trace:'+trace:mapMode;const positions=positionSets[positionKey]||{};const setPositions=(value:ManualPositions)=>setPositionSets(current=>({...current,[positionKey]:value}));const cameras=useRef<Record<string,Camera>>({});const lastView=useRef<{key:string;zoom:number;pan:{x:number;y:number};boxes:Map<string,Box>}|null>(null);const contextKey=trace?'trace:'+trace:view==='map'?'map:'+mapMode:'gantt';const[drag,setDrag]=useState<Drag|null>(null);const[wire,setWire]=useState<{x:number;y:number}|null>(null);const[linkSelected,setLinkSelected]=useState(-1);const[fan,setFan]=useState<{x:number;y:number;indices:number[]}|null>(null);const[hover,setHover]=useState(-1);
- useEffect(()=>{const element=viewport.current;if(!element)return;const update=()=>setGridViewport({left:element.scrollLeft,width:element.clientWidth});update();const observer=new ResizeObserver(update);observer.observe(element);return()=>observer.disconnect()},[view,project.id]);
- const children=(id:string)=>project.tasks.filter(t=>t.parent===id);const expandedLinks=useMemo(()=>{const leaves=(id:string):string[]=>{const kids=project.tasks.filter(t=>t.parent===id);return kids.length?kids.flatMap(t=>leaves(t.id)):[id]};return project.links.flatMap((l,index)=>leaves(l.from).flatMap(from=>leaves(l.to).map(to=>({...l,from,to,index}))))},[project]);
- const baseRelationFlags=useMemo(()=>{const incoming=new Set<string>(),outgoing=new Set<string>();for(const l of [...project.links,...expandedLinks]){incoming.add(l.to);outgoing.add(l.from)}return {incoming,outgoing}},[project.links,expandedLinks]);
- const traced=useMemo(()=>{const set=new Set<string>();if(!trace)return set;const leaves=(id:string):string[]=>{const kids=project.tasks.filter(t=>t.parent===id);return kids.length?kids.flatMap(t=>leaves(t.id)):[id]};leaves(trace).forEach(id=>set.add(id));let change=true;while(change){change=false;for(const l of expandedLinks)if(set.has(l.from)&&!set.has(l.to)){set.add(l.to);change=true}}change=true;while(change){change=false;for(const l of expandedLinks)if(set.has(l.to)&&!set.has(l.from)){set.add(l.from);change=true}}return set},[trace,expandedLinks,project]);
- const list:Task[]=[];const depth=new Map<string,number>();const walk=(parent:string,d:number)=>{for(const t of children(parent)){depth.set(t.id,d);list.push(t);if(filter.trim()||!collapsed.has(t.id))walk(t.id,d+1)}};if(trace){project.tasks.filter(t=>traced.has(t.id)).forEach(t=>list.push(t))}else walk('',0);
- if(filter.trim()){const hits=new Set(project.tasks.filter(t=>t.title.toLowerCase().includes(filter.toLowerCase())).map(t=>t.id));for(const id of [...hits]){let t=project.tasks.find(t=>t.id===id);while(t?.parent){hits.add(t.parent);t=project.tasks.find(x=>x.id===t!.parent)}}for(let i=list.length-1;i>=0;i--)if(!hits.has(list[i].id))list.splice(i,1)}
- const scheduleSuppressed=(t:Task)=>!!project.calculation_state&&project.calculation_state!=='ready'&&(t.summary||(t.responsibility==='internal'&&t.status!=='done'));const shownStart=(t:Task)=>scheduleSuppressed(t)?'':t.start||t.legacy_start;const shownEnd=(t:Task)=>scheduleSuppressed(t)?'':t.end||t.legacy_end;
- const dates=list.flatMap(t=>[shownStart(t),shownEnd(t)]).filter(Boolean).map(dateNum);const first=Math.min(dateNum(project.start),...dates)-2;const last=Math.max(first+30,...dates)+5;const dayWidth=32;const gridStart=Math.max(0,Math.floor((gridViewport.left/zoom-310)/dayWidth)-2);const gridLabelStart=Math.max(0,Math.ceil((gridViewport.left/zoom-310)/dayWidth));const gridEnd=Math.min(last-first+1,Math.ceil(((gridViewport.left+gridViewport.width)/zoom-310)/dayWidth)+2);const boxes=new Map<string,Box>();let stageBands:StageBand[]=[];let width=1000,height=Math.max(360,list.length*72+80);
- if(view==='gantt'&&!trace){width=Math.max(1000,310+(last-first+1)*dayWidth);list.forEach((t,i)=>{const s=shownStart(t);const end=shownEnd(t);boxes.set(t.id,{x:s?310+(dateNum(s)-first)*dayWidth:320,y:62+i*72,w:s&&end?Math.max(28,(dateNum(end)-dateNum(s)+1)*dayWidth-6):155,h:46})})}
- else if(trace){const rank=new Map<string,number>();const rankOf=(id:string,visited=new Set<string>()):number=>{if(rank.has(id))return rank.get(id)!;if(visited.has(id))return 0;visited.add(id);const incoming=expandedLinks.filter(l=>l.to===id&&traced.has(l.from));const n=incoming.length?1+Math.max(...incoming.map(l=>rankOf(l.from,new Set(visited)))):0;rank.set(id,n);return n};const counts=new Map<number,number>();for(const t of list){const col=rankOf(t.id);const row=counts.get(col)||0;counts.set(col,row+1);boxes.set(t.id,{x:40+col*440,y:50+row*164,w:290,h:104})};width=100+440*(1+Math.max(0,...rank.values()));height=Math.max(400,150+Math.max(0,...counts.values())*164)}
- else {const visible=list.map(t=>t.id);const stage=mapMode==='stages'?stageLayout(project,visible,positions):null;const layout=stage?.boxes||(mapMode==='flow'?flowLayout(project,mapLinks(project,expandedLinks,new Set(visible),'',true),visible,positions):mapLayout(project,expandedLinks,visible,positions));stageBands=stage?.bands||[];for(const[id,box]of layout)boxes.set(id,box);width=Math.max(1000,...[...boxes.values()].map(b=>b.x+b.w+40),...stageBands.map(b=>b.x+b.w+40));height=Math.max(400,...[...boxes.values()].map(b=>b.y+b.h+40),...stageBands.map(b=>b.y+b.h+40))}
- if(trace)for(const[id,position]of Object.entries(positions)){const box=boxes.get(id);if(box){box.x=position.x;box.y=position.y;width=Math.max(width,box.x+box.w+40);height=Math.max(height,box.y+box.h+40)}}
- const relationFlags={incoming:new Set(baseRelationFlags.incoming),outgoing:new Set(baseRelationFlags.outgoing)};if(view==='map'&&!trace)for(const edge of mapLinks(project,expandedLinks,new Set(list.map(t=>t.id)),'',true)){relationFlags.incoming.add(edge.to);relationFlags.outgoing.add(edge.from)};
- const ganttGroups=view==='gantt'&&!trace?list.filter(t=>t.summary).flatMap(t=>{const ids=new Set(descendants(t.id,project));const shown=list.filter(child=>ids.has(child.id));if(!shown.length)return [];const members=[t,...shown].map(child=>boxes.get(child.id)!);const level=depth.get(t.id)||0;const deepest=Math.max(...shown.map(child=>depth.get(child.id)||0));const pad=8+(deepest-level)*4;const x=Math.max(314,Math.min(...members.map(b=>b.x))-pad),right=Math.max(...members.map(b=>b.x+b.w))+pad;const y=boxes.get(t.id)!.y-10,bottom=Math.max(...members.map(b=>b.y+b.h))+pad;return [{task:t,level,x,y,w:right-x,h:bottom-y}] }):[];
- const fit=()=>{const el=viewport.current;if(!el)return;const z=Math.min(1,Math.max(.1,Math.min((el.clientWidth-32)/width,(el.clientHeight-32)/height)));setZoom(z);setPan({x:(el.clientWidth-width*z)/2,y:(el.clientHeight-height*z)/2})};
- useLayoutEffect(()=>{const previous=lastView.current;if(previous?.key===contextKey)return;if(previous)cameras.current[previous.key]={zoom:previous.zoom,pan:previous.pan};const saved=cameras.current[contextKey];if(saved){setZoom(saved.zoom);setPan(saved.pan)}else if(isMap){if(previous?.key.startsWith('map:')&&!trace){const anchor=selected&&boxes.has(selected)&&previous.boxes.has(selected)?selected:PROJECT_ROOT;const before=previous.boxes.get(anchor),after=boxes.get(anchor);setZoom(previous.zoom);if(before&&after)setPan({x:previous.pan.x+(before.x-after.x)*previous.zoom,y:previous.pan.y+(before.y-after.y)*previous.zoom});else setPan(previous.pan)}else fit()}else{setZoom(1);setPan({x:0,y:0})}},[contextKey]);
- useLayoutEffect(()=>{lastView.current={key:contextKey,zoom,pan,boxes:new Map(boxes)}});
- function switchMode(mode:MapMode){if(mode===mapMode)return;if(branchClickTimer.current)clearTimeout(branchClickTimer.current);collapseAnchor.current=null;panStart.current=null;setPanning(false);setDrag(null);setWire(null);setOffset(0);setFan(null);setHover(-1);setMapMode(mode)}
- useEffect(()=>{const el=viewport.current;if(!el||!isMap)return;const wheel=(e:WheelEvent)=>{if(e.ctrlKey||e.metaKey)return;e.preventDefault();const unit=e.deltaMode===1?16:e.deltaMode===2?el.clientHeight:1;const next=Math.min(1.5,Math.max(.1,zoom*Math.exp(-Math.max(-1000,Math.min(1000,e.deltaY*unit))*.0015)));const rect=el.querySelector('svg')!.getBoundingClientRect(),x=e.clientX-rect.left,y=e.clientY-rect.top,ratio=next/zoom;setZoom(next);setPan({x:x-(x-pan.x)*ratio,y:y-(y-pan.y)*ratio})};el.addEventListener('wheel',wheel,{passive:false});return()=>el.removeEventListener('wheel',wheel)},[isMap,zoom,pan]);
- function anchorBranch(id:string){if(view!=='map'||trace)return;const b=boxes.get(id);if(b)collapseAnchor.current={id,x:pan.x+b.x*zoom,y:pan.y+b.y*zoom}}
- useLayoutEffect(()=>{const anchor=collapseAnchor.current;collapseAnchor.current=null;if(!anchor||view!=='map'||trace)return;const b=boxes.get(anchor.id);if(b)setPan({x:anchor.x-b.x*zoom,y:anchor.y-b.y*zoom})},[collapsed]);
- function toggleBranch(id:string){anchorBranch(id);setCollapsed(current=>{const next=new Set(current);next.has(id)?next.delete(id):next.add(id);return next})}
- function toggleAllBranches(fold:boolean){anchorBranch(PROJECT_ROOT);setCollapsed(new Set(fold?project.tasks.filter(t=>t.summary).map(t=>t.id):[]))}
- const shownLinks=trace?expandedLinks.filter(l=>traced.has(l.from)&&traced.has(l.to)):view==='map'?mapLinks(project,expandedLinks,new Set(list.map(t=>t.id)),selected,allMapLinks):project.links.map((l,index)=>({...l,index}));const ends=new Set<string>();const activeIndex=hover>=0?hover:linkSelected;if(activeIndex>=0){const l=project.links[activeIndex];if(l){ends.add(l.from);ends.add(l.to);for(const edge of shownLinks.filter(e=>e.index===activeIndex)){ends.add(edge.from);ends.add(edge.to)}if(trace)for(const e of expandedLinks.filter(l=>l.index===activeIndex)){ends.add(e.from);ends.add(e.to)}}}
- function point(e:React.PointerEvent<SVGSVGElement>){const rect=e.currentTarget.getBoundingClientRect();return {x:(e.clientX-rect.left-(isMap?pan.x:0))/zoom,y:(e.clientY-rect.top-(isMap?pan.y:0))/zoom}}
- function duration(t:Task){if(scheduleSuppressed(t))return tr('md22239ff2b');const start=shownStart(t),end=shownEnd(t);if(!start||!end)return t.duration_days?tr('durationDays',{count:t.duration_days}):'—';const a=dateNum(start),b=dateNum(end);const count=project.duration_mode==='calendar'?b-a+1:Array.from({length:b-a+1},(_,i)=>calendar?.days[dateStr(a+i)]?.working?1:0).reduce<number>((x,y)=>x+y,0);return tr('durationDays',{count})}
- function color(l:Link){return l.from===selected?'#d89142':l.to===selected?'#419bce':selected?'#aab8c9':'#419bce'}
- function originalLinkColor(index:number){return color(shownLinks.find(l=>l.index===index&&(l.from===selected||l.to===selected))||project.links[index])}
- function finish(e:React.PointerEvent<SVGSVGElement>){if(!drag)return;const d=drag;setDrag(null);setWire(null);setOffset(0);if(d.kind==='link'){const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-port]') as SVGElement|null;const id=target?.dataset.id,side=target?.dataset.port;if(id&&id!==d.id&&side!==d.side){const from=d.side==='out'?d.id:id,to=d.side==='out'?id:d.id;onLink({from,to,mode:'after',days:0},-1)}return};if(Math.abs(e.clientX-d.clientX)<4&&Math.abs(e.clientY-d.clientY)<4)return;if(d.kind==='node'){suppressTaskClick.current=true;setTimeout(()=>{suppressTaskClick.current=false},0)}if((d.kind==='resize'||d.kind==='date')&&!calendarReady)return;if(d.kind==='resize'){const days=Math.round((e.clientX-d.clientX)/zoom/dayWidth);if(!days)return;const p=clone(project),t=p.tasks.find(t=>t.id===d.id)!;Object.assign(t,resizedDuration(p,t,d.side,days,calendar));onChange(p);return;}if(d.kind==='date'){const days=Math.round((e.clientX-d.clientX)/zoom/dayWidth);if(!days)return;const p=clone(project);const ids=new Set([d.id,...descendants(d.id,p)]);for(const t of p.tasks.filter(t=>ids.has(t.id)&&!t.summary)){const base=t.start||t.requested_start||t.legacy_start||p.start;t.requested_start=dateStr(dateNum(base)+days);if(t.responsibility==='customer'){if(t.start)t.start=dateStr(dateNum(t.start)+days);if(t.end)t.end=dateStr(dateNum(t.end)+days)}}onChange(p)}}
- return <section className="chart-panel" data-map-mode={view==='map'&&!trace?mapMode:trace?'trace':undefined}>{view==='gantt'&&!calendarReady&&<p className="notice amber" role="status" data-calendar-unavailable>{tr('calendar.unavailableNotice')}</p>}<div className="chart-toolbar"><span>{trace?tr('m2799eecd87'):view==='gantt'?tr('mb548c729b9'):tr('m78165590ad')}</span><div>{view==='map'&&!trace&&<div className="map-mode-switch" role="group" aria-label={tr('m57e0d287f6')}>{([['tree',tr('me1daa9e250')],['flow','Flow'],['stages',tr('m1228f4b97f')]] as const).map(([mode,label])=><button key={mode} type="button" data-map-mode-switch={mode} aria-pressed={mapMode===mode} onClick={()=>switchMode(mode)}>{label}</button>)}</div>}<button className="secondary" onClick={()=>setZoom(Math.max(.1,zoom-.1))}>−</button><span>{Math.round(zoom*100)}%</span><button className="secondary" onClick={()=>setZoom(Math.min(1.5,zoom+.1))}>+</button>{view==='map'&&!trace&&<><button className="secondary" onClick={()=>toggleAllBranches(true)}>{tr('m22831cf61c')}</button><button className="secondary" onClick={()=>toggleAllBranches(false)}>{tr('ma998df6f57')}</button></>}{view==='map'&&!trace&&<button className="secondary" aria-pressed={allMapLinks} onClick={()=>setAllMapLinks(!allMapLinks)}>{allMapLinks?tr('m237e275d02'):tr('mb640ec6eb8')}</button>}{(view==='map'||trace)&&<><button className="secondary" onClick={fit}>{tr('m3681a2658a')}</button><button className="secondary" disabled={!Object.keys(positions).length} onClick={()=>setPositions({})}>{tr('mbf85db4164')}</button></>}{trace&&<button onClick={()=>setTrace('')}>{tr('m7a7f364b2c')}</button>}</div></div><div className={'chart-scroll'+(isMap?' map-viewport':'')+(panning?' panning':'')} ref={viewport} onScroll={event=>{if(!isMap)setGridViewport({left:event.currentTarget.scrollLeft,width:event.currentTarget.clientWidth})}}><svg width={isMap?'100%':width*zoom} height={isMap?'100%':height*zoom} viewBox={isMap?undefined:`0 0 ${width} ${height}`} onPointerDown={e=>{if(!isMap||e.button!==0||(e.target as Element).closest('[data-task],[data-link]'))return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);panStart.current={x:e.clientX,y:e.clientY,px:pan.x,py:pan.y};setPanning(true)}} onPointerMove={e=>{if(panStart.current){const p=panStart.current;setPan({x:p.px+e.clientX-p.x,y:p.py+e.clientY-p.y});return}if(!drag)return;const p=point(e);if(drag.kind==='link')setWire(p);else if(drag.kind==='resize'||drag.kind==='date')setOffset(Math.round((e.clientX-drag.clientX)/zoom/dayWidth)*dayWidth);else if(drag.kind==='node')setPositions({...positions,[drag.id]:{x:Math.max(10,drag.x+(e.clientX-drag.clientX)/zoom),y:Math.max(10,drag.y+(e.clientY-drag.clientY)/zoom)}})}} onPointerUp={e=>{if(panStart.current){panStart.current=null;setPanning(false)}else finish(e)}} onPointerCancel={()=>{panStart.current=null;setPanning(false);setDrag(null);setWire(null);setOffset(0)}}>
- <defs><pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#dfe5ec"/></pattern></defs><rect width={isMap?'100%':width} height={isMap?'100%':height} fill={isMap?'url(#dots)':'#fff'}/><g data-map-content={isMap?'true':undefined} transform={isMap?`translate(${pan.x} ${pan.y}) scale(${zoom})`:undefined}>
- {view==='map'&&!trace&&mapMode==='stages'&&stageBands.map(b=><g key={b.id} data-stage-id={b.id} pointerEvents="none"><rect x={b.x} y={b.y} width={b.w} height={b.h} rx={12} fill="#eef3fa" fillOpacity={.7} stroke="#b8c9dd" strokeWidth={1.5}/><text x={b.x+14} y={b.y+24} fontSize={12} fontWeight={750} fill="#415d80">{b.title.slice(0,38)}{b.title.length>38?'…':''}<title>{b.title}</title></text></g>)}
- {view==='gantt'&&!trace&&<>{Array.from({length:Math.max(0,gridEnd-gridStart)},(_,offset)=>{const i=gridStart+offset;const day=dateStr(first+i);const working=planningDay(calendar,day)?.working;return <g key={day} data-gantt-day={day} data-calendar-working={working===undefined?'unknown':working?'working':'nonworking'}><rect x={310+i*dayWidth} y={0} width={dayWidth} height={height} fill={working===false?'#f0f2f5':'transparent'}/><line x1={310+i*dayWidth} x2={310+i*dayWidth} y1={40} y2={height} stroke="#e7ebf0"/><text x={326+i*dayWidth} y={20} textAnchor="middle" fontSize={11} fill="#52627c">{day.slice(8)}</text>{(i===gridLabelStart||i===0||day.endsWith('01'))&&<text x={310+i*dayWidth} y={37} fontSize={10}>{day.slice(0,7)}</text>}</g>})}{ganttGroups.map(g=>{const tint=g.task.status==='done'?'#55a77b':g.task.responsibility==='customer'?'#d39a51':'#7395c3';const left=8+g.level*10;return <g key={'container-'+g.task.id} data-gantt-group={g.task.id} pointerEvents="none"><rect data-group-label="true" x={left} y={g.y} width={302-left} height={g.h} rx={9} fill={tint} fillOpacity={.055}/><path d={`M${left+7},${g.y+7} H${left} V${g.y+g.h-7} H${left+7}`} fill="none" stroke={tint} strokeWidth={2}/><rect data-group-envelope="true" x={g.x} y={g.y} width={g.w} height={g.h} rx={12} fill={tint} fillOpacity={.07} stroke={selected===g.task.id?'#3b82c4':tint} strokeOpacity={.65} strokeWidth={selected===g.task.id?2:1.3}/></g>})}{list.map((t,i)=><g key={t.id} className={t.summary?'milestone-row':undefined}><line x1={0} x2={width} y1={112+i*72} y2={112+i*72} stroke="#e9edf3"/><text x={20+(depth.get(t.id)||0)*14} y={85+i*72} className="row-label" fontWeight={t.summary?750:500} onClick={()=>setSelected(t.id)} onDoubleClick={()=>onEdit(t)}>{t.summary?'◆ ':''}{t.title.slice(0,32)}</text><text x={20+(depth.get(t.id)||0)*14} y={101+i*72} data-milestone-label={t.summary?t.id:undefined} fontSize={t.summary?9:10} fill={t.summary?'#3e587c':'#65748b'}>{t.summary?tr('m4fa412f672')+children(t.id).length+tr('mb4024ccbf9'):''}{hours(t.planned_minutes)} {tr('m05cb4c48a0')} {statuses[t.status]}</text>{canEdit&&<g role="button" tabIndex={0} aria-label={tr('m39dcb19084')+t.title} className="svg-button" onKeyDown={e=>{if(e.key==='Enter')onChild(t)}} onClick={()=>{setCollapsed(current=>{const next=new Set(current);next.delete(t.id);return next});onChild(t)}}><rect x={224} y={91+i*72} width={22} height={18} rx={4} fill="#e4efff"/><text x={230} y={105+i*72} fontSize={14}>+</text></g>}<g role="button" aria-label={'Trace '+t.title} className="svg-button" onClick={()=>setTrace(t.id)}><rect x={250} y={91+i*72} width={53} height={18} rx={4} fill="#edf2fa"/><text x={255} y={104+i*72} fontSize={10}>Trace →</text></g></g>)}</>}
- {view==='map'&&!trace&&mapMode==='tree'&&list.map(t=>{const a=boxes.get(t.parent)||boxes.get(PROJECT_ROOT)!,b=boxes.get(t.id)!;const right=b.x>a.x,x1=a.x+(right?a.w:0),x2=b.x+(right?0:b.w),y1=a.y+a.h-18,y2=b.y+b.h-18,middle=(x1+x2)/2;return <path key={'tree'+t.id} data-hierarchy={t.id} d={`M${x1},${y1} C${middle},${y1} ${middle},${y2} ${x2},${y2}`} fill="none" stroke="#bccddd" strokeWidth={1.5}/>})}
- {view==='map'&&!trace&&(()=>{const b=boxes.get(PROJECT_ROOT)!;return <g data-project-root="true"><rect x={b.x} y={b.y} width={b.w} height={b.h} rx={9} fill="#1d405e"/><text x={b.x+14} y={b.y+30} fill="white" fontSize={13} fontWeight={650}>{project.title.slice(0,34)}<title>{project.title}</title></text><text x={b.x+14} y={b.y+65} fill="#bed1e2" fontSize={11}>{tr('taskCount',{count:project.tasks.length})}</text><text x={b.x+14} y={b.y+84} fill="#bed1e2" fontSize={10}>{tr('m3defef7b85')}</text></g>})()}
+import {
+  planningDay,
+  planningCalendarReady,
+  resizedDuration,
+  type PlanningCalendar,
+} from "./planningCalendar";
+import { tr } from "./i18n";
+import { mapLinks } from "./mapLinks";
+import {
+  mapLayout,
+  flowLayout,
+  stageLayout,
+  PROJECT_ROOT,
+  type ManualPositions,
+  type StageBand,
+} from "./mapLayout";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  clone,
+  dateNum,
+  dateStr,
+  hours,
+  statuses,
+  type Link,
+  type Project,
+  type Task,
+} from "./types";
+type Box = { x: number; y: number; w: number; h: number };
+type MapMode = "tree" | "flow" | "stages";
+type Camera = { zoom: number; pan: { x: number; y: number } };
+type Drag = {
+  kind: "date" | "resize" | "node" | "link";
+  id: string;
+  side?: string;
+  clientX: number;
+  clientY: number;
+  x: number;
+  y: number;
+};
+function descendants(id: string, p: Project): string[] {
+  return p.tasks
+    .filter((t) => t.parent === id)
+    .flatMap((t) => [t.id, ...descendants(t.id, p)]);
+}
+export function Chart({
+  project,
+  calendar,
+  view,
+  selected,
+  setSelected,
+  onEdit,
+  onChild,
+  onLink,
+  onChange,
+  trace,
+  setTrace,
+  canEdit,
+  filter,
+}: {
+  project: Project;
+  calendar?: PlanningCalendar;
+  view: "gantt" | "map";
+  selected: string;
+  setSelected: (s: string) => void;
+  onEdit: (t: Task) => void;
+  onChild: (t: Task) => void;
+  onLink: (l: Link, index: number) => void;
+  onChange: (p: Project) => void;
+  trace: string;
+  setTrace: (s: string) => void;
+  canEdit: boolean;
+  filter: string;
+}) {
+  const calendarReady = planningCalendarReady(calendar);
+  const [offset, setOffset] = useState(0);
+  const [gridViewport, setGridViewport] = useState({ left: 0, width: 1000 });
+  const viewport = useRef<HTMLDivElement>(null);
+  const [mapMode, setMapMode] = useState<MapMode>("tree");
+  const [linksByMode, setLinksByMode] = useState<Record<MapMode, boolean>>({
+    tree: false,
+    flow: true,
+    stages: false,
+  });
+  const allMapLinks = linksByMode[mapMode];
+  const setAllMapLinks = (value: boolean) =>
+    setLinksByMode((current) => ({ ...current, [mapMode]: value }));
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [panning, setPanning] = useState(false);
+  const collapseAnchor = useRef<{ id: string; x: number; y: number } | null>(
+    null,
+  );
+  const suppressTaskClick = useRef(false);
+  const branchClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const panStart = useRef<{
+    x: number;
+    y: number;
+    px: number;
+    py: number;
+  } | null>(null);
+  const isMap = view === "map" || !!trace;
+  useEffect(() => {
+    const dismiss = (e: PointerEvent) => {
+      if (!(e.target as Element).closest(".wire-fan,[data-link]")) {
+        setFan(null);
+        setHover(-1);
+      }
+    };
+    const escape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setFan(null);
+        setHover(-1);
+      }
+    };
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", escape);
+    };
+  }, []);
+  useEffect(
+    () => () => {
+      if (branchClickTimer.current) clearTimeout(branchClickTimer.current);
+    },
+    [project.id],
+  );
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [zoom, setZoom] = useState(1);
+  const [positionSets, setPositionSets] = useState<
+    Record<string, ManualPositions>
+  >({});
+  const positionKey = trace ? "trace:" + trace : mapMode;
+  const positions = positionSets[positionKey] || {};
+  const setPositions = (value: ManualPositions) =>
+    setPositionSets((current) => ({ ...current, [positionKey]: value }));
+  const cameras = useRef<Record<string, Camera>>({});
+  const lastView = useRef<{
+    key: string;
+    zoom: number;
+    pan: { x: number; y: number };
+    boxes: Map<string, Box>;
+  } | null>(null);
+  const contextKey = trace
+    ? "trace:" + trace
+    : view === "map"
+      ? "map:" + mapMode
+      : "gantt";
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const [wire, setWire] = useState<{ x: number; y: number } | null>(null);
+  const [linkSelected, setLinkSelected] = useState(-1);
+  const [fan, setFan] = useState<{
+    x: number;
+    y: number;
+    indices: number[];
+  } | null>(null);
+  const [hover, setHover] = useState(-1);
+  useEffect(() => {
+    const element = viewport.current;
+    if (!element) return;
+    const update = () =>
+      setGridViewport({ left: element.scrollLeft, width: element.clientWidth });
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [view, project.id]);
+  const children = (id: string) => project.tasks.filter((t) => t.parent === id);
+  const expandedLinks = useMemo(() => {
+    const leaves = (id: string): string[] => {
+      const kids = project.tasks.filter((t) => t.parent === id);
+      return kids.length ? kids.flatMap((t) => leaves(t.id)) : [id];
+    };
+    return project.links.flatMap((l, index) =>
+      leaves(l.from).flatMap((from) =>
+        leaves(l.to).map((to) => ({ ...l, from, to, index })),
+      ),
+    );
+  }, [project]);
+  const baseRelationFlags = useMemo(() => {
+    const incoming = new Set<string>(),
+      outgoing = new Set<string>();
+    for (const l of [...project.links, ...expandedLinks]) {
+      incoming.add(l.to);
+      outgoing.add(l.from);
+    }
+    return { incoming, outgoing };
+  }, [project.links, expandedLinks]);
+  const traced = useMemo(() => {
+    const set = new Set<string>();
+    if (!trace) return set;
+    const leaves = (id: string): string[] => {
+      const kids = project.tasks.filter((t) => t.parent === id);
+      return kids.length ? kids.flatMap((t) => leaves(t.id)) : [id];
+    };
+    leaves(trace).forEach((id) => set.add(id));
+    let change = true;
+    while (change) {
+      change = false;
+      for (const l of expandedLinks)
+        if (set.has(l.from) && !set.has(l.to)) {
+          set.add(l.to);
+          change = true;
+        }
+    }
+    change = true;
+    while (change) {
+      change = false;
+      for (const l of expandedLinks)
+        if (set.has(l.to) && !set.has(l.from)) {
+          set.add(l.from);
+          change = true;
+        }
+    }
+    return set;
+  }, [trace, expandedLinks, project]);
+  const list: Task[] = [];
+  const depth = new Map<string, number>();
+  const walk = (parent: string, d: number) => {
+    for (const t of children(parent)) {
+      depth.set(t.id, d);
+      list.push(t);
+      if (filter.trim() || !collapsed.has(t.id)) walk(t.id, d + 1);
+    }
+  };
+  if (trace) {
+    project.tasks.filter((t) => traced.has(t.id)).forEach((t) => list.push(t));
+  } else walk("", 0);
+  if (filter.trim()) {
+    const hits = new Set(
+      project.tasks
+        .filter((t) => t.title.toLowerCase().includes(filter.toLowerCase()))
+        .map((t) => t.id),
+    );
+    for (const id of [...hits]) {
+      let t = project.tasks.find((t) => t.id === id);
+      while (t?.parent) {
+        hits.add(t.parent);
+        t = project.tasks.find((x) => x.id === t!.parent);
+      }
+    }
+    for (let i = list.length - 1; i >= 0; i--)
+      if (!hits.has(list[i].id)) list.splice(i, 1);
+  }
+  const scheduleSuppressed = (t: Task) =>
+    !!project.calculation_state &&
+    project.calculation_state !== "ready" &&
+    (t.summary || (t.responsibility === "internal" && t.status !== "done"));
+  const shownStart = (t: Task) =>
+    scheduleSuppressed(t) ? "" : t.start || t.legacy_start;
+  const shownEnd = (t: Task) =>
+    scheduleSuppressed(t) ? "" : t.end || t.legacy_end;
+  const dates = list
+    .flatMap((t) => [shownStart(t), shownEnd(t)])
+    .filter(Boolean)
+    .map(dateNum);
+  const first = Math.min(dateNum(project.start), ...dates) - 2;
+  const last = Math.max(first + 30, ...dates) + 5;
+  const dayWidth = 32;
+  const gridStart = Math.max(
+    0,
+    Math.floor((gridViewport.left / zoom - 310) / dayWidth) - 2,
+  );
+  const gridLabelStart = Math.max(
+    0,
+    Math.ceil((gridViewport.left / zoom - 310) / dayWidth),
+  );
+  const gridEnd = Math.min(
+    last - first + 1,
+    Math.ceil(
+      ((gridViewport.left + gridViewport.width) / zoom - 310) / dayWidth,
+    ) + 2,
+  );
+  const boxes = new Map<string, Box>();
+  let stageBands: StageBand[] = [];
+  let width = 1000,
+    height = Math.max(360, list.length * 72 + 80);
+  if (view === "gantt" && !trace) {
+    width = Math.max(1000, 310 + (last - first + 1) * dayWidth);
+    list.forEach((t, i) => {
+      const s = shownStart(t);
+      const end = shownEnd(t);
+      boxes.set(t.id, {
+        x: s ? 310 + (dateNum(s) - first) * dayWidth : 320,
+        y: 62 + i * 72,
+        w:
+          s && end
+            ? Math.max(28, (dateNum(end) - dateNum(s) + 1) * dayWidth - 6)
+            : 155,
+        h: 46,
+      });
+    });
+  } else if (trace) {
+    const rank = new Map<string, number>();
+    const rankOf = (id: string, visited = new Set<string>()): number => {
+      if (rank.has(id)) return rank.get(id)!;
+      if (visited.has(id)) return 0;
+      visited.add(id);
+      const incoming = expandedLinks.filter(
+        (l) => l.to === id && traced.has(l.from),
+      );
+      const n = incoming.length
+        ? 1 + Math.max(...incoming.map((l) => rankOf(l.from, new Set(visited))))
+        : 0;
+      rank.set(id, n);
+      return n;
+    };
+    const counts = new Map<number, number>();
+    for (const t of list) {
+      const col = rankOf(t.id);
+      const row = counts.get(col) || 0;
+      counts.set(col, row + 1);
+      boxes.set(t.id, { x: 40 + col * 440, y: 50 + row * 164, w: 290, h: 104 });
+    }
+    width = 100 + 440 * (1 + Math.max(0, ...rank.values()));
+    height = Math.max(400, 150 + Math.max(0, ...counts.values()) * 164);
+  } else {
+    const visible = list.map((t) => t.id);
+    const stage =
+      mapMode === "stages" ? stageLayout(project, visible, positions) : null;
+    const layout =
+      stage?.boxes ||
+      (mapMode === "flow"
+        ? flowLayout(
+            project,
+            mapLinks(project, expandedLinks, new Set(visible), "", true),
+            visible,
+            positions,
+          )
+        : mapLayout(project, expandedLinks, visible, positions));
+    stageBands = stage?.bands || [];
+    for (const [id, box] of layout) boxes.set(id, box);
+    width = Math.max(
+      1000,
+      ...[...boxes.values()].map((b) => b.x + b.w + 40),
+      ...stageBands.map((b) => b.x + b.w + 40),
+    );
+    height = Math.max(
+      400,
+      ...[...boxes.values()].map((b) => b.y + b.h + 40),
+      ...stageBands.map((b) => b.y + b.h + 40),
+    );
+  }
+  if (trace)
+    for (const [id, position] of Object.entries(positions)) {
+      const box = boxes.get(id);
+      if (box) {
+        box.x = position.x;
+        box.y = position.y;
+        width = Math.max(width, box.x + box.w + 40);
+        height = Math.max(height, box.y + box.h + 40);
+      }
+    }
+  const relationFlags = {
+    incoming: new Set(baseRelationFlags.incoming),
+    outgoing: new Set(baseRelationFlags.outgoing),
+  };
+  if (view === "map" && !trace)
+    for (const edge of mapLinks(
+      project,
+      expandedLinks,
+      new Set(list.map((t) => t.id)),
+      "",
+      true,
+    )) {
+      relationFlags.incoming.add(edge.to);
+      relationFlags.outgoing.add(edge.from);
+    }
+  const ganttGroups =
+    view === "gantt" && !trace
+      ? list
+          .filter((t) => t.summary)
+          .flatMap((t) => {
+            const ids = new Set(descendants(t.id, project));
+            const shown = list.filter((child) => ids.has(child.id));
+            if (!shown.length) return [];
+            const members = [t, ...shown].map((child) => boxes.get(child.id)!);
+            const level = depth.get(t.id) || 0;
+            const deepest = Math.max(
+              ...shown.map((child) => depth.get(child.id) || 0),
+            );
+            const pad = 8 + (deepest - level) * 4;
+            const x = Math.max(314, Math.min(...members.map((b) => b.x)) - pad),
+              right = Math.max(...members.map((b) => b.x + b.w)) + pad;
+            const y = boxes.get(t.id)!.y - 10,
+              bottom = Math.max(...members.map((b) => b.y + b.h)) + pad;
+            return [{ task: t, level, x, y, w: right - x, h: bottom - y }];
+          })
+      : [];
+  const fit = () => {
+    const el = viewport.current;
+    if (!el) return;
+    const z = Math.min(
+      1,
+      Math.max(
+        0.1,
+        Math.min(
+          (el.clientWidth - 32) / width,
+          (el.clientHeight - 32) / height,
+        ),
+      ),
+    );
+    setZoom(z);
+    setPan({
+      x: (el.clientWidth - width * z) / 2,
+      y: (el.clientHeight - height * z) / 2,
+    });
+  };
+  useLayoutEffect(() => {
+    const previous = lastView.current;
+    if (previous?.key === contextKey) return;
+    if (previous)
+      cameras.current[previous.key] = {
+        zoom: previous.zoom,
+        pan: previous.pan,
+      };
+    const saved = cameras.current[contextKey];
+    if (saved) {
+      setZoom(saved.zoom);
+      setPan(saved.pan);
+    } else if (isMap) {
+      if (previous?.key.startsWith("map:") && !trace) {
+        const anchor =
+          selected && boxes.has(selected) && previous.boxes.has(selected)
+            ? selected
+            : PROJECT_ROOT;
+        const before = previous.boxes.get(anchor),
+          after = boxes.get(anchor);
+        setZoom(previous.zoom);
+        if (before && after)
+          setPan({
+            x: previous.pan.x + (before.x - after.x) * previous.zoom,
+            y: previous.pan.y + (before.y - after.y) * previous.zoom,
+          });
+        else setPan(previous.pan);
+      } else fit();
+    } else {
+      setZoom(1);
+      setPan({ x: 0, y: 0 });
+    }
+  }, [contextKey]);
+  useLayoutEffect(() => {
+    lastView.current = { key: contextKey, zoom, pan, boxes: new Map(boxes) };
+  });
+  function switchMode(mode: MapMode) {
+    if (mode === mapMode) return;
+    if (branchClickTimer.current) clearTimeout(branchClickTimer.current);
+    collapseAnchor.current = null;
+    panStart.current = null;
+    setPanning(false);
+    setDrag(null);
+    setWire(null);
+    setOffset(0);
+    setFan(null);
+    setHover(-1);
+    setMapMode(mode);
+  }
+  useEffect(() => {
+    const el = viewport.current;
+    if (!el || !isMap) return;
+    const wheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) return;
+      e.preventDefault();
+      const unit =
+        e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? el.clientHeight : 1;
+      const next = Math.min(
+        1.5,
+        Math.max(
+          0.1,
+          zoom *
+            Math.exp(
+              -Math.max(-1000, Math.min(1000, e.deltaY * unit)) * 0.0015,
+            ),
+        ),
+      );
+      const rect = el.querySelector("svg")!.getBoundingClientRect(),
+        x = e.clientX - rect.left,
+        y = e.clientY - rect.top,
+        ratio = next / zoom;
+      setZoom(next);
+      setPan({ x: x - (x - pan.x) * ratio, y: y - (y - pan.y) * ratio });
+    };
+    el.addEventListener("wheel", wheel, { passive: false });
+    return () => el.removeEventListener("wheel", wheel);
+  }, [isMap, zoom, pan]);
+  function anchorBranch(id: string) {
+    if (view !== "map" || trace) return;
+    const b = boxes.get(id);
+    if (b)
+      collapseAnchor.current = {
+        id,
+        x: pan.x + b.x * zoom,
+        y: pan.y + b.y * zoom,
+      };
+  }
+  useLayoutEffect(() => {
+    const anchor = collapseAnchor.current;
+    collapseAnchor.current = null;
+    if (!anchor || view !== "map" || trace) return;
+    const b = boxes.get(anchor.id);
+    if (b) setPan({ x: anchor.x - b.x * zoom, y: anchor.y - b.y * zoom });
+  }, [collapsed]);
+  function toggleBranch(id: string) {
+    anchorBranch(id);
+    setCollapsed((current) => {
+      const next = new Set(current);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+  function toggleAllBranches(fold: boolean) {
+    anchorBranch(PROJECT_ROOT);
+    setCollapsed(
+      new Set(
+        fold ? project.tasks.filter((t) => t.summary).map((t) => t.id) : [],
+      ),
+    );
+  }
+  const shownLinks = trace
+    ? expandedLinks.filter((l) => traced.has(l.from) && traced.has(l.to))
+    : view === "map"
+      ? mapLinks(
+          project,
+          expandedLinks,
+          new Set(list.map((t) => t.id)),
+          selected,
+          allMapLinks,
+        )
+      : project.links.map((l, index) => ({ ...l, index }));
+  const ends = new Set<string>();
+  const activeIndex = hover >= 0 ? hover : linkSelected;
+  if (activeIndex >= 0) {
+    const l = project.links[activeIndex];
+    if (l) {
+      ends.add(l.from);
+      ends.add(l.to);
+      for (const edge of shownLinks.filter((e) => e.index === activeIndex)) {
+        ends.add(edge.from);
+        ends.add(edge.to);
+      }
+      if (trace)
+        for (const e of expandedLinks.filter((l) => l.index === activeIndex)) {
+          ends.add(e.from);
+          ends.add(e.to);
+        }
+    }
+  }
+  function point(e: React.PointerEvent<SVGSVGElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left - (isMap ? pan.x : 0)) / zoom,
+      y: (e.clientY - rect.top - (isMap ? pan.y : 0)) / zoom,
+    };
+  }
+  function duration(t: Task) {
+    if (scheduleSuppressed(t)) return tr("md22239ff2b");
+    const start = shownStart(t),
+      end = shownEnd(t);
+    if (!start || !end)
+      return t.duration_days
+        ? tr("durationDays", { count: t.duration_days })
+        : "—";
+    const a = dateNum(start),
+      b = dateNum(end);
+    const count =
+      project.duration_mode === "calendar"
+        ? b - a + 1
+        : Array.from({ length: b - a + 1 }, (_, i) =>
+            calendar?.days[dateStr(a + i)]?.working ? 1 : 0,
+          ).reduce<number>((x, y) => x + y, 0);
+    return tr("durationDays", { count });
+  }
+  function color(l: Link) {
+    return l.from === selected
+      ? "#d89142"
+      : l.to === selected
+        ? "#419bce"
+        : selected
+          ? "#aab8c9"
+          : "#419bce";
+  }
+  function originalLinkColor(index: number) {
+    return color(
+      shownLinks.find(
+        (l) => l.index === index && (l.from === selected || l.to === selected),
+      ) || project.links[index],
+    );
+  }
+  function finish(e: React.PointerEvent<SVGSVGElement>) {
+    if (!drag) return;
+    const d = drag;
+    setDrag(null);
+    setWire(null);
+    setOffset(0);
+    if (d.kind === "link") {
+      const target = document
+        .elementFromPoint(e.clientX, e.clientY)
+        ?.closest("[data-port]") as SVGElement | null;
+      const id = target?.dataset.id,
+        side = target?.dataset.port;
+      if (id && id !== d.id && side !== d.side) {
+        const from = d.side === "out" ? d.id : id,
+          to = d.side === "out" ? id : d.id;
+        onLink({ from, to, mode: "after", days: 0 }, -1);
+      }
+      return;
+    }
+    if (
+      Math.abs(e.clientX - d.clientX) < 4 &&
+      Math.abs(e.clientY - d.clientY) < 4
+    )
+      return;
+    if (d.kind === "node") {
+      suppressTaskClick.current = true;
+      setTimeout(() => {
+        suppressTaskClick.current = false;
+      }, 0);
+    }
+    if ((d.kind === "resize" || d.kind === "date") && !calendarReady) return;
+    if (d.kind === "resize") {
+      const days = Math.round((e.clientX - d.clientX) / zoom / dayWidth);
+      if (!days) return;
+      const p = clone(project),
+        t = p.tasks.find((t) => t.id === d.id)!;
+      Object.assign(t, resizedDuration(p, t, d.side, days, calendar));
+      onChange(p);
+      return;
+    }
+    if (d.kind === "date") {
+      const days = Math.round((e.clientX - d.clientX) / zoom / dayWidth);
+      if (!days) return;
+      const p = clone(project);
+      const ids = new Set([d.id, ...descendants(d.id, p)]);
+      for (const t of p.tasks.filter((t) => ids.has(t.id) && !t.summary)) {
+        const base = t.start || t.requested_start || t.legacy_start || p.start;
+        t.requested_start = dateStr(dateNum(base) + days);
+        if (t.responsibility === "customer") {
+          if (t.start) t.start = dateStr(dateNum(t.start) + days);
+          if (t.end) t.end = dateStr(dateNum(t.end) + days);
+        }
+      }
+      onChange(p);
+    }
+  }
+  return (
+    <section
+      className="chart-panel"
+      data-map-mode={
+        view === "map" && !trace ? mapMode : trace ? "trace" : undefined
+      }
+    >
+      {view === "gantt" && !calendarReady && (
+        <p className="notice amber" role="status" data-calendar-unavailable>
+          {tr("calendar.unavailableNotice")}
+        </p>
+      )}
+      <div className="chart-toolbar">
+        <span>
+          {trace
+            ? tr("m2799eecd87")
+            : view === "gantt"
+              ? tr("mb548c729b9")
+              : tr("m78165590ad")}
+        </span>
+        <div>
+          {view === "map" && !trace && (
+            <div
+              className="map-mode-switch"
+              role="group"
+              aria-label={tr("m57e0d287f6")}
+            >
+              {(
+                [
+                  ["tree", tr("me1daa9e250")],
+                  ["flow", "Flow"],
+                  ["stages", tr("m1228f4b97f")],
+                ] as const
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  data-map-mode-switch={mode}
+                  aria-pressed={mapMode === mode}
+                  onClick={() => switchMode(mode)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            className="secondary"
+            onClick={() => setZoom(Math.max(0.1, zoom - 0.1))}
+          >
+            −
+          </button>
+          <span>{Math.round(zoom * 100)}%</span>
+          <button
+            className="secondary"
+            onClick={() => setZoom(Math.min(1.5, zoom + 0.1))}
+          >
+            +
+          </button>
+          {view === "map" && !trace && (
+            <>
+              <button
+                className="secondary"
+                onClick={() => toggleAllBranches(true)}
+              >
+                {tr("m22831cf61c")}
+              </button>
+              <button
+                className="secondary"
+                onClick={() => toggleAllBranches(false)}
+              >
+                {tr("ma998df6f57")}
+              </button>
+            </>
+          )}
+          {view === "map" && !trace && (
+            <button
+              className="secondary"
+              aria-pressed={allMapLinks}
+              onClick={() => setAllMapLinks(!allMapLinks)}
+            >
+              {allMapLinks ? tr("m237e275d02") : tr("mb640ec6eb8")}
+            </button>
+          )}
+          {(view === "map" || trace) && (
+            <>
+              <button className="secondary" onClick={fit}>
+                {tr("m3681a2658a")}
+              </button>
+              <button
+                className="secondary"
+                disabled={!Object.keys(positions).length}
+                onClick={() => setPositions({})}
+              >
+                {tr("mbf85db4164")}
+              </button>
+            </>
+          )}
+          {trace && (
+            <button onClick={() => setTrace("")}>{tr("m7a7f364b2c")}</button>
+          )}
+        </div>
+      </div>
+      <div
+        className={
+          "chart-scroll" +
+          (isMap ? " map-viewport" : "") +
+          (panning ? " panning" : "")
+        }
+        ref={viewport}
+        onScroll={(event) => {
+          if (!isMap)
+            setGridViewport({
+              left: event.currentTarget.scrollLeft,
+              width: event.currentTarget.clientWidth,
+            });
+        }}
+      >
+        <svg
+          width={isMap ? "100%" : width * zoom}
+          height={isMap ? "100%" : height * zoom}
+          viewBox={isMap ? undefined : `0 0 ${width} ${height}`}
+          onPointerDown={(e) => {
+            if (
+              !isMap ||
+              e.button !== 0 ||
+              (e.target as Element).closest("[data-task],[data-link]")
+            )
+              return;
+            e.preventDefault();
+            e.currentTarget.setPointerCapture(e.pointerId);
+            panStart.current = {
+              x: e.clientX,
+              y: e.clientY,
+              px: pan.x,
+              py: pan.y,
+            };
+            setPanning(true);
+          }}
+          onPointerMove={(e) => {
+            if (panStart.current) {
+              const p = panStart.current;
+              setPan({ x: p.px + e.clientX - p.x, y: p.py + e.clientY - p.y });
+              return;
+            }
+            if (!drag) return;
+            const p = point(e);
+            if (drag.kind === "link") setWire(p);
+            else if (drag.kind === "resize" || drag.kind === "date")
+              setOffset(
+                Math.round((e.clientX - drag.clientX) / zoom / dayWidth) *
+                  dayWidth,
+              );
+            else if (drag.kind === "node")
+              setPositions({
+                ...positions,
+                [drag.id]: {
+                  x: Math.max(10, drag.x + (e.clientX - drag.clientX) / zoom),
+                  y: Math.max(10, drag.y + (e.clientY - drag.clientY) / zoom),
+                },
+              });
+          }}
+          onPointerUp={(e) => {
+            if (panStart.current) {
+              panStart.current = null;
+              setPanning(false);
+            } else finish(e);
+          }}
+          onPointerCancel={() => {
+            panStart.current = null;
+            setPanning(false);
+            setDrag(null);
+            setWire(null);
+            setOffset(0);
+          }}
+        >
+          <defs>
+            <pattern
+              id="dots"
+              width="20"
+              height="20"
+              patternUnits="userSpaceOnUse"
+            >
+              <circle cx="1" cy="1" r="1" fill="#dfe5ec" />
+            </pattern>
+          </defs>
+          <rect
+            width={isMap ? "100%" : width}
+            height={isMap ? "100%" : height}
+            fill={isMap ? "url(#dots)" : "#fff"}
+          />
+          <g
+            data-map-content={isMap ? "true" : undefined}
+            transform={
+              isMap ? `translate(${pan.x} ${pan.y}) scale(${zoom})` : undefined
+            }
+          >
+            {view === "map" &&
+              !trace &&
+              mapMode === "stages" &&
+              stageBands.map((b) => (
+                <g key={b.id} data-stage-id={b.id} pointerEvents="none">
+                  <rect
+                    x={b.x}
+                    y={b.y}
+                    width={b.w}
+                    height={b.h}
+                    rx={12}
+                    fill="#eef3fa"
+                    fillOpacity={0.7}
+                    stroke="#b8c9dd"
+                    strokeWidth={1.5}
+                  />
+                  <text
+                    x={b.x + 14}
+                    y={b.y + 24}
+                    fontSize={12}
+                    fontWeight={750}
+                    fill="#415d80"
+                  >
+                    {b.title.slice(0, 38)}
+                    {b.title.length > 38 ? "…" : ""}
+                    <title>{b.title}</title>
+                  </text>
+                </g>
+              ))}
+            {view === "gantt" && !trace && (
+              <>
+                {Array.from(
+                  { length: Math.max(0, gridEnd - gridStart) },
+                  (_, offset) => {
+                    const i = gridStart + offset;
+                    const day = dateStr(first + i);
+                    const working = planningDay(calendar, day)?.working;
+                    return (
+                      <g
+                        key={day}
+                        data-gantt-day={day}
+                        data-calendar-working={
+                          working === undefined
+                            ? "unknown"
+                            : working
+                              ? "working"
+                              : "nonworking"
+                        }
+                      >
+                        <rect
+                          x={310 + i * dayWidth}
+                          y={0}
+                          width={dayWidth}
+                          height={height}
+                          fill={working === false ? "#f0f2f5" : "transparent"}
+                        />
+                        <line
+                          x1={310 + i * dayWidth}
+                          x2={310 + i * dayWidth}
+                          y1={40}
+                          y2={height}
+                          stroke="#e7ebf0"
+                        />
+                        <text
+                          x={326 + i * dayWidth}
+                          y={20}
+                          textAnchor="middle"
+                          fontSize={11}
+                          fill="#52627c"
+                        >
+                          {day.slice(8)}
+                        </text>
+                        {(i === gridLabelStart ||
+                          i === 0 ||
+                          day.endsWith("01")) && (
+                          <text x={310 + i * dayWidth} y={37} fontSize={10}>
+                            {day.slice(0, 7)}
+                          </text>
+                        )}
+                      </g>
+                    );
+                  },
+                )}
+                {ganttGroups.map((g) => {
+                  const tint =
+                    g.task.status === "done"
+                      ? "#55a77b"
+                      : g.task.responsibility === "customer"
+                        ? "#d39a51"
+                        : "#7395c3";
+                  const left = 8 + g.level * 10;
+                  return (
+                    <g
+                      key={"container-" + g.task.id}
+                      data-gantt-group={g.task.id}
+                      pointerEvents="none"
+                    >
+                      <rect
+                        data-group-label="true"
+                        x={left}
+                        y={g.y}
+                        width={302 - left}
+                        height={g.h}
+                        rx={9}
+                        fill={tint}
+                        fillOpacity={0.055}
+                      />
+                      <path
+                        d={`M${left + 7},${g.y + 7} H${left} V${g.y + g.h - 7} H${left + 7}`}
+                        fill="none"
+                        stroke={tint}
+                        strokeWidth={2}
+                      />
+                      <rect
+                        data-group-envelope="true"
+                        x={g.x}
+                        y={g.y}
+                        width={g.w}
+                        height={g.h}
+                        rx={12}
+                        fill={tint}
+                        fillOpacity={0.07}
+                        stroke={selected === g.task.id ? "#3b82c4" : tint}
+                        strokeOpacity={0.65}
+                        strokeWidth={selected === g.task.id ? 2 : 1.3}
+                      />
+                    </g>
+                  );
+                })}
+                {list.map((t, i) => (
+                  <g
+                    key={t.id}
+                    className={t.summary ? "milestone-row" : undefined}
+                  >
+                    <line
+                      x1={0}
+                      x2={width}
+                      y1={112 + i * 72}
+                      y2={112 + i * 72}
+                      stroke="#e9edf3"
+                    />
+                    <text
+                      x={20 + (depth.get(t.id) || 0) * 14}
+                      y={85 + i * 72}
+                      className="row-label"
+                      fontWeight={t.summary ? 750 : 500}
+                      onClick={() => setSelected(t.id)}
+                      onDoubleClick={() => onEdit(t)}
+                    >
+                      {t.summary ? "◆ " : ""}
+                      {t.title.slice(0, 32)}
+                    </text>
+                    <text
+                      x={20 + (depth.get(t.id) || 0) * 14}
+                      y={101 + i * 72}
+                      data-milestone-label={t.summary ? t.id : undefined}
+                      fontSize={t.summary ? 9 : 10}
+                      fill={t.summary ? "#3e587c" : "#65748b"}
+                    >
+                      {t.summary
+                        ? tr("m4fa412f672") +
+                          children(t.id).length +
+                          tr("mb4024ccbf9")
+                        : ""}
+                      {hours(t.planned_minutes)} {tr("m05cb4c48a0")}{" "}
+                      {statuses[t.status]}
+                    </text>
+                    {canEdit && (
+                      <g
+                        role="button"
+                        tabIndex={0}
+                        aria-label={tr("m39dcb19084") + t.title}
+                        className="svg-button"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") onChild(t);
+                        }}
+                        onClick={() => {
+                          setCollapsed((current) => {
+                            const next = new Set(current);
+                            next.delete(t.id);
+                            return next;
+                          });
+                          onChild(t);
+                        }}
+                      >
+                        <rect
+                          x={224}
+                          y={91 + i * 72}
+                          width={22}
+                          height={18}
+                          rx={4}
+                          fill="#e4efff"
+                        />
+                        <text x={230} y={105 + i * 72} fontSize={14}>
+                          +
+                        </text>
+                      </g>
+                    )}
+                    <g
+                      role="button"
+                      aria-label={"Trace " + t.title}
+                      className="svg-button"
+                      onClick={() => setTrace(t.id)}
+                    >
+                      <rect
+                        x={250}
+                        y={91 + i * 72}
+                        width={53}
+                        height={18}
+                        rx={4}
+                        fill="#edf2fa"
+                      />
+                      <text x={255} y={104 + i * 72} fontSize={10}>
+                        Trace →
+                      </text>
+                    </g>
+                  </g>
+                ))}
+              </>
+            )}
+            {view === "map" &&
+              !trace &&
+              mapMode === "tree" &&
+              list.map((t) => {
+                const a = boxes.get(t.parent) || boxes.get(PROJECT_ROOT)!,
+                  b = boxes.get(t.id)!;
+                const right = b.x > a.x,
+                  x1 = a.x + (right ? a.w : 0),
+                  x2 = b.x + (right ? 0 : b.w),
+                  y1 = a.y + a.h - 18,
+                  y2 = b.y + b.h - 18,
+                  middle = (x1 + x2) / 2;
+                return (
+                  <path
+                    key={"tree" + t.id}
+                    data-hierarchy={t.id}
+                    d={`M${x1},${y1} C${middle},${y1} ${middle},${y2} ${x2},${y2}`}
+                    fill="none"
+                    stroke="#bccddd"
+                    strokeWidth={1.5}
+                  />
+                );
+              })}
+            {view === "map" &&
+              !trace &&
+              (() => {
+                const b = boxes.get(PROJECT_ROOT)!;
+                return (
+                  <g data-project-root="true">
+                    <rect
+                      x={b.x}
+                      y={b.y}
+                      width={b.w}
+                      height={b.h}
+                      rx={9}
+                      fill="#1d405e"
+                    />
+                    <text
+                      x={b.x + 14}
+                      y={b.y + 30}
+                      fill="white"
+                      fontSize={13}
+                      fontWeight={650}
+                    >
+                      {project.title.slice(0, 34)}
+                      <title>{project.title}</title>
+                    </text>
+                    <text
+                      x={b.x + 14}
+                      y={b.y + 65}
+                      fill="#bed1e2"
+                      fontSize={11}
+                    >
+                      {tr("taskCount", { count: project.tasks.length })}
+                    </text>
+                    <text
+                      x={b.x + 14}
+                      y={b.y + 84}
+                      fill="#bed1e2"
+                      fontSize={10}
+                    >
+                      {tr("m3defef7b85")}
+                    </text>
+                  </g>
+                );
+              })()}
 
- {shownLinks.map((l,k)=>{const a=boxes.get(l.from),b=boxes.get(l.to);if(!a||!b)return null;const x1=a.x+a.w,y1=a.y+14,x2=b.x,y2=b.y+14;const offset=Math.max(35,Math.abs(x2-x1)/2);const lane=Math.max(8,Math.min(a.y,b.y)-20-(k%3)*8);const d=x2<x1&&view==='map'&&!trace?`M${x1},${y1} C${x1+24},${y1} ${x1+24},${lane} ${x1},${lane} L${x2},${lane} C${x2-24},${lane} ${x2-24},${y2} ${x2},${y2}`:`M${x1},${y1} C${x1+offset},${y1} ${x2-offset},${y2} ${x2},${y2}`;const tint=color(l);return <g key={k} data-link={l.index} data-from={l.from} data-to={l.to} onPointerEnter={()=>setHover(l.index)} onPointerLeave={()=>setHover(-1)} onClick={e=>{e.stopPropagation();setLinkSelected(l.index);const indices=[...new Set(shownLinks.filter(x=>x.from===l.from||x.to===l.to).map(x=>x.index))];if(indices.length>1)setFan({x:Math.max(10,Math.min(e.clientX+12,window.innerWidth-410)),y:Math.max(10,Math.min(e.clientY+12,window.innerHeight-260)),indices});else setFan(null)}} onDoubleClick={()=>onLink(project.links[l.index],l.index)}><title>{(project.tasks.find(t=>t.id===project.links[l.index].from)?.title||'')+' → '+(project.tasks.find(t=>t.id===project.links[l.index].to)?.title||'')}</title><path d={d} fill="none" stroke="transparent" strokeWidth={16}/><path d={d} fill="none" stroke={tint} strokeWidth={activeIndex===l.index?3.5:2} strokeDasharray={isMap?'7 5':undefined}/><path d={`M${x2-7},${y2-4} L${x2},${y2} L${x2-7},${y2+4}`} fill="none" stroke={tint} strokeWidth={2}/></g>})}
- {list.map(t=>{const b={...boxes.get(t.id)!};if(drag?.id===t.id){if(drag.kind==='date')b.x+=offset;if(drag.kind==='resize'){if(drag.side==='in'){const change=Math.min(offset,b.w-26);b.x+=change;b.w-=change}else b.w=Math.max(26,b.w+offset)}}const fill=t.status==='done'?'#d9f2e4':t.blocked?'#e1e6ec':t.responsibility==='customer'?'#fff0dd':t.summary?'#e7edff':'#f8fbff';const accent=t.status==='done'?'#367a55':t.blocked?'#69788c':t.responsibility==='customer'?'#93662f':'#536e9b';const stroke=selected===t.id||ends.has(t.id)?'#086ad8':t.summary?accent:t.blocked?'#77869b':'#c6d3e2';return <g key={t.id} data-task={t.id} data-milestone={t.summary?t.id:undefined} className={'task-node'+(t.summary?' milestone-node':'')} tabIndex={0} role="button" aria-label={(t.summary?tr('mc30afbcc66'):'')+t.title} onKeyDown={e=>{if(e.key==='Enter')onEdit(t)}} onClick={e=>{if(suppressTaskClick.current){suppressTaskClick.current=false;return}setSelected(t.id);if(view==='map'&&!trace&&t.summary&&e.detail<2){if(branchClickTimer.current)clearTimeout(branchClickTimer.current);branchClickTimer.current=setTimeout(()=>toggleBranch(t.id),260)}}} onDoubleClick={()=>{if(branchClickTimer.current)clearTimeout(branchClickTimer.current);onEdit(t)}}><rect className="task-card" x={b.x} y={b.y} width={b.w} height={b.h} rx={9} fill={fill} stroke={stroke} strokeWidth={selected===t.id||ends.has(t.id)?3.5:t.summary?2.3:1.5} vectorEffect={isMap?'non-scaling-stroke':undefined} strokeDasharray={!t.start&&selected!==t.id&&!ends.has(t.id)?'5 3':undefined} onPointerDown={e=>{if(e.button!==0)return;if(view==='gantt'&&(!calendarReady||!canEdit||t.status==='done'||scheduleSuppressed(t)))return;suppressTaskClick.current=false;e.currentTarget.setPointerCapture(e.pointerId);setOffset(0);setDrag({kind:view==='gantt'&&!trace?'date':'node',id:t.id,clientX:e.clientX,clientY:e.clientY,x:b.x,y:b.y});setSelected(t.id)}}/>
- {t.summary&&<path data-milestone-band={t.id} d={isMap?`M${b.x+10},${b.y+3} H${b.x+b.w-10}`:`M${b.x+5},${b.y+12} V${b.y+5} H${b.x+b.w-5} V${b.y+12}`} fill="none" stroke={accent} strokeWidth={3} strokeLinecap="round" pointerEvents="none"/>}
- {isMap&&t.summary&&<text data-milestone-label={t.id} x={b.x+12} y={b.y+15} fontSize={9} fontWeight={800} letterSpacing={.7} fill={accent} pointerEvents="none">{tr('md5d20f9a44')} {children(t.id).length}</text>}
- {isMap&&selected===t.id&&<rect x={b.x-3} y={b.y-3} width={b.w+6} height={b.h+6} rx={12} fill="none" stroke="#93c5fd" strokeWidth={3} strokeOpacity={.35} vectorEffect="non-scaling-stroke" pointerEvents="none"/>}
- {view==='gantt'&&!trace&&<text data-duration={t.id} x={b.x+b.w/2} y={b.y+29} textAnchor="middle" fontSize={b.w<45?9:11} fill="#344b69" pointerEvents="none">{duration(t)}</text>}{(view==='map'||trace)&&<text x={b.x+12} y={b.y+(t.summary?37:29)} fontSize={12} fontWeight={t.summary?750:650} pointerEvents="none"><title>{t.title}</title><tspan x={b.x+12} dy={-5}>{t.summary?'◆ ':''}{t.title.slice(0,29)}</tspan><tspan x={b.x+12} dy={15}>{t.title.slice(29,58)}{t.title.length>58?'…':''}</tspan></text>}{(view==='map'||trace)&&<><text x={b.x+12} y={b.y+(t.summary?63:57)} fontSize={10} fill="#5c6b81" pointerEvents="none">{t.start||tr('m65fd24f1cb')} — {t.end||tr('ma8efd0c322')}</text><text x={b.x+12} y={b.y+(t.summary?77:73)} fontSize={10} pointerEvents="none">{statuses[t.status]} · {hours(t.planned_minutes)} / {hours(t.actual_minutes)} {tr('m40831c5d98')}</text></>}
- {(view==='map'||trace)&&([{kind:'incoming',present:relationFlags.incoming.has(t.id),label:tr('m3588f23531'),color:'#2563eb',background:'#e8f0ff',dx:51},{kind:'outgoing',present:relationFlags.outgoing.has(t.id),label:tr('m7f87eb729b'),color:'#b58a00',background:'#fff4bf',dx:31}]).filter(mark=>mark.present).map(mark=><g key={mark.kind} data-relation={mark.kind} role="img" aria-label={mark.label} transform={`translate(${b.x+b.w-mark.dx},${b.y+8})`}><title>{mark.label}</title><rect width={17} height={17} rx={4} fill={mark.background}/><path d={mark.kind==='incoming'?'M13 8.5 H4 M8 4.5 L4 8.5 L8 12.5':'M4 8.5 H13 M9 4.5 L13 8.5 L9 12.5'} fill="none" stroke={mark.color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"/></g>)}
- {canEdit&&(view==='map'||trace)&&<g role="button" tabIndex={0} aria-label={tr('m39dcb19084')+t.title} className="svg-button" onKeyDown={e=>{if(e.key==='Enter'){e.stopPropagation();onChild(t)}}} onClick={e=>{e.stopPropagation();setCollapsed(current=>{const next=new Set(current);next.delete(t.id);return next});onChild(t)}}><rect x={b.x+b.w-77} y={b.y+b.h-21} width={22} height={18} rx={4} fill="#e4efff"/><text x={b.x+b.w-71} y={b.y+b.h-7} fontSize={14}>+</text></g>}{(view==='map'||trace)&&<g role="button" aria-label={'Trace '+t.title} className="svg-button" onClick={e=>{e.stopPropagation();setTrace(t.id)}}><rect x={b.x+b.w-49} y={b.y+b.h-20} width={43} height={16} rx={4} fill="#edf2fa"/><text x={b.x+b.w-44} y={b.y+b.h-8} fontSize={10}>Trace →</text></g>}{t.summary&&!trace&&<g className="svg-button" data-collapse={t.id} role="button" tabIndex={0} aria-expanded={!collapsed.has(t.id)} aria-label={(collapsed.has(t.id)?tr('m58ece00c87'):tr('mc25d7f2b3c'))+t.title} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();toggleBranch(t.id)}}} onClick={e=>{e.stopPropagation();toggleBranch(t.id)}}><rect x={b.x+8} y={b.y+b.h-23} width={isMap?112:20} height={19} rx={5} fill="#e1eaf6"/><text x={b.x+13} y={b.y+b.h-10} fontSize={10} fill="#34577b">{collapsed.has(t.id)?'▸':'▾'}{isMap?(collapsed.has(t.id)?tr('m9d04851ce3')+children(t.id).length:tr('m6c7f5a513b')):''}</text></g>}{canEdit&&calendarReady&&view==='gantt'&&!trace&&!t.summary&&t.status!=='done'&&!scheduleSuppressed(t)&&(['in','out'] as const).map(side=><rect key={'resize-'+side} data-resize={side} data-id={t.id} x={side==='in'?b.x+1:b.x+b.w-9} y={b.y+b.h-22} width={8} height={20} rx={3} fill="#8099b8" className="resize-handle" onPointerDown={e=>{if(e.button!==0)return;e.stopPropagation();e.currentTarget.ownerSVGElement?.setPointerCapture(e.pointerId);setSelected(t.id);setOffset(0);setDrag({kind:'resize',id:t.id,side,clientX:e.clientX,clientY:e.clientY,x:b.x,y:b.y})}}><title>{tr('m7731237bc9')}</title></rect>)}{canEdit&&(['in','out'] as const).map(side=><circle key={side} data-port={side} data-id={t.id} cx={side==='in'?b.x:b.x+b.w} cy={b.y+14} r={6} fill="white" stroke="#419bce" strokeWidth={2} className="port" onClick={e=>e.stopPropagation()} onPointerDown={e=>{e.stopPropagation();setDrag({kind:'link',id:t.id,side,clientX:e.clientX,clientY:e.clientY,x:side==='in'?b.x:b.x+b.w,y:b.y+14});setWire({x:side==='in'?b.x:b.x+b.w,y:b.y+14})}}/>)}</g>})}
- {drag?.kind==='link'&&wire&&<line x1={drag.x} y1={drag.y} x2={wire.x} y2={wire.y} stroke="#086ad8" strokeWidth={2} strokeDasharray="5 4" pointerEvents="none"/>}
- </g></svg></div>{linkSelected>=0&&project.links[linkSelected]&&<div className="selected-link"><span>{tr('mbbe810e1c9')}</span><button className="secondary" onClick={()=>onLink(project.links[linkSelected],linkSelected)}>{tr('m3c794514b2')}</button><button className="icon" onClick={()=>setLinkSelected(-1)}>×</button></div>}{fan&&<div className="wire-fan" style={{left:fan.x,top:fan.y}}><header><b>{tr('mbcede98e8d')}</b><button className="icon" onClick={()=>setFan(null)}>×</button></header>{fan.indices.map(i=>{const l=project.links[i];return <button key={i} style={{borderLeft:'4px solid '+originalLinkColor(i)}} className={i===linkSelected?'chosen':''} onMouseEnter={()=>setHover(i)} onClick={()=>{setLinkSelected(i);setHover(i)}} onDoubleClick={()=>{setFan(null);onLink(l,i)}}>{project.tasks.find(t=>t.id===l.from)?.title} → {project.tasks.find(t=>t.id===l.to)?.title}</button>})}</div>}</section>
+            {shownLinks.map((l, k) => {
+              const a = boxes.get(l.from),
+                b = boxes.get(l.to);
+              if (!a || !b) return null;
+              const x1 = a.x + a.w,
+                y1 = a.y + 14,
+                x2 = b.x,
+                y2 = b.y + 14;
+              const offset = Math.max(35, Math.abs(x2 - x1) / 2);
+              const lane = Math.max(8, Math.min(a.y, b.y) - 20 - (k % 3) * 8);
+              const d =
+                x2 < x1 && view === "map" && !trace
+                  ? `M${x1},${y1} C${x1 + 24},${y1} ${x1 + 24},${lane} ${x1},${lane} L${x2},${lane} C${x2 - 24},${lane} ${x2 - 24},${y2} ${x2},${y2}`
+                  : `M${x1},${y1} C${x1 + offset},${y1} ${x2 - offset},${y2} ${x2},${y2}`;
+              const tint = color(l);
+              return (
+                <g
+                  key={k}
+                  data-link={l.index}
+                  data-from={l.from}
+                  data-to={l.to}
+                  onPointerEnter={() => setHover(l.index)}
+                  onPointerLeave={() => setHover(-1)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setLinkSelected(l.index);
+                    const indices = [
+                      ...new Set(
+                        shownLinks
+                          .filter((x) => x.from === l.from || x.to === l.to)
+                          .map((x) => x.index),
+                      ),
+                    ];
+                    if (indices.length > 1)
+                      setFan({
+                        x: Math.max(
+                          10,
+                          Math.min(e.clientX + 12, window.innerWidth - 410),
+                        ),
+                        y: Math.max(
+                          10,
+                          Math.min(e.clientY + 12, window.innerHeight - 260),
+                        ),
+                        indices,
+                      });
+                    else setFan(null);
+                  }}
+                  onDoubleClick={() => onLink(project.links[l.index], l.index)}
+                >
+                  <title>
+                    {(project.tasks.find(
+                      (t) => t.id === project.links[l.index].from,
+                    )?.title || "") +
+                      " → " +
+                      (project.tasks.find(
+                        (t) => t.id === project.links[l.index].to,
+                      )?.title || "")}
+                  </title>
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth={16}
+                  />
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke={tint}
+                    strokeWidth={activeIndex === l.index ? 3.5 : 2}
+                    strokeDasharray={isMap ? "7 5" : undefined}
+                  />
+                  <path
+                    d={`M${x2 - 7},${y2 - 4} L${x2},${y2} L${x2 - 7},${y2 + 4}`}
+                    fill="none"
+                    stroke={tint}
+                    strokeWidth={2}
+                  />
+                </g>
+              );
+            })}
+            {list.map((t) => {
+              const b = { ...boxes.get(t.id)! };
+              if (drag?.id === t.id) {
+                if (drag.kind === "date") b.x += offset;
+                if (drag.kind === "resize") {
+                  if (drag.side === "in") {
+                    const change = Math.min(offset, b.w - 26);
+                    b.x += change;
+                    b.w -= change;
+                  } else b.w = Math.max(26, b.w + offset);
+                }
+              }
+              const fill =
+                t.status === "done"
+                  ? "#d9f2e4"
+                  : t.blocked
+                    ? "#e1e6ec"
+                    : t.responsibility === "customer"
+                      ? "#fff0dd"
+                      : t.summary
+                        ? "#e7edff"
+                        : "#f8fbff";
+              const accent =
+                t.status === "done"
+                  ? "#367a55"
+                  : t.blocked
+                    ? "#69788c"
+                    : t.responsibility === "customer"
+                      ? "#93662f"
+                      : "#536e9b";
+              const stroke =
+                selected === t.id || ends.has(t.id)
+                  ? "#086ad8"
+                  : t.summary
+                    ? accent
+                    : t.blocked
+                      ? "#77869b"
+                      : "#c6d3e2";
+              return (
+                <g
+                  key={t.id}
+                  data-task={t.id}
+                  data-milestone={t.summary ? t.id : undefined}
+                  className={"task-node" + (t.summary ? " milestone-node" : "")}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={(t.summary ? tr("mc30afbcc66") : "") + t.title}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") onEdit(t);
+                  }}
+                  onClick={(e) => {
+                    if (suppressTaskClick.current) {
+                      suppressTaskClick.current = false;
+                      return;
+                    }
+                    setSelected(t.id);
+                    if (view === "map" && !trace && t.summary && e.detail < 2) {
+                      if (branchClickTimer.current)
+                        clearTimeout(branchClickTimer.current);
+                      branchClickTimer.current = setTimeout(
+                        () => toggleBranch(t.id),
+                        260,
+                      );
+                    }
+                  }}
+                  onDoubleClick={() => {
+                    if (branchClickTimer.current)
+                      clearTimeout(branchClickTimer.current);
+                    onEdit(t);
+                  }}
+                >
+                  <rect
+                    className="task-card"
+                    x={b.x}
+                    y={b.y}
+                    width={b.w}
+                    height={b.h}
+                    rx={9}
+                    fill={fill}
+                    stroke={stroke}
+                    strokeWidth={
+                      selected === t.id || ends.has(t.id)
+                        ? 3.5
+                        : t.summary
+                          ? 2.3
+                          : 1.5
+                    }
+                    vectorEffect={isMap ? "non-scaling-stroke" : undefined}
+                    strokeDasharray={
+                      !t.start && selected !== t.id && !ends.has(t.id)
+                        ? "5 3"
+                        : undefined
+                    }
+                    onPointerDown={(e) => {
+                      if (e.button !== 0) return;
+                      if (
+                        view === "gantt" &&
+                        (!calendarReady ||
+                          !canEdit ||
+                          t.status === "done" ||
+                          scheduleSuppressed(t))
+                      )
+                        return;
+                      suppressTaskClick.current = false;
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                      setOffset(0);
+                      setDrag({
+                        kind: view === "gantt" && !trace ? "date" : "node",
+                        id: t.id,
+                        clientX: e.clientX,
+                        clientY: e.clientY,
+                        x: b.x,
+                        y: b.y,
+                      });
+                      setSelected(t.id);
+                    }}
+                  />
+                  {t.summary && (
+                    <path
+                      data-milestone-band={t.id}
+                      d={
+                        isMap
+                          ? `M${b.x + 10},${b.y + 3} H${b.x + b.w - 10}`
+                          : `M${b.x + 5},${b.y + 12} V${b.y + 5} H${b.x + b.w - 5} V${b.y + 12}`
+                      }
+                      fill="none"
+                      stroke={accent}
+                      strokeWidth={3}
+                      strokeLinecap="round"
+                      pointerEvents="none"
+                    />
+                  )}
+                  {isMap && t.summary && (
+                    <text
+                      data-milestone-label={t.id}
+                      x={b.x + 12}
+                      y={b.y + 15}
+                      fontSize={9}
+                      fontWeight={800}
+                      letterSpacing={0.7}
+                      fill={accent}
+                      pointerEvents="none"
+                    >
+                      {tr("md5d20f9a44")} {children(t.id).length}
+                    </text>
+                  )}
+                  {isMap && selected === t.id && (
+                    <rect
+                      x={b.x - 3}
+                      y={b.y - 3}
+                      width={b.w + 6}
+                      height={b.h + 6}
+                      rx={12}
+                      fill="none"
+                      stroke="#93c5fd"
+                      strokeWidth={3}
+                      strokeOpacity={0.35}
+                      vectorEffect="non-scaling-stroke"
+                      pointerEvents="none"
+                    />
+                  )}
+                  {view === "gantt" && !trace && (
+                    <text
+                      data-duration={t.id}
+                      x={b.x + b.w / 2}
+                      y={b.y + 29}
+                      textAnchor="middle"
+                      fontSize={b.w < 45 ? 9 : 11}
+                      fill="#344b69"
+                      pointerEvents="none"
+                    >
+                      {duration(t)}
+                    </text>
+                  )}
+                  {(view === "map" || trace) && (
+                    <text
+                      x={b.x + 12}
+                      y={b.y + (t.summary ? 37 : 29)}
+                      fontSize={12}
+                      fontWeight={t.summary ? 750 : 650}
+                      pointerEvents="none"
+                    >
+                      <title>{t.title}</title>
+                      <tspan x={b.x + 12} dy={-5}>
+                        {t.summary ? "◆ " : ""}
+                        {t.title.slice(0, 29)}
+                      </tspan>
+                      <tspan x={b.x + 12} dy={15}>
+                        {t.title.slice(29, 58)}
+                        {t.title.length > 58 ? "…" : ""}
+                      </tspan>
+                    </text>
+                  )}
+                  {(view === "map" || trace) && (
+                    <>
+                      <text
+                        x={b.x + 12}
+                        y={b.y + (t.summary ? 63 : 57)}
+                        fontSize={10}
+                        fill="#5c6b81"
+                        pointerEvents="none"
+                      >
+                        {t.start || tr("m65fd24f1cb")} —{" "}
+                        {t.end || tr("ma8efd0c322")}
+                      </text>
+                      <text
+                        x={b.x + 12}
+                        y={b.y + (t.summary ? 77 : 73)}
+                        fontSize={10}
+                        pointerEvents="none"
+                      >
+                        {statuses[t.status]} · {hours(t.planned_minutes)} /{" "}
+                        {hours(t.actual_minutes)} {tr("m40831c5d98")}
+                      </text>
+                    </>
+                  )}
+                  {(view === "map" || trace) &&
+                    [
+                      {
+                        kind: "incoming",
+                        present: relationFlags.incoming.has(t.id),
+                        label: tr("m3588f23531"),
+                        color: "#2563eb",
+                        background: "#e8f0ff",
+                        dx: 51,
+                      },
+                      {
+                        kind: "outgoing",
+                        present: relationFlags.outgoing.has(t.id),
+                        label: tr("m7f87eb729b"),
+                        color: "#b58a00",
+                        background: "#fff4bf",
+                        dx: 31,
+                      },
+                    ]
+                      .filter((mark) => mark.present)
+                      .map((mark) => (
+                        <g
+                          key={mark.kind}
+                          data-relation={mark.kind}
+                          role="img"
+                          aria-label={mark.label}
+                          transform={`translate(${b.x + b.w - mark.dx},${b.y + 8})`}
+                        >
+                          <title>{mark.label}</title>
+                          <rect
+                            width={17}
+                            height={17}
+                            rx={4}
+                            fill={mark.background}
+                          />
+                          <path
+                            d={
+                              mark.kind === "incoming"
+                                ? "M13 8.5 H4 M8 4.5 L4 8.5 L8 12.5"
+                                : "M4 8.5 H13 M9 4.5 L13 8.5 L9 12.5"
+                            }
+                            fill="none"
+                            stroke={mark.color}
+                            strokeWidth={2.5}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </g>
+                      ))}
+                  {canEdit && (view === "map" || trace) && (
+                    <g
+                      role="button"
+                      tabIndex={0}
+                      aria-label={tr("m39dcb19084") + t.title}
+                      className="svg-button"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.stopPropagation();
+                          onChild(t);
+                        }
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCollapsed((current) => {
+                          const next = new Set(current);
+                          next.delete(t.id);
+                          return next;
+                        });
+                        onChild(t);
+                      }}
+                    >
+                      <rect
+                        x={b.x + b.w - 77}
+                        y={b.y + b.h - 21}
+                        width={22}
+                        height={18}
+                        rx={4}
+                        fill="#e4efff"
+                      />
+                      <text x={b.x + b.w - 71} y={b.y + b.h - 7} fontSize={14}>
+                        +
+                      </text>
+                    </g>
+                  )}
+                  {(view === "map" || trace) && (
+                    <g
+                      role="button"
+                      aria-label={"Trace " + t.title}
+                      className="svg-button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTrace(t.id);
+                      }}
+                    >
+                      <rect
+                        x={b.x + b.w - 49}
+                        y={b.y + b.h - 20}
+                        width={43}
+                        height={16}
+                        rx={4}
+                        fill="#edf2fa"
+                      />
+                      <text x={b.x + b.w - 44} y={b.y + b.h - 8} fontSize={10}>
+                        Trace →
+                      </text>
+                    </g>
+                  )}
+                  {t.summary && !trace && (
+                    <g
+                      className="svg-button"
+                      data-collapse={t.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={!collapsed.has(t.id)}
+                      aria-label={
+                        (collapsed.has(t.id)
+                          ? tr("m58ece00c87")
+                          : tr("mc25d7f2b3c")) + t.title
+                      }
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          toggleBranch(t.id);
+                        }
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleBranch(t.id);
+                      }}
+                    >
+                      <rect
+                        x={b.x + 8}
+                        y={b.y + b.h - 23}
+                        width={isMap ? 112 : 20}
+                        height={19}
+                        rx={5}
+                        fill="#e1eaf6"
+                      />
+                      <text
+                        x={b.x + 13}
+                        y={b.y + b.h - 10}
+                        fontSize={10}
+                        fill="#34577b"
+                      >
+                        {collapsed.has(t.id) ? "▸" : "▾"}
+                        {isMap
+                          ? collapsed.has(t.id)
+                            ? tr("m9d04851ce3") + children(t.id).length
+                            : tr("m6c7f5a513b")
+                          : ""}
+                      </text>
+                    </g>
+                  )}
+                  {canEdit &&
+                    calendarReady &&
+                    view === "gantt" &&
+                    !trace &&
+                    !t.summary &&
+                    t.status !== "done" &&
+                    !scheduleSuppressed(t) &&
+                    (["in", "out"] as const).map((side) => (
+                      <rect
+                        key={"resize-" + side}
+                        data-resize={side}
+                        data-id={t.id}
+                        x={side === "in" ? b.x + 1 : b.x + b.w - 9}
+                        y={b.y + b.h - 22}
+                        width={8}
+                        height={20}
+                        rx={3}
+                        fill="#8099b8"
+                        className="resize-handle"
+                        onPointerDown={(e) => {
+                          if (e.button !== 0) return;
+                          e.stopPropagation();
+                          e.currentTarget.ownerSVGElement?.setPointerCapture(
+                            e.pointerId,
+                          );
+                          setSelected(t.id);
+                          setOffset(0);
+                          setDrag({
+                            kind: "resize",
+                            id: t.id,
+                            side,
+                            clientX: e.clientX,
+                            clientY: e.clientY,
+                            x: b.x,
+                            y: b.y,
+                          });
+                        }}
+                      >
+                        <title>{tr("m7731237bc9")}</title>
+                      </rect>
+                    ))}
+                  {canEdit &&
+                    (["in", "out"] as const).map((side) => (
+                      <circle
+                        key={side}
+                        data-port={side}
+                        data-id={t.id}
+                        cx={side === "in" ? b.x : b.x + b.w}
+                        cy={b.y + 14}
+                        r={6}
+                        fill="white"
+                        stroke="#419bce"
+                        strokeWidth={2}
+                        className="port"
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          setDrag({
+                            kind: "link",
+                            id: t.id,
+                            side,
+                            clientX: e.clientX,
+                            clientY: e.clientY,
+                            x: side === "in" ? b.x : b.x + b.w,
+                            y: b.y + 14,
+                          });
+                          setWire({
+                            x: side === "in" ? b.x : b.x + b.w,
+                            y: b.y + 14,
+                          });
+                        }}
+                      />
+                    ))}
+                </g>
+              );
+            })}
+            {drag?.kind === "link" && wire && (
+              <line
+                x1={drag.x}
+                y1={drag.y}
+                x2={wire.x}
+                y2={wire.y}
+                stroke="#086ad8"
+                strokeWidth={2}
+                strokeDasharray="5 4"
+                pointerEvents="none"
+              />
+            )}
+          </g>
+        </svg>
+      </div>
+      {linkSelected >= 0 && project.links[linkSelected] && (
+        <div className="selected-link">
+          <span>{tr("mbbe810e1c9")}</span>
+          <button
+            className="secondary"
+            onClick={() => onLink(project.links[linkSelected], linkSelected)}
+          >
+            {tr("m3c794514b2")}
+          </button>
+          <button className="icon" onClick={() => setLinkSelected(-1)}>
+            ×
+          </button>
+        </div>
+      )}
+      {fan && (
+        <div className="wire-fan" style={{ left: fan.x, top: fan.y }}>
+          <header>
+            <b>{tr("mbcede98e8d")}</b>
+            <button className="icon" onClick={() => setFan(null)}>
+              ×
+            </button>
+          </header>
+          {fan.indices.map((i) => {
+            const l = project.links[i];
+            return (
+              <button
+                key={i}
+                style={{ borderLeft: "4px solid " + originalLinkColor(i) }}
+                className={i === linkSelected ? "chosen" : ""}
+                onMouseEnter={() => setHover(i)}
+                onClick={() => {
+                  setLinkSelected(i);
+                  setHover(i);
+                }}
+                onDoubleClick={() => {
+                  setFan(null);
+                  onLink(l, i);
+                }}
+              >
+                {project.tasks.find((t) => t.id === l.from)?.title} →{" "}
+                {project.tasks.find((t) => t.id === l.to)?.title}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
 }

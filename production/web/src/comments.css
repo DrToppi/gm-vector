@@ -1,18 +1,81 @@
-.task-comments{margin-top:24px;padding-top:18px;border-top:1px solid #d9e3ef}
-.task-comments h3{margin:0 0 8px;color:#243b5c}
-.task-comments-list{max-height:340px;overflow:auto;margin:16px 0;border:1px solid #e3eaf3;border-radius:10px;background:#f9fbfe}
-.task-comments-list>p{padding:0 14px}
-.task-comments-list>article{padding:14px;border-bottom:1px solid #e3eaf3}
-.task-comments-list>article:last-child{border-bottom:0}
-.task-comment-heading{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:12px}
-.task-comment-heading time{color:#75849a;font-size:11px}
-.task-comment-text{white-space:pre-wrap;overflow-wrap:anywhere;margin:10px 0;line-height:1.5;font-size:13px}
-.task-comment-delivery,.task-comment-recipient{font-size:11px;color:#65758c;overflow-wrap:anywhere}
-.task-comment-delivery[data-delivery-state=sent]{color:#237856}
-.task-comment-delivery[data-delivery-state=queued]{color:#456fba}
-.task-comment-delivery[data-delivery-state=failed],.task-comment-delivery[data-delivery-state=uncertain],.task-comment-error{color:#a33c3c}
-.task-comment-error{font-size:12px;overflow-wrap:anywhere}
-.task-comment-form textarea{resize:vertical;min-height:88px}
-.task-comment-form .check{margin-bottom:6px}
-.task-comment-actions{display:flex;justify-content:flex-end;margin-top:12px}
-.task-comments>.error button{margin-left:8px}
+.task-comments {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid #d9e3ef;
+}
+.task-comments h3 {
+  margin: 0 0 8px;
+  color: #243b5c;
+}
+.task-comments-list {
+  max-height: 340px;
+  overflow: auto;
+  margin: 16px 0;
+  border: 1px solid #e3eaf3;
+  border-radius: 10px;
+  background: #f9fbfe;
+}
+.task-comments-list > p {
+  padding: 0 14px;
+}
+.task-comments-list > article {
+  padding: 14px;
+  border-bottom: 1px solid #e3eaf3;
+}
+.task-comments-list > article:last-child {
+  border-bottom: 0;
+}
+.task-comment-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.task-comment-heading time {
+  color: #75849a;
+  font-size: 11px;
+}
+.task-comment-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 10px 0;
+  line-height: 1.5;
+  font-size: 13px;
+}
+.task-comment-delivery,
+.task-comment-recipient {
+  font-size: 11px;
+  color: #65758c;
+  overflow-wrap: anywhere;
+}
+.task-comment-delivery[data-delivery-state="sent"] {
+  color: #237856;
+}
+.task-comment-delivery[data-delivery-state="queued"] {
+  color: #456fba;
+}
+.task-comment-delivery[data-delivery-state="failed"],
+.task-comment-delivery[data-delivery-state="uncertain"],
+.task-comment-error {
+  color: #a33c3c;
+}
+.task-comment-error {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.task-comment-form textarea {
+  resize: vertical;
+  min-height: 88px;
+}
+.task-comment-form .check {
+  margin-bottom: 6px;
+}
+.task-comment-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.task-comments > .error button {
+  margin-left: 8px;
+}

@@ -51,11 +51,7 @@ export default [
   // remains authoritative, including no-unexpected-multiline.
   prettier,
   {
-    files: [
-      "src/**/*.{ts,tsx}",
-      "tests/**/*.{ts,tsx}",
-      "*.{ts,mts,cts}",
-    ],
+    files: ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}", "*.{ts,mts,cts}"],
     languageOptions: {
       parser: tseslint.parser,
       ecmaVersion: "latest",

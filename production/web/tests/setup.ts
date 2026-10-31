@@ -54,5 +54,7 @@ afterEach(() => {
     vi.unstubAllEnvs();
   }
   expect(remainingTimers, "Test left timers after component cleanup").toBe(0);
-  expect(observed, "Unexpected or missing console diagnostics").toEqual(expected);
+  expect(observed, "Unexpected or missing console diagnostics").toEqual(
+    expected,
+  );
 });

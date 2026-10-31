@@ -1,11 +1,194 @@
 // Catalog contract plus executable render/export checks. No production data.
-const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
-const ts=require('typescript'),{buildSync}=require('esbuild');
-const root=path.join(__dirname,'..'),langs=['en','ru','de','fr','es','pt-BR','zh-Hans'];
-const catalogs=Object.fromEntries(langs.map(lang=>[lang,JSON.parse(fs.readFileSync(path.join(root,'src/locales',lang+'.json'),'utf8'))]));
-const keys=Object.keys(catalogs.en).sort();const slots=value=>[...value.matchAll(/{{\s*([\w]+)\s*}}/g)].map(match=>match[1]).sort();
-for(const lang of langs){const catalog=catalogs[lang];assert.deepEqual(Object.keys(catalog).sort(),keys,lang+' key parity');for(const key of keys){assert.equal(typeof catalog[key],'string');assert(catalog[key].trim(),`${lang}:${key} empty`);assert.deepEqual(slots(catalog[key]),slots(catalogs.en[key]),`${lang}:${key} interpolation`);assert(!/[<>]/.test(catalog[key]),`${lang}:${key} markup is forbidden`)}for(const category of new Intl.PluralRules(lang).resolvedOptions().pluralCategories){for(const prefix of ['taskCount','durationDays'])assert(prefix+'_'+category in catalog,`${lang}:${prefix} plural ${category}`)}}
-let calls=0;for(const file of fs.readdirSync(path.join(root,'src')).filter(file=>/\.tsx?$/.test(file))){const source=fs.readFileSync(path.join(root,'src',file),'utf8');const sf=ts.createSourceFile(file,source,ts.ScriptTarget.Latest,true,file.endsWith('tsx')?ts.ScriptKind.TSX:ts.ScriptKind.TS);function walk(node){if(ts.isCallExpression(node)&&node.expression.getText(sf)==='tr'&&ts.isStringLiteral(node.arguments[0])){const key=node.arguments[0].text;assert(key in catalogs.en||key+'_other' in catalogs.en,`${file}: missing ${key}`);calls++}if(file!=='i18n.ts'&&(ts.isJsxText(node)||ts.isStringLiteral(node)))assert(!/[А-Яа-яЁё]/.test(node.text||''),`${file}: untranslated Russian literal`);ts.forEachChild(node,walk)}walk(sf)}
-const entry=`import i18n,{tr,changeLocale} from './src/i18n';import {reportHTML,reportCSV} from './src/exportReport';import {statuses} from './src/types';import {taskStatus} from './src/taskStatus';import {githubIssueDraft,issueBaseURL} from './src/githubIssue';export {i18n,tr,changeLocale,reportHTML,reportCSV,statuses,taskStatus,githubIssueDraft,issueBaseURL};`;
-const bundle=buildSync({stdin:{contents:entry,resolveDir:root,loader:'ts'},bundle:true,platform:'node',format:'cjs',write:false});const sandbox={module:{exports:{}},exports:{},console,setTimeout,clearTimeout,Intl,Date,URLSearchParams,require};vm.runInNewContext(bundle.outputFiles[0].text,sandbox);const app=sandbox.module.exports;
-(async()=>{const draft=app.githubIssueDraft({title:' Test ',steps:'steps',expected:'expected',actual:'actual',token:'MUST_NOT_LEAK',diagnostics:{secret:'MUST_NOT_LEAK'}},'1.2.3');assert(!JSON.stringify(draft).includes('MUST_NOT_LEAK'));assert.equal(new URL(draft.url).searchParams.get('body'),draft.body);assert.equal(new URL(draft.url).searchParams.get('title'),draft.title);assert.equal(draft.title,'Test');assert(draft.body.includes('1.2.3'));for(const version of ['https://private.example','internal_host','unknown'])assert(!app.githubIssueDraft({title:'x',steps:'x',expected:'x',actual:'x'},version).body.includes(version));assert(!app.githubIssueDraft({title:'x',steps:'a'.repeat(7000),expected:'x',actual:'x'}).fits);const task={id:'one',title:'<script>alert("fixture")</script>',description:'',summary:false,status:'todo',start:'2026-10-29',end:'2026-10-29',planned_minutes:60,actual_minutes:0,assignments:[],responsibility:'internal'};const project={id:'test',title:'A & B',brief:'<img src=x>',revision:1,tasks:[task]};for(const lang of langs){await app.changeLocale(lang);assert.equal(app.statuses.todo,catalogs[lang].mc6cc849619,'module status must react to locale');assert.equal(app.taskStatus(task,project,'2026-10-29').label,catalogs[lang].mc6cc849619);for(const count of [0,1,2,5,21,1000000]){const category=new Intl.PluralRules(lang).select(count);assert.equal(app.tr('durationDays',{count}),catalogs[lang]['durationDays_'+category].replace('{{count}}',String(count)))}const html=app.reportHTML(project,[],'2026-10-29');assert(html.includes('lang="'+lang+'"'));assert(html.includes('&lt;script&gt;'));assert(html.includes('&lt;img src=x&gt;'));assert(!html.includes('<script>'));assert(html.includes(catalogs[lang].mb9ce27191d));assert(app.reportCSV(project,[]).includes(catalogs[lang].mb9ce27191d));const unsafe='<img onerror=alert(1)>';assert(app.tr('apiReference',{code:unsafe,requestId:'fixture'}).includes(unsafe),'React must receive a string, not HTML');}console.log(`i18n: ${langs.length} locales, ${keys.length} keys, ${calls} calls; parity, placeholders, plurals, reactive labels and escaped exports passed`);})().catch(error=>{console.error(error);process.exitCode=1});
+const assert = require("node:assert/strict"),
+  fs = require("node:fs"),
+  path = require("node:path"),
+  vm = require("node:vm");
+const ts = require("typescript"),
+  { buildSync } = require("esbuild");
+const root = path.join(__dirname, ".."),
+  langs = ["en", "ru", "de", "fr", "es", "pt-BR", "zh-Hans"];
+const catalogs = Object.fromEntries(
+  langs.map((lang) => [
+    lang,
+    JSON.parse(
+      fs.readFileSync(path.join(root, "src/locales", lang + ".json"), "utf8"),
+    ),
+  ]),
+);
+const keys = Object.keys(catalogs.en).sort();
+const slots = (value) =>
+  [...value.matchAll(/{{\s*([\w]+)\s*}}/g)].map((match) => match[1]).sort();
+for (const lang of langs) {
+  const catalog = catalogs[lang];
+  assert.deepEqual(Object.keys(catalog).sort(), keys, lang + " key parity");
+  for (const key of keys) {
+    assert.equal(typeof catalog[key], "string");
+    assert(catalog[key].trim(), `${lang}:${key} empty`);
+    assert.deepEqual(
+      slots(catalog[key]),
+      slots(catalogs.en[key]),
+      `${lang}:${key} interpolation`,
+    );
+    assert(!/[<>]/.test(catalog[key]), `${lang}:${key} markup is forbidden`);
+  }
+  for (const category of new Intl.PluralRules(lang).resolvedOptions()
+    .pluralCategories) {
+    for (const prefix of ["taskCount", "durationDays"])
+      assert(
+        prefix + "_" + category in catalog,
+        `${lang}:${prefix} plural ${category}`,
+      );
+  }
+}
+let calls = 0;
+for (const file of fs
+  .readdirSync(path.join(root, "src"))
+  .filter((file) => /\.tsx?$/.test(file))) {
+  const source = fs.readFileSync(path.join(root, "src", file), "utf8");
+  const sf = ts.createSourceFile(
+    file,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith("tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  function walk(node) {
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.getText(sf) === "tr" &&
+      ts.isStringLiteral(node.arguments[0])
+    ) {
+      const key = node.arguments[0].text;
+      assert(
+        key in catalogs.en || key + "_other" in catalogs.en,
+        `${file}: missing ${key}`,
+      );
+      calls++;
+    }
+    if (file !== "i18n.ts" && (ts.isJsxText(node) || ts.isStringLiteral(node)))
+      assert(
+        !/[А-Яа-яЁё]/.test(node.text || ""),
+        `${file}: untranslated Russian literal`,
+      );
+    ts.forEachChild(node, walk);
+  }
+  walk(sf);
+}
+const entry = `import i18n,{tr,changeLocale} from './src/i18n';import {reportHTML,reportCSV} from './src/exportReport';import {statuses} from './src/types';import {taskStatus} from './src/taskStatus';import {githubIssueDraft,issueBaseURL} from './src/githubIssue';export {i18n,tr,changeLocale,reportHTML,reportCSV,statuses,taskStatus,githubIssueDraft,issueBaseURL};`;
+const bundle = buildSync({
+  stdin: { contents: entry, resolveDir: root, loader: "ts" },
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  write: false,
+});
+const sandbox = {
+  module: { exports: {} },
+  exports: {},
+  console,
+  setTimeout,
+  clearTimeout,
+  Intl,
+  Date,
+  URLSearchParams,
+  require,
+};
+vm.runInNewContext(bundle.outputFiles[0].text, sandbox);
+const app = sandbox.module.exports;
+(async () => {
+  const draft = app.githubIssueDraft(
+    {
+      title: " Test ",
+      steps: "steps",
+      expected: "expected",
+      actual: "actual",
+      token: "MUST_NOT_LEAK",
+      diagnostics: { secret: "MUST_NOT_LEAK" },
+    },
+    "1.2.3",
+  );
+  assert(!JSON.stringify(draft).includes("MUST_NOT_LEAK"));
+  assert.equal(new URL(draft.url).searchParams.get("body"), draft.body);
+  assert.equal(new URL(draft.url).searchParams.get("title"), draft.title);
+  assert.equal(draft.title, "Test");
+  assert(draft.body.includes("1.2.3"));
+  for (const version of ["https://private.example", "internal_host", "unknown"])
+    assert(
+      !app
+        .githubIssueDraft(
+          { title: "x", steps: "x", expected: "x", actual: "x" },
+          version,
+        )
+        .body.includes(version),
+    );
+  assert(
+    !app.githubIssueDraft({
+      title: "x",
+      steps: "a".repeat(7000),
+      expected: "x",
+      actual: "x",
+    }).fits,
+  );
+  const task = {
+    id: "one",
+    title: '<script>alert("fixture")</script>',
+    description: "",
+    summary: false,
+    status: "todo",
+    start: "2026-10-29",
+    end: "2026-10-29",
+    planned_minutes: 60,
+    actual_minutes: 0,
+    assignments: [],
+    responsibility: "internal",
+  };
+  const project = {
+    id: "test",
+    title: "A & B",
+    brief: "<img src=x>",
+    revision: 1,
+    tasks: [task],
+  };
+  for (const lang of langs) {
+    await app.changeLocale(lang);
+    assert.equal(
+      app.statuses.todo,
+      catalogs[lang].mc6cc849619,
+      "module status must react to locale",
+    );
+    assert.equal(
+      app.taskStatus(task, project, "2026-10-29").label,
+      catalogs[lang].mc6cc849619,
+    );
+    for (const count of [0, 1, 2, 5, 21, 1000000]) {
+      const category = new Intl.PluralRules(lang).select(count);
+      assert.equal(
+        app.tr("durationDays", { count }),
+        catalogs[lang]["durationDays_" + category].replace(
+          "{{count}}",
+          String(count),
+        ),
+      );
+    }
+    const html = app.reportHTML(project, [], "2026-10-29");
+    assert(html.includes('lang="' + lang + '"'));
+    assert(html.includes("&lt;script&gt;"));
+    assert(html.includes("&lt;img src=x&gt;"));
+    assert(!html.includes("<script>"));
+    assert(html.includes(catalogs[lang].mb9ce27191d));
+    assert(app.reportCSV(project, []).includes(catalogs[lang].mb9ce27191d));
+    const unsafe = "<img onerror=alert(1)>";
+    assert(
+      app
+        .tr("apiReference", { code: unsafe, requestId: "fixture" })
+        .includes(unsafe),
+      "React must receive a string, not HTML",
+    );
+  }
+  console.log(
+    `i18n: ${langs.length} locales, ${keys.length} keys, ${calls} calls; parity, placeholders, plurals, reactive labels and escaped exports passed`,
+  );
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
