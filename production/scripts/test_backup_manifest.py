@@ -11,6 +11,20 @@ def fixture(root):
  runtime={field:'/run/secrets/'+name for field,name in b.RUNTIME_FILES.items() if field == 'secret_file'}
  (cfg/'config.json').write_text(json.dumps(runtime));return cfg,runtime
 class BackupManifestTests(unittest.TestCase):
+ def test_restored_sealed_fields_require_matching_application_key(self):
+  key=b'S'*32;nonce=b'N'*12;plain=b'SYNTHETIC-SECRET-NEVER-LOG'
+  sealed=nonce+b.AESGCM(key).encrypt(nonce,plain,b'GMA|Planner:v1')
+  def records(*args,**kwargs):
+   for kind in ('user_totp','enrollment','invitation'):yield kind.encode()+b'|'+sealed.hex().encode()
+  with patch.object(b,'process_lines',records):
+   self.assertEqual(b.verify_restored_secrets('synthetic',key),{'user_totp':1,'enrollment':1,'invitation':1})
+   with self.assertRaisesRegex(ValueError,'could not be authenticated') as error:b.verify_restored_secrets('synthetic',b'W'*32)
+   self.assertNotIn(plain.decode(),str(error.exception));self.assertNotIn(sealed.hex(),str(error.exception))
+ def test_restored_sealed_fields_reject_malformed_protocol(self):
+  for row in (b'unknown|00',b'user_totp|00',b'enrollment|zz',b'invitation|',b'not-a-record',b'user_totp|00|extra'):
+   def records(*args,**kwargs):yield row
+   with self.subTest(row=row),patch.object(b,'process_lines',records):
+    with self.assertRaisesRegex(ValueError,'could not be authenticated'):b.verify_restored_secrets('synthetic',b'S'*32)
  def test_dependencies_and_no_private_keys(self):
   with tempfile.TemporaryDirectory() as d:
    cfg,r=fixture(Path(d));r.update(smtp_file='/run/secrets/smtp.json',ldap_file='/run/secrets/ldap.json',report_public_key_file='/run/secrets/report-public-key.json')

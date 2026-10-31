@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Encrypted local backup. Restore test always creates its own disposable DB."""
-import argparse,datetime,hashlib,io,json,os,secrets,stat,subprocess,tarfile,time
+import argparse,datetime,hashlib,io,json,os,secrets,select,stat,subprocess,tarfile,time
 from pathlib import Path
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 ROOT=Path(__file__).resolve().parents[2]
@@ -97,6 +97,59 @@ def read_archive(args,path):
 def counts(container, database="planner"):
  sql="SELECT 'projects',count(*) FROM projects UNION ALL SELECT 'tasks',count(*) FROM tasks UNION ALL SELECT 'dependencies',count(*) FROM dependencies UNION ALL SELECT 'users',count(*) FROM users UNION ALL SELECT 'time_entries',count(*) FROM time_entries UNION ALL SELECT 'calendars',count(*) FROM calendars ORDER BY 1;"
  return run(['exec',container,'psql','-U','planner','-d',database,'-At','-c',sql]).decode().strip()
+
+def process_lines(argv, *, timeout=180, max_line=MAX_SECRET*2+64, max_output=MAX_ARCHIVE*3):
+ """Read a fixed internal protocol without buffering arbitrary DB output."""
+ child=subprocess.Popen(DOCKER+argv,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
+ deadline=time.monotonic()+timeout;pending=b'';total=0
+ try:
+  while True:
+   remaining=deadline-time.monotonic()
+   if remaining<=0:raise TimeoutError('backup verification subprocess timed out')
+   if not select.select([child.stdout],[],[],remaining)[0]:raise TimeoutError('backup verification subprocess timed out')
+   chunk=os.read(child.stdout.fileno(),65536)
+   if not chunk:break
+   total+=len(chunk)
+   if total>max_output:raise ValueError('backup verification output exceeds limit')
+   pending+=chunk
+   while b'\n' in pending:
+    line,pending=pending.split(b'\n',1)
+    if len(line)>max_line:raise ValueError('backup verification record exceeds limit')
+    yield line
+   if len(pending)>max_line:raise ValueError('backup verification record exceeds limit')
+  if pending:raise ValueError('incomplete backup verification record')
+  if child.wait(timeout=max(.001,deadline-time.monotonic())):raise RuntimeError('backup verification subprocess failed')
+ finally:
+  child.stdout.close()
+  if child.poll() is None:
+   child.terminate()
+   try:child.wait(timeout=2)
+   except subprocess.TimeoutExpired:
+    child.kill();child.wait(timeout=2)
+
+def verify_restored_secrets(container, application_key):
+ """Authenticate existing sealed fields in the disposable restored database.
+
+ Nothing decrypted is returned, printed or written. This is a restore-tool check,
+ not a change to application readiness or a public diagnostic API.
+ """
+ sql="SELECT 'user_totp',encode(totp,'hex') FROM users WHERE octet_length(totp)>0 UNION ALL SELECT 'enrollment',encode(payload,'hex') FROM enrollments WHERE payload IS NOT NULL AND octet_length(payload)>0 UNION ALL SELECT 'invitation',encode(decode(payload->>'secret','base64'),'hex') FROM outbox WHERE provider='smtp_invitation' AND payload ? 'secret';"
+ totals={'user_totp':0,'enrollment':0,'invitation':0};cipher=AESGCM(application_key)
+ records=process_lines(['exec',container,'psql','-X','-qAt','-U','planner','-d','planner','-v','ON_ERROR_STOP=1','-c',sql])
+ try:
+  for record in records:
+   try:
+    category,encoded=record.decode('ascii').split('|')
+    if category not in totals or not encoded:raise ValueError()
+    sealed=bytes.fromhex(encoded)
+    if len(sealed)<28:raise ValueError()
+    cipher.decrypt(sealed[:12],sealed[12:],b'GMA|Planner:v1')
+   except Exception:
+    raise ValueError('restored application secrets could not be authenticated') from None
+   totals[category]+=1
+ finally:
+  records.close()
+ return totals
 def key(path,create=False):
  if create and not path.exists():
   path.parent.mkdir(mode=0o700,parents=True,exist_ok=True)
@@ -185,8 +238,9 @@ def verify(args,path):
    except RuntimeError:time.sleep(1)
   run(['exec','-i',name,'pg_restore','-U','planner','-d','planner','--no-owner','--no-acl','--exit-on-error'],dump)
   assert counts(name)==meta['counts'],'Restored row counts differ'
+  sealed_fields=verify_restored_secrets(name,values['secrets/encryption.key']) if complete else None
   if complete:runtime_smoke(args,name,values)
-  print(json.dumps({'restore_verified':True,'runtime_verified':complete,'legacy_database_only':not complete,'seconds':round(time.monotonic()-started,2),'counts':meta['counts'].splitlines()}))
+  print(json.dumps({'restore_verified':True,'runtime_verified':complete,'legacy_database_only':not complete,'sealed_fields_verified':sealed_fields,'seconds':round(time.monotonic()-started,2),'counts':meta['counts'].splitlines()}))
  finally:
   run(['rm','-f',name])
 if __name__=='__main__':
