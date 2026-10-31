@@ -11,11 +11,13 @@ implementation or deployment.
 The user explicitly resumed work. The verified updater was deployed and its host
 service enabled; WP-01 is independently accepted at 5812b2c, WP-02 at 400ae188,
 WP-04 at e97971d and WP-03 at 9b03c90. WP-03 evidence is recorded in
-docs/remediation/2026-10-30/wp-03-verification.md. WP-05 is planning-only until
-the human selects D09/D10/D13 in
-docs/remediation/2026-10-30/wp-05-decisions.md and its bounded plan is frozen.
-The question cards are pending; recommendations are not approval. Do not install
-WP-05 dependencies or change code/services from those proposals yet.
+docs/remediation/2026-10-30/wp-03-verification.md. The user selected WP-05 D09 A,
+D10 B and D13 A in docs/remediation/2026-10-30/wp-05-decisions.md. Work is now
+bounded-plan preparation in feature/operational-hardening. Freeze the tools,
+file ownership, required scenarios and evidence plan before WP-05 code or installs.
+No individual vulnerability exception, main merge, release or deployment is
+authorized by that selection. Existing implementation authorization remains valid
+once the bounded plan is ready; routine in-scope work needs no repeated approval.
 See [the updated checkpoint](docs/implementation-checkpoint.md).
 
 The user approved implementation beginning with the Git updater, followed by

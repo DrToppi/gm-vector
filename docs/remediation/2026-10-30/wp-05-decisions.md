@@ -1,6 +1,8 @@
 # WP-05 admission decisions
 
-Status: **PROPOSED — HUMAN SELECTION REQUIRED**. Checked on 2026-10-31.
+Status: **D09 A / D10 B / D13 A ACCEPTED BY THE USER ON 2026-10-31**.
+Implementation still requires the bounded WP-05 plan and its review. No exception
+for a particular advisory was approved by this policy selection.
 WP-03 is independently accepted at 9b03c90; see its verification record.
 This packet concerns the next package and does not reopen that acceptance.
 This packet does not authorize a deployment, a policy exception, new backup
@@ -15,7 +17,7 @@ architecture or use of real integrations. Read [the matrix](wp-03-05.md),
 | B — separate WebDriver harnesses | Standards-based control and independent driver choices | Duplicate driver, lifecycle and fixture plumbing | Different wait/error semantics can hide missing scenarios or introduce flaky results |
 | C — external browser service | Wider actual OS/browser combinations without local infrastructure | Service cost, credentials and internet availability | Test traces/artifacts cross a new trust boundary; synthetic-only data and service authorization are needed |
 
-Recommendation **A**, not approval. Freeze the exact package/browser revisions,
+Accepted choice **A**. Freeze the exact package/browser revisions,
 supported Linux environment and native dependencies after selection. Current
 public metadata suggests @playwright/test 1.64.1 (Apache-2.0, Node >=20); it is not
 installed or accepted by this packet. Verify the actual resolved lock and peers.
@@ -33,7 +35,7 @@ do not silently skip a missing engine or disable TLS checks for real endpoints.
 | B — same default block, with narrowly scoped, human-approved expiring exceptions | Explicit risk ownership, remediation date and audit trail | Exception records and expiration/recheck need maintenance | Overbroad or stale approvals weaken the gate unless enforcement fails closed |
 | C — block only findings classified reachable | Less noise from unused packages | Requires trustworthy reachability evidence for every platform/artifact | Incomplete analysis can miss native/dynamic paths; not equivalent to absence of exploitable defects |
 
-Recommendation **B**, not approval. Proposed B policy: exceptions last at most
+Accepted choice **B**: exceptions last at most
 14 calendar days and require the human owner to approve advisory, package/version,
 exact image digest/path, rationale, compensating controls and expiry/recheck.
 Implementers cannot approve their own exception. No automatic ignore-unfixed or
@@ -43,7 +45,7 @@ OpenPGP advisory is not automatically exempted by this packet.
 Regardless of choice, scan the actual app/proxy/PostgreSQL image digests, not just
 mutable tag names; retain scanner version, advisory DB timestamp and SBOM/report
 membership for all three. Missing image/report, scanner failure, malformed output
-or advisory data older than the proposed 24-hour maximum blocks the gate. Apply
+or advisory data older than the accepted 24-hour maximum blocks the gate. Apply
 the selected gate on each required candidate CI run; scheduled-only checks cannot
 accept a different SHA. All choices require unfixed-finding, unavailable/stale DB
 and omitted-image controls under their selected policy. B additionally requires
@@ -54,6 +56,10 @@ Current fact: CI enforces HIGH/CRITICAL only for the proxy. scan-images.py scans
 three tags but prints counts without making those findings fail the command.
 This packet is not evidence that all-image enforcement already exists.
 
+The policy is selected; [D14 approval proof](wp-05-approval-proof.md) remains a
+separate human trust-boundary choice. Until selected and verified, there are no
+admitted exceptions. Ordinary strict scans do not depend on that choice.
+
 ## D13 — recovery scope, upgrade origins and reference objective
 
 | Choice | Benefits | Drawbacks | Risks |
@@ -62,7 +68,7 @@ This packet is not evidence that all-image enforcement already exists.
 | B — extend the encrypted versioned archive to reports/TLS/deployment artifacts, with the same proposed reference objective | More self-contained disaster recovery | New archive version, parsers, membership/resource/compatibility rules and file ownership handling | Sensitive private material and inconsistent volume/config snapshots need additional controls; old-format compatibility must be explicit |
 | C — physical backup plus WAL/PITR, proposed recovery point within 15 minutes | Smaller potential data-loss interval | New storage/retention/replication/monitoring and recovery architecture | Missing WAL, key loss and archive consistency can defeat recovery; requires another bounded design before implementation |
 
-Recommendation **A**, not approval. Proposed 30-minute clock starts when the
+Accepted choice **A**. The reference 30-minute clock starts when the
 prepared operator begins the documented recovery action and ends only after real
 password/TOTP login, intended privileges, project read/write/export and restart
 are usable on the reference fixture. Record all preparation assumptions, elapsed
@@ -113,7 +119,7 @@ consistency fix needs an actual controlled failure before implementation.
 
 ## Remaining package gates
 
-After human selection and WP-03 acceptance, freeze a separate bounded WP-05 plan,
+Human selection and WP-03 acceptance are recorded. Freeze a separate bounded WP-05 plan,
 file ownership, fixture matrix, exact tools and evidence protocol before code.
 Retain the accepted 60-minute final soak with the established workload and SLOs;
 freeze the exact phase distribution without shortening that observation. Expand
@@ -132,6 +138,6 @@ is implied by selecting these proposals.
 - [Recovery time objective](https://csrc.nist.gov/glossary/term/recovery_time_objective)
   and [recovery point objective](https://csrc.nist.gov/glossary/term/recovery_point_objective).
 
-These sources justify tool/recovery distinctions; they do not select a policy or
-establish a passing test. The three recommendations remain unapproved until the
-user explicitly chooses them.
+The user explicitly selected A/B/A in the three question cards. The alternatives
+remain documented for their tradeoffs; they were not selected. These sources and
+selections do not establish any executed WP-05 test or operational acceptance.

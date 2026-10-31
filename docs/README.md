@@ -7,7 +7,8 @@ corresponding functionality is implemented.
 Current work is [resumed from the documented checkpoint](implementation-checkpoint.md).
 The verified updater is deployed; WP-01, WP-02, WP-04 and
 [WP-03](remediation/2026-10-30/wp-03-verification.md) are independently accepted.
-The [WP-05 choices](remediation/2026-10-30/wp-05-decisions.md) await human selection.
+The user selected [WP-05 D09 A/D10 B/D13 A](remediation/2026-10-30/wp-05-decisions.md);
+its bounded implementation plan is next.
 
 ## Install and operate
 
@@ -45,7 +46,8 @@ The [WP-05 choices](remediation/2026-10-30/wp-05-decisions.md) await human selec
 The [2026-10-30 remediation programme](remediation/2026-10-30/README.md) is currently
 **in progress, now planning WP-05**. The user approved starting with the
 separate updater, followed by the ordered work packages. WP-01/WP-02/WP-04/WP-03
-have exact-SHA acceptance records; WP-05 decisions D09/D10/D13 await selection.
+have exact-SHA acceptance records; WP-05 A/B/A decisions are accepted and bounded
+planning is underway.
 The programme defines WP-01
 through WP-05, the implementation order,
 acceptance rules and required independent review. Read its

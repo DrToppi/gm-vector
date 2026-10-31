@@ -9,7 +9,8 @@ keyboard/gesture coverage and RED→GREEN fixes for focus restoration and select
 ordering. Full local checks, exact-source CI and READ-ONLY review passed; see the
 [WP-03 evidence](remediation/2026-10-30/wp-03-verification.md).
 Current work is [WP-05 planning](remediation/2026-10-30/wp-05-decisions.md);
-D09/D10/D13 remain unapproved. No main merge, release or remediation deployment
+D09 A/D10 B/D13 A were subsequently selected by the user; the bounded WP-05 plan
+must be frozen and reviewed before code. No main merge, release or remediation deployment
 was performed. The historical pause below does not describe the current runtime.
 
 ## Completed and verified
