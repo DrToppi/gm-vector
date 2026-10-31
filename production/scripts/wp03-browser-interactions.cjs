@@ -204,6 +204,24 @@ module.exports = async function interactions({ send, evaluate, wait, read, click
   await wait(`document.activeElement===document.querySelector(${JSON.stringify(title)})`, 'task focus return');
   assert(await evaluate(`document.activeElement===document.querySelector(${JSON.stringify(title)})`), 'native focus returns to task opener');
   assert(!(await state()).tasks.some(task => task.title === 'Unsaved native keyboard draft'), 'cancelled task draft never persisted');
+  setPhase('wp03-native-keyboard-menus');
+  const menuRevision = (await state()).revision;
+  for (const selector of ['.project-actions.export-menu', '.project-actions:not(.export-menu)']) {
+    assert(await evaluate(`!document.querySelector(${JSON.stringify(selector)}).open`), 'native menu starts closed');
+    await evaluate(`document.querySelector(${JSON.stringify(selector)}+' > summary').focus()`);
+    await key('Enter', 'Enter', 13);
+    await wait(`document.querySelector(${JSON.stringify(selector)}).open`, 'native Enter opens details menu');
+    await key('Tab', 'Tab', 9);
+    assert(await evaluate(`document.activeElement===document.querySelector(${JSON.stringify(selector)}).querySelector('button:not(:disabled)')`), 'native Tab reaches first enabled menu command');
+    const focus = await evaluate(`(()=>{const e=document.activeElement,s=getComputedStyle(e);return{visible:e.matches(':focus-visible'),style:s.outlineStyle,width:parseFloat(s.outlineWidth),color:s.outlineColor}})()`);
+    assert(focus.visible && focus.style !== 'none' && focus.width > 0 &&
+      !['transparent', 'rgba(0, 0, 0, 0)'].includes(focus.color), 'native menu command has a visible focus outline');
+    await key('Tab', 'Tab', 9, 8);
+    assert(await evaluate(`document.activeElement===document.querySelector(${JSON.stringify(selector)}+' > summary')`), 'native Shift-Tab returns to summary');
+    await key('Enter', 'Enter', 13);
+    await wait(`!document.querySelector(${JSON.stringify(selector)}).open`, 'native Enter closes details menu');
+  }
+  assert.equal((await state()).revision, menuRevision, 'keyboard menu traversal does not execute a mutation');
   await click('Майнд-мэп');
   setPhase('wp03-native-keyboard-link-escape');
   await connect(ids[2], ids[0]);
@@ -216,5 +234,5 @@ module.exports = async function interactions({ send, evaluate, wait, read, click
   const back = await read('/projects/' + originalProject);
   assert(back.project.id === originalProject, 'original fixture preserved');
   await reload("document.querySelector('.project-header h1')?.textContent==='E2E synthetic project'", 'original fixture restored');
-  console.log('WP03 native browser PASS: bar save/Gantt wire cancel, wheel/pan/node, port links/edit/cycle/retry, bundle selection/endpoints, Tab/Shift-Tab/Enter/Escape/focus/draft; elapsed_ms=' + Math.round(performance.now() - started));
+  console.log('WP03 native browser PASS: bar save/Gantt wire cancel, wheel/pan/node, port links/edit/cycle/retry, bundle selection/endpoints, Tab/Shift-Tab/Enter/Escape/focus/draft/menus; elapsed_ms=' + Math.round(performance.now() - started));
 };

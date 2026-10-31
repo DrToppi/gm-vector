@@ -154,3 +154,57 @@ Use `--source-web` only with this labelled benchmark; alternate sources cannot
 silently replace sources for the required regression run. The final full run,
 exact-source CI, independent bindings/evidence review and package acceptance are
 still pending.
+
+## First final candidate and independent review findings
+
+Clean candidate abd07e6 completed local `verify.py all`, exit 0; private log
+SHA-256 `05d4548a334997cf4b2b9b8f6f32d93fe8f8ed219e3c521838cb98d9fd96f240`.
+This includes 41 components, 50-module boundaries, three negative controls,
+448 authorization cells, the existing API/race/calendar/history/export/backup
+fixtures and all browser regressions. Real API E2E took 24.40 seconds; the native
+helper, including Gantt wire cancellation, took 4036 ms.
+[Exact-source CI 41184233925](https://github.com/DrToppi/gm-vector/actions/runs/41184233925)
+also succeeded, including locked build, scans under the existing policy, packaged
+installation and updater/migration recovery. This is not the final accepted SHA.
+
+The READ-ONLY reviewer independently ran the unit entry point: 41 components,
+typechecks, lint/format, module/negative-control and existing Go-race/pure/crypto
+checks passed. Binding/return-map review found no imported alias/state regression.
+Two required evidence gaps held acceptance despite those greens:
+
+- 03-04: disabled-status assertions did not exercise a positive status change.
+  Test-only e1a276e adds actual member UI todo→doing, one submit, exact saved
+  payload and preserved plan/other properties. The task-editor file passes six
+  cases, with type/lint/format checks. The final suite now contains 42 cases.
+- 03-09: native modal keyboard coverage did not prove details-menu traversal.
+  The fixture now uses Enter→open, Tab→first enabled command with visible outline,
+  Shift-Tab→summary and Enter→closed for both project and export menus, with no
+  project mutation. The updated real API E2E actually passed in 25.16 seconds.
+
+Neither gap required a runtime change. The updated final SHA and CI/full evidence
+must still be checked; the older successful CI cannot accept later test code.
+
+## Acceptance matrix mapping
+
+| Row | Bounded evidence / remaining boundary |
+| --- | --- |
+| 03-01 | Exact dev pins/peers/engines, locked CI build; required app/test types, lint, format, components, build and locales |
+| 03-02 | Three deliberate negative controls with exclusive cleanup; independent run also passed |
+| 03-03 | Approved symbol manifest, 18 strengthened comparisons/19 controls, actual 50-module graph and separate import/return-map review |
+| 03-04 | Task-editor/member status payload plus existing plan/fact/customer/assignee/draft/failure/cancel/busy/role component and real API paths |
+| 03-05 | Real controller/transport/session races, noncooperative abort, obsolete callbacks, held archive/list and existing 17-case browser suite |
+| 03-06 | Native bar movement/Gantt port cancel, 731-day resize, milestone/Trace and saved/edited/cyclic relationships with real API |
+| 03-07 | Native wheel/pan/node/bundle endpoints; tree/flow/stages, collapse and per-mode/Trace camera browser checks |
+| 03-08 | Weekday quotas/date exceptions/invalid windows/failed preview components and real shared-capacity API UI |
+| 03-09 | Critical native dialog and two details-menu keyboard paths; visible computed outline, focus return, Enter/error/retry and Escape contracts |
+| 03-10 | Seven reactive locale forms/weekday labels, escaped long user text, existing 603-key/663-call localization and browser checks |
+| 03-11 | History stale/revision/cursor/former employees plus full export/privacy/browser regressions; actual complete API export tests |
+| 03-12 | Deferred promises, required fixture settlement, timer/listener/observer teardown and every owned PDF window cleanup |
+| 03-13 | Existing real first setup/TOTP/invitation/recovery/Bug Report browser flows and session/privacy regressions |
+| 03-14 | Same-method bundle sizes and bounded paired CSS-free synthetic selection timings; no universal render/network SLO |
+
+This matrix describes critical paths, not every UI/input/browser/locale combination.
+The existing matched backup/configuration fixture passed within its established
+boundary; restored password/TOTP/invitation/outbox usability and separately managed
+report/TLS volumes still need WP-05 evidence. Firefox/WebKit, all-image gating and
+the 60-minute operational soak are also WP-05, not claimed by this package.
