@@ -11,7 +11,9 @@
     "format:check": "prettier --check .",
     "format": "prettier --write .",
     "test:components": "vitest run",
-    "check:tests": "tsc --project tsconfig.test.json"
+    "check:tests": "tsc --project tsconfig.test.json",
+    "test:browsers": "playwright test --config=playwright.config.ts",
+    "check:browsers": "tsc --project tsconfig.browser.json"
   },
   "dependencies": {
     "i18next": "26.5.11",
@@ -22,6 +24,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.64.1",
     "@testing-library/dom": "10.4.2",
     "@testing-library/react": "16.3.3",
     "@types/node": "24.19.2",

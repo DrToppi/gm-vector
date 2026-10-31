@@ -51,7 +51,12 @@ export default [
   // remains authoritative, including no-unexpected-multiline.
   prettier,
   {
-    files: ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}", "*.{ts,mts,cts}"],
+    files: [
+      "src/**/*.{ts,tsx}",
+      "tests/**/*.{ts,tsx}",
+      "browser/**/*.ts",
+      "*.{ts,mts,cts}",
+    ],
     languageOptions: {
       parser: tseslint.parser,
       ecmaVersion: "latest",
@@ -76,7 +81,11 @@ export default [
     },
   },
   {
-    files: ["*.{js,mjs,cjs}", "scripts/**/*.{js,mjs,cjs}"],
+    files: [
+      "*.{js,mjs,cjs}",
+      "scripts/**/*.{js,mjs,cjs}",
+      "browser/**/*.{js,mjs,cjs}",
+    ],
     languageOptions: {
       ecmaVersion: "latest",
       globals: globals.node,
