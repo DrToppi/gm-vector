@@ -227,7 +227,7 @@ currently reject the single timer type conflict below. The formatter reports
 | `HistoryExportActions` 1; `ProjectImport` 1; `TaskEffort` 1 | Keep monotonic generation invalidation at unmount. Represent it with a named stable invalidation callback, not a captured numeric value or DOM-ref cleanup; retain session guards and every owned print-window cleanup. |
 | `TaskHistory` 3 | Stable invalidation callback for generation/sequence. Complete exact stable/primitive fetch dependencies; remove the captured `pager.revision` read and normalize it with a functional updater only when changed. Do not add `pager.revision` as a fetch dependency: normalization must not issue another first-page request. Fixed first-page continuation/expiry and one fetch per signature remain. |
 | `UpdatesPanel` 2 | Stable current/reset/status-read callbacks; preserve completion-driven bounded polls, uncertain-command reconciliation and no automatic mutation retry. |
-| `main` 3 | Preserve initial polling handler snapshot through a stable bridge. Read latest open handler via ref only in the existing auto-open effect, with the selected project identifier as an explicit primitive dependency; keep each child callback's render-bound intent. Add stable coordinator dependency to polling update effect. App/auth/logout have no finding and remain untouched. |
+| `main` 3 | Preserve initial polling handler snapshot through a stable bridge. Read latest open handler via ref only in the existing auto-open effect, preserving its live execution-time coordinator guard; keep each child callback's render-bound intent. Add stable coordinator dependencies. The earlier captured selected-ID refinement is superseded by the reproduced late D03 finding below. App/auth/logout have no finding and remain untouched. |
 
 These are narrowly required lint-correctness edits, not decomposition of Chart,
 Panels, authentication or history. No global suppression is allowed. Any further
@@ -285,3 +285,22 @@ A different READ-ONLY reviewer checked the source, actual failure log and
 versus [passive-effect cleanup](https://react.dev/reference/react/useEffect), and
 found this narrow fix in scope. Code may follow after the module-move commit;
 the causal hypothesis still requires unchanged native assertion RED→GREEN.
+
+## Late D03 execution-time selection finding (2026-10-31)
+
+After reviewing the extracted controller, the READ-ONLY reviewer identified that
+0029's lint repair changed the original live `!refresh.projectID` guard into a
+render-captured `!selectedID`. A real React regression at 563d64e reproduces the
+consequence: a test wrapper's layout effect explicitly opens B once when the
+catalog first arrives; the older pending passive auto-open still opens A. Actual
+RED: expected B, got A; expected zero GET A, got one. No request/session/guard
+mock or timing sleep is used. This is a confirmed blocker, not a speculative race.
+
+The accepted D03 invariant already forbids replacing a newer explicit selection.
+The independently reviewed narrow correction restores the original live
+`!refresh.projectID` check, uses the stable `refresh` dependency and removes the
+unused captured selectedID. Preserve all initial polling snapshots, latest-open
+bridge, child intents, APIs and other guards. No architecture decision is changed.
+Record this appendix before code; commit the regression and source fix together
+as a separate behavioral-preservation repair after extraction, then require actual
+RED→GREEN, existing races/native paths and a new final SHA/CI/review.
