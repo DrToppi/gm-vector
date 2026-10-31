@@ -1,7 +1,7 @@
 # WP-05 admission decisions
 
 Status: **PROPOSED — HUMAN SELECTION REQUIRED**. Checked on 2026-10-31.
-WP-03 final candidate is 563d64e; its final CI/acceptance remains separate.
+WP-03 corrected candidate is 9b03c90; its final CI/acceptance remains separate.
 This packet does not authorize a deployment, a policy exception, new backup
 architecture or use of real integrations. Read [the matrix](wp-03-05.md),
 [decision register](decisions.md) and [workflow](../../development-workflow.md).
@@ -44,8 +44,10 @@ mutable tag names; retain scanner version, advisory DB timestamp and SBOM/report
 membership for all three. Missing image/report, scanner failure, malformed output
 or advisory data older than the proposed 24-hour maximum blocks the gate. Apply
 the selected gate on each required candidate CI run; scheduled-only checks cannot
-accept a different SHA. Negative fixtures must prove missing/expired exception,
-unfixed finding, unavailable/stale DB and omitted-image failures.
+accept a different SHA. All choices require unfixed-finding, unavailable/stale DB
+and omitted-image controls under their selected policy. B additionally requires
+missing/expired/overbroad exception failures; A must not admit exceptions, and C
+must reject missing/invalid reachability classification instead of calling it safe.
 
 Current fact: CI enforces HIGH/CRITICAL only for the proxy. scan-images.py scans
 three tags but prints counts without making those findings fail the command.
@@ -66,6 +68,8 @@ are usable on the reference fixture. Record all preparation assumptions, elapsed
 time, snapshot timestamp and last recovered acknowledged write. Recoverable data
 ends at that verified matching snapshot; no daily backup cadence or fixed 24-hour
 data-loss guarantee is invented. This is a reference target, not a universal SLA.
+For C, the proposed 15 minutes is a recovery-point/data-loss objective, not a
+recovery-time objective; C's recovery-time target needs its new bounded design.
 
 Use the established synthetic scale: five projects × 300 tasks, 30 employees and
 at least 1001 facts, multi-year calendars, real synthetic encrypted TOTP/invitations/
