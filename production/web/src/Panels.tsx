@@ -6,7 +6,7 @@ import { useSessionScope } from "./useSessionScope";
 import { EmployeeAdministration } from "./EmployeeAdministration";
 import { useCallback, useEffect, useState } from "react";
 import { download } from "./api";
-import { Modal } from "./Editors";
+import { Modal } from "./Modal";
 import {
   hours,
   today,

@@ -3,7 +3,7 @@ import { githubIssueDraft, issueBaseURL } from "./githubIssue";
 import { useSessionScope } from "./useSessionScope";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { download, ApiError } from "./api";
-import { Modal } from "./Editors";
+import { Modal } from "./Modal";
 import {
   diagnosticEnvironment,
   diagnosticSnapshot,
