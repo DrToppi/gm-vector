@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { tr } from "./i18n";
 export function Modal({
   title,
@@ -12,7 +12,7 @@ export function Modal({
   dismissible?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const dialog = ref.current;
     dialog?.showModal();
     return () => dialog?.close();
