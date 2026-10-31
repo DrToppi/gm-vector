@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, download, onSessionChange } from "./api";
 import { useSessionScope } from "./useSessionScope";
 import { tr } from "./i18n";
@@ -53,6 +53,9 @@ export function HistoryExportActions({
       prints.current.delete(owned);
     }
   };
+  const invalidate = useCallback(() => {
+    generation.current++;
+  }, []);
   useEffect(() => {
     active.current = true;
     generation.current++;
@@ -71,13 +74,13 @@ export function HistoryExportActions({
       }, 1000);
     return () => {
       active.current = false;
-      generation.current++;
+      invalidate();
       controller.current?.abort();
       window.clearInterval(sweep);
       stop();
       closeAll();
     };
-  }, [signature]);
+  }, [signature, invalidate]);
   async function exportHistory(format: "json" | "csv" | "html" | "pdf") {
     if (busy || !active.current) return;
     const version = ++generation.current,

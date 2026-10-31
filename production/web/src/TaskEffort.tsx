@@ -1,7 +1,7 @@
 import { usePlanningClock } from "./PlanningClock";
 import { tr } from "./i18n";
 import { useSessionScope } from "./useSessionScope";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { TaskHistory } from "./TaskHistory";
 import {
   hours,
@@ -46,13 +46,16 @@ export function TaskEffort({
     key = project.id + "/" + task.id,
     currentKey = useRef(key);
   currentKey.current = key;
+  const invalidate = useCallback(() => {
+    generation.current++;
+  }, []);
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
-      generation.current++;
+      invalidate();
     };
-  }, [key]);
+  }, [key, invalidate]);
   const assigned = employees.filter(
     (e) =>
       task.assignments.some((a) => a.employee_id === e.id) &&

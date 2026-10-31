@@ -4,7 +4,7 @@ import { DirectorySettings } from "./DirectorySettings";
 import { UpdatesPanel } from "./UpdatesPanel";
 import { useSessionScope } from "./useSessionScope";
 import { EmployeeAdministration } from "./EmployeeAdministration";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { download } from "./api";
 import { Modal } from "./Editors";
 import {
@@ -59,13 +59,16 @@ export function TimePanel({
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [form, setForm] = useState<TimeEntry | null>(null);
   const [error, setError] = useState("");
-  const load = () =>
-    api("/projects/" + project.id + "/time-entries")
-      .then(setEntries)
-      .catch((e) => setError(e.message));
+  const load = useCallback(
+    () =>
+      api("/projects/" + project.id + "/time-entries")
+        .then(setEntries)
+        .catch((e) => setError(e.message)),
+    [api, project.id],
+  );
   useEffect(() => {
     load();
-  }, [project.id, project.revision]);
+  }, [load, project.revision]);
   const max = Math.max(
     60,
     ...project.tasks
@@ -379,7 +382,7 @@ export function AdminPanel() {
   const [projects, setProjects] = useState<any[]>([]);
   const [projectIDs, setProjectIDs] = useState<string[]>([]);
   const [scopes, setScopes] = useState(["project:read"]);
-  async function refresh() {
+  const refresh = useCallback(async () => {
     try {
       const [u, i, a, d, t, p, tr] = await Promise.all([
         api("/users"),
@@ -400,10 +403,10 @@ export function AdminPanel() {
     } catch (e) {
       setMsg((e as Error).message);
     }
-  }
+  }, [api]);
   useEffect(() => {
     refresh();
-  }, []);
+  }, [refresh]);
   async function upload(file: File | undefined, path: string) {
     if (!file) return;
     try {
@@ -740,16 +743,19 @@ export function MembersPanel({
   const [id, setID] = useState("");
   const [role, setRole] = useState("member");
   const [error, setError] = useState("");
-  const load = () =>
-    api("/projects/" + project.id + "/members")
-      .then(setRows)
-      .catch((e) => setError(e.message));
+  const load = useCallback(
+    () =>
+      api("/projects/" + project.id + "/members")
+        .then(setRows)
+        .catch((e) => setError(e.message)),
+    [api, project.id],
+  );
   useEffect(() => {
     load();
     api("/projects/" + project.id + "/member-candidates")
       .then(setUsers)
       .catch(() => {});
-  }, []);
+  }, [load, api, project.id]);
   return (
     <Modal title={tr("m0ccac57a84")} onClose={onClose}>
       {error && <p className="error">{error}</p>}

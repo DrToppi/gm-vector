@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { tr } from "./i18n";
 import { useSessionScope } from "./useSessionScope";
 import {
@@ -41,8 +41,11 @@ export function UpdatesPanel() {
   const [error, setError] = useState("");
   const [paused, setPaused] = useState(false);
   const [revision, setRevision] = useState(0);
-  const current = () => mounted.current && scope.current();
-  const resetConfirmation = (next: UpdateStatus) => {
+  const current = useCallback(
+    () => mounted.current && scope.current(),
+    [scope],
+  );
+  const resetConfirmation = useCallback((next: UpdateStatus) => {
     const previous = previousStatus.current;
     if (
       previous?.candidate_commit !== next.candidate_commit ||
@@ -52,29 +55,32 @@ export function UpdatesPanel() {
       setConfirmation("");
     previousStatus.current = next;
     setStatus(next);
-  };
-  async function refresh(manual = false) {
-    if (!current() || mutating.current) return;
-    if (manual) {
-      automaticPolls.current = 0;
-      setPaused(false);
-    }
-    const ticket = requests.begin();
-    try {
-      const next = updateStatus(
-        await scope.api("/admin/updates", "GET", undefined, ticket.signal),
-      );
-      if (!current() || !ticket.current()) return;
-      resetConfirmation(next);
-      setUncertain(false);
-      setError("");
-    } catch {
-      if (!current() || !ticket.current()) return;
-      setError(tr("updates.unavailable"));
-    } finally {
-      if (current() && ticket.current()) setRevision((value) => value + 1);
-    }
-  }
+  }, []);
+  const refresh = useCallback(
+    async (manual = false) => {
+      if (!current() || mutating.current) return;
+      if (manual) {
+        automaticPolls.current = 0;
+        setPaused(false);
+      }
+      const ticket = requests.begin();
+      try {
+        const next = updateStatus(
+          await scope.api("/admin/updates", "GET", undefined, ticket.signal),
+        );
+        if (!current() || !ticket.current()) return;
+        resetConfirmation(next);
+        setUncertain(false);
+        setError("");
+      } catch {
+        if (!current() || !ticket.current()) return;
+        setError(tr("updates.unavailable"));
+      } finally {
+        if (current() && ticket.current()) setRevision((value) => value + 1);
+      }
+    },
+    [current, requests, scope, resetConfirmation],
+  );
   useEffect(() => {
     mounted.current = true;
     requests.open();
@@ -83,7 +89,7 @@ export function UpdatesPanel() {
       mounted.current = false;
       requests.close();
     };
-  }, []);
+  }, [requests, refresh]);
   const running = !!status && updateRunning(status.state);
   useEffect(() => {
     if (busy || paused || (!running && !uncertain)) return;
@@ -96,7 +102,7 @@ export function UpdatesPanel() {
       void refresh();
     }, pollDelay);
     return () => window.clearTimeout(timer);
-  }, [running, uncertain, busy, paused, revision]);
+  }, [running, uncertain, busy, paused, revision, refresh]);
   async function command(action: "check" | "apply" | "recover") {
     if (
       !current() ||

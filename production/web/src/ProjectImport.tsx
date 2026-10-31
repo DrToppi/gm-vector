@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSessionScope } from "./useSessionScope";
 import { tr } from "./i18n";
 import {
@@ -20,13 +20,16 @@ export function ProjectImport({
     [acknowledged, setAcknowledged] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const invalidate = useCallback(() => {
+    generation.current++;
+  }, []);
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
-      generation.current++;
+      invalidate();
     };
-  }, []);
+  }, [invalidate]);
   const current = (version: number) =>
     mounted.current && scope.current() && version === generation.current;
   async function inspect(value: TransferDocument, version: number) {

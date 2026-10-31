@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "./api";
 import { useSessionScope } from "./useSessionScope";
 import { tr } from "./i18n";
@@ -97,14 +97,17 @@ export function TaskHistory({
   }>({ key: traversalKey, revision: null, firstNext: null });
   if (traversal.current.key !== traversalKey)
     traversal.current = { key: traversalKey, revision: null, firstNext: null };
+  const invalidate = useCallback(() => {
+    generation.current++;
+    sequence.current++;
+  }, []);
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
-      generation.current++;
-      sequence.current++;
+      invalidate();
     };
-  }, []);
+  }, [invalidate]);
   useEffect(() => {
     const version = ++sequence.current,
       key = signature,
@@ -145,8 +148,11 @@ export function TaskHistory({
           setData(
             cursor === null ? { ...page, next_cursor: fence.firstNext } : page,
           );
-          if (pager.revision !== revision)
-            setPager((value) => firstHistoryPosition(revision, value.reload));
+          setPager((value) =>
+            value.revision !== revision
+              ? firstHistoryPosition(revision, value.reload)
+              : value,
+          );
         }
       })
       .catch((cause) => {
@@ -180,7 +186,7 @@ export function TaskHistory({
       active = false;
       controller.abort();
     };
-  }, [signature]);
+  }, [signature, cursor, filters, projectID, revision, scope]);
   // Historical facts remain filterable after an employee leaves the current
   // catalog. Retain only the selected label, alongside the one authorized page.
   const employeeOptions = new Map(

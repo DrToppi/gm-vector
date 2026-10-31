@@ -148,7 +148,7 @@ export function TaskComments({
       mounted = false;
       window.clearInterval(timer);
     };
-  }, [path, reload]);
+  }, [path, reload, api]);
 
   useEffect(() => {
     if (!canSend) setSend(false);

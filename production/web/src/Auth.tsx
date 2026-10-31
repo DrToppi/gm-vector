@@ -36,10 +36,11 @@ export function Auth({
   const [recovery, setRecovery] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [initialResume] = useState(() => ({ enroll, token }));
   useEffect(() => {
-    if (!enroll || !token) return;
+    if (!initialResume.enroll || !initialResume.token) return;
     setBusy(true);
-    api("/auth/bootstrap/resume", "POST", { token })
+    api("/auth/bootstrap/resume", "POST", { token: initialResume.token })
       .then((r) => {
         setSecret(r.secret);
         setURI(r.otpauth_uri);
@@ -47,7 +48,7 @@ export function Auth({
       })
       .catch(() => {})
       .finally(() => setBusy(false));
-  }, []);
+  }, [api, initialResume]);
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");

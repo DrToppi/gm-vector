@@ -1,7 +1,7 @@
 import { tr } from "./i18n";
 import { githubIssueDraft, issueBaseURL } from "./githubIssue";
 import { useSessionScope } from "./useSessionScope";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { download, ApiError } from "./api";
 import { Modal } from "./Editors";
 import {
@@ -93,7 +93,7 @@ export function BugReport({
     > | null>(null),
     [publicReviewed, setPublicReviewed] = useState(false),
     [issueMessage, setIssueMessage] = useState("");
-  async function loadKey() {
+  const loadKey = useCallback(async () => {
     const request = ++keyRequest.current;
     setKeyState("loading");
     let responseReceived = false;
@@ -132,10 +132,10 @@ export function BugReport({
         setKeyState("unavailable");
       }
     }
-  }
+  }, [api]);
   useEffect(() => {
     void loadKey();
-  }, []);
+  }, [loadKey]);
   function change(field: keyof Fields, value: string) {
     setIssue(null);
     setPublicReviewed(false);

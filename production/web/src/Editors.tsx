@@ -14,7 +14,7 @@ import {
   ProvisionalCalendarNotice,
 } from "./ProjectCalendars";
 import { TaskComments } from "./TaskComments";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   blankTask,
   clone,
@@ -43,8 +43,9 @@ export function Modal({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    ref.current?.showModal();
-    return () => ref.current?.close();
+    const dialog = ref.current;
+    dialog?.showModal();
+    return () => dialog?.close();
   }, []);
   return (
     <dialog
@@ -1283,6 +1284,9 @@ function DirectorySearch({ onRefresh }: { onRefresh: () => void }) {
     [msg, setMsg] = useState(""),
     [busy, setBusy] = useState(false);
   const version = useRef(0);
+  const invalidateSearch = useCallback(() => {
+    version.current++;
+  }, []);
   useEffect(() => {
     let active = true;
     api<{ source_details: DirectorySource[] }>("/directory/status")
@@ -1294,9 +1298,9 @@ function DirectorySearch({ onRefresh }: { onRefresh: () => void }) {
       });
     return () => {
       active = false;
-      version.current++;
+      invalidateSearch();
     };
-  }, []);
+  }, [api, invalidateSearch]);
   function changeSource(next: "ldap" | "api") {
     version.current++;
     setSource(next);

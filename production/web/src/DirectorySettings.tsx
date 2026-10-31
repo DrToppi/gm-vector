@@ -1,5 +1,5 @@
 import { tr } from "./i18n";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSessionScope } from "./useSessionScope";
 type Status = {
   ldap: { configured: boolean; enabled: boolean; provider: string };
@@ -10,16 +10,16 @@ export function DirectorySettings() {
   const [state, setState] = useState<Status | null>(null),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
-  async function load() {
+  const load = useCallback(async () => {
     try {
       setState(await api<Status>("/directory/status"));
     } catch (e) {
       setMessage((e as Error).message);
     }
-  }
+  }, [api]);
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
   return (
     <article className="panel">
       <h2>{tr("m0587f2f46f")}</h2>

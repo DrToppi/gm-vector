@@ -38,7 +38,7 @@ export function EmployeeAdministration({ canWrite }: { canWrite: boolean }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [api]);
   return (
     <section className="panel" aria-label={tr("m32777494bb")}>
       <h2>{tr("mdc4b92a7d8")}</h2>
@@ -199,7 +199,7 @@ function EmployeeAccess({
       mounted = false;
       clearInterval(timer);
     };
-  }, [path]);
+  }, [path, api]);
   async function invite(reissue: boolean) {
     if (
       working.current ||

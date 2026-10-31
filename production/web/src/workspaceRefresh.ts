@@ -24,7 +24,7 @@ export class WorkspaceRefresh {
   private foreground = new Set<WorkspaceRead>();
   private backgroundRead: WorkspaceRead | null = null;
   private background: object | null = null;
-  private timer: ReturnType<typeof setTimeout> | undefined;
+  private timer: ReturnType<Window["setTimeout"]> | undefined;
   private run: (() => Promise<void>) | undefined;
   private eligible: (() => boolean) | undefined;
   private wasEligible = false;

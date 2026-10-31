@@ -405,7 +405,7 @@ export function Chart({
       y: (el.clientHeight - height * z) / 2,
     });
   };
-  useLayoutEffect(() => {
+  function reconcileCamera() {
     const previous = lastView.current;
     if (previous?.key === contextKey) return;
     if (previous)
@@ -437,7 +437,10 @@ export function Chart({
       setZoom(1);
       setPan({ x: 0, y: 0 });
     }
-  }, [contextKey]);
+  }
+  useLayoutEffect(() => {
+    reconcileCamera();
+  });
   useLayoutEffect(() => {
     lastView.current = { key: contextKey, zoom, pan, boxes: new Map(boxes) };
   });
@@ -492,13 +495,16 @@ export function Chart({
         y: pan.y + b.y * zoom,
       };
   }
-  useLayoutEffect(() => {
+  function applyCollapseAnchor() {
     const anchor = collapseAnchor.current;
     collapseAnchor.current = null;
     if (!anchor || view !== "map" || trace) return;
     const b = boxes.get(anchor.id);
     if (b) setPan({ x: anchor.x - b.x * zoom, y: anchor.y - b.y * zoom });
-  }, [collapsed]);
+  }
+  useLayoutEffect(() => {
+    applyCollapseAnchor();
+  });
   function toggleBranch(id: string) {
     anchorBranch(id);
     setCollapsed((current) => {

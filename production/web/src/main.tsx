@@ -293,21 +293,29 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
     setError("");
     await loadProject(id, false, selectedIntent);
   }
+  // The polling subscription retains the original session-lifetime handlers;
+  // child callbacks continue to capture their own render-bound intent.
+  const initialPolling = useRef({ loadProject, refreshLists });
+  const latestOpen = useRef(open);
+  latestOpen.current = open;
+  const selectedID = refresh.projectID;
   useEffect(() => {
+    const initial = initialPolling.current;
     refresh.connectPolling(
-      () => loadProject(refresh.projectID, true, refresh.capture()),
+      () => initial.loadProject(refresh.projectID, true, refresh.capture()),
       () => !currentUI.current.paused,
     );
-    void refreshLists();
+    void initial.refreshLists();
     return () => refresh.close();
-  }, []);
+  }, [refresh]);
   useEffect(() => {
-    if (user && !project && !refresh.projectID && projects.length)
-      void open(projects[0].id);
-  }, [user, project, projects]);
+    if (user && !project && !selectedID && projects.length)
+      void latestOpen.current(projects[0].id);
+  }, [user, project, projects, selectedID]);
   useEffect(
     () => refresh.updatePolling(),
     [
+      refresh,
       project,
       preview,
       taskEditor,
