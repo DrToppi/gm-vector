@@ -6,6 +6,7 @@ import {
   type RenderHookResult,
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { useLayoutEffect, useRef } from "react";
 import { useWorkspaceController } from "../src/useWorkspaceController";
 import { Workspace } from "../src/Workspace";
 import { advanceSession } from "../src/api";
@@ -46,6 +47,35 @@ async function mountController(f: FetchFixture) {
 
 describe("real workspace coordination and view boundary", () => {
   const current = scenario();
+
+  it("preserves an explicit layout-time selection before the older passive auto-open runs", async () => {
+    const f = current();
+    workspaceRoutes(f);
+    const props = { user, onLogout: vi.fn() };
+    function useExplicitSelection() {
+      const controller = useWorkspaceController(props);
+      const opened = useRef(false);
+      useLayoutEffect(() => {
+        if (
+          !opened.current &&
+          controller.projects.length &&
+          !controller.project
+        ) {
+          opened.current = true;
+          void controller.open("B");
+        }
+      }, [controller]);
+      return controller;
+    }
+    let hook!: RenderHookResult<Controller, unknown>;
+    await act(async () => {
+      hook = renderHook(useExplicitSelection, { wrapper: Clock });
+    });
+    expect.soft(hook.result.current.project?.id).toBe("B");
+    expect.soft(f.find("GET", "/projects/A")).toHaveLength(0);
+    expect(f.find("GET", "/projects/B")).toHaveLength(1);
+    hook.unmount();
+  });
 
   it("keeps the new A through A→B→A and rejects callbacks from the former A generation", async () => {
     const f = current(),

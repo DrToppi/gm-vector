@@ -169,7 +169,6 @@ export function useWorkspaceController({
   const initialPolling = useRef({ loadProject, refreshLists });
   const latestOpen = useRef(open);
   latestOpen.current = open;
-  const selectedID = refresh.projectID;
   useEffect(() => {
     const initial = initialPolling.current;
     refresh.connectPolling(
@@ -180,9 +179,9 @@ export function useWorkspaceController({
     return () => refresh.close();
   }, [refresh]);
   useEffect(() => {
-    if (user && !project && !selectedID && projects.length)
+    if (user && !project && !refresh.projectID && projects.length)
       void latestOpen.current(projects[0].id);
-  }, [user, project, projects, selectedID]);
+  }, [user, project, projects, refresh]);
   useEffect(
     () => refresh.updatePolling(),
     [
