@@ -32,7 +32,7 @@ jobs:
       - name: Offline diagnostic crypto dependency
         run: sudo apt-get update && sudo apt-get install -y python3-cryptography nginx
       - run: python3 production/scripts/build.py
-      - name: Unit, integration and isolated browser E2E
+      - name: Frontend gates, unit, integration and isolated browser E2E
         run: /usr/bin/python3 production/scripts/verify.py all
         env:
           GMA_TEST_DSN: postgres://test:ci-disposable-only@127.0.0.1:15432/gma_planner_test?sslmode=disable

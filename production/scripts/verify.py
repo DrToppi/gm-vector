@@ -100,6 +100,12 @@ def main():
         return 0
 
     if args.suite in ('unit', 'all'):
+        run('Frontend typecheck', ['npm', 'run', 'check'], ROOT / 'web')
+        run('Frontend test/config typecheck', ['npm', 'run', 'check:tests'], ROOT / 'web')
+        run('Frontend correctness lint', ['npm', 'run', 'lint'], ROOT / 'web')
+        run('Frontend format check', ['npm', 'run', 'format:check'], ROOT / 'web')
+        run('Frontend component regression', ['npm', 'run', 'test:components'], ROOT / 'web')
+        run('Frontend gate negative controls', ['node', str(ROOT / 'scripts/frontend-tooling-check.cjs')])
         run('Verification gate unit', [sys.executable, '-m', 'unittest', 'discover',
                                       '-s', str(ROOT / 'scripts'), '-p', 'test_verify.py'])
         run('Backup manifest unit', [sys.executable, '-m', 'unittest', 'discover',

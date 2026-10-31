@@ -29,6 +29,32 @@ Actual executed checks, exit 0:
 - `node production/scripts/workspace-refresh-check.cjs`: existing coordinator
   unit checks plus all 17 existing browser scenarios, with assertions retained.
 
-New tooling diagnostics, rule repairs, formatting, component tests, extraction,
-gesture/keyboard additions, full runner, CI and final independent review remain
+## Tooling and mechanical checkpoint
+
+Tooling commit db40db5: 12 exact dev pins, original production resolutions retained;
+`npm ls --all` exits 0 with no problems, all 149 installed engine constraints match,
+`npm audit` exits 0 with zero findings. The selected lint rules initially reject
+25 exhaustive-deps errors; both typechecks reject the single browser-timer/Node-type
+conflict. The component command rejects an empty suite. These red baseline results
+are preserved in the [reviewed repair appendix](wp-03-implementation.md).
+
+Mechanical commit fb2829e changes 48 frontend files. Actual format/localization and
+all 17 workspace browser checks pass; normalized emitted-JS and type-node ASTs
+match across 40 TS/TSX files. The explicitly reviewed normalizations join adjacent
+JSX literal children, remove redundant parenthesized types and standalone empty
+statements; they do not ignore arbitrary whitespace/string differences. Private
+normalization result SHA-256:
+`0f22e48bfa91d6348529bf3d64a3bb4f8d959f4fc43d33466c7f12c20b976f8b`.
+Prettier required a second pass for i18n.ts; final non-mutating check passed. The
+known timer type error remains, deliberately outside the mechanical commit.
+
+Actual negative controls (`node production/scripts/frontend-tooling-check.cjs`)
+exit 0: every authored TS/TSX file receives correctness/hook rules; each temporary
+lint, formatting and component defect makes its own command exit 1 for the expected
+reason; probes are removed. The initial sandbox attempt could not spawn a child
+Node process (EPERM); the authorized rerun executed the controls. The new frontend
+commands are required by the unified unit/all runner and therefore existing CI.
+
+Rule repairs, real component scenarios, extraction, native gesture/keyboard
+additions, full runner, exact-source CI and final independent review remain
 pending. No merge, deployment or operational readiness is claimed.
