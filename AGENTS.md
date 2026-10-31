@@ -8,6 +8,11 @@ implementation or deployment.
 
 ## Current work mode
 
+This docs/operational-readiness branch is documentation-only preparation for
+WP-05. D09/D10/D13 in docs/remediation/2026-10-30/wp-05-decisions.md are proposed;
+do not implement them before human selection, WP-03 acceptance and a bounded
+WP-05 plan. The implementation history below does not waive this branch limit.
+
 The user explicitly resumed work. The verified updater was deployed and its host
 service enabled; WP-01 is independently accepted at 5812b2c, WP-02 at 400ae188 and
 WP-04 at e97971d. WP-03 implementation follows under accepted D07 A/D08 A. Its

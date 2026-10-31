@@ -42,6 +42,10 @@ under D07 A/D08 A awaits final verification and independent acceptance.
 
 ## Planned remediation
 
+[WP-05 admission choices](remediation/2026-10-30/wp-05-decisions.md) compare three
+browser, vulnerability-policy and recovery options. D09/D10/D13 need human
+selection; their recommendations are not implementation approval.
+
 The [2026-10-30 remediation programme](remediation/2026-10-30/README.md) is currently
 **in progress, now verifying WP-03**. The user approved starting with the
 separate updater, followed by the ordered work packages. WP-01/WP-02/WP-04 have
