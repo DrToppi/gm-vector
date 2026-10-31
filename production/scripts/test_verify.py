@@ -99,3 +99,39 @@ class FocusedHistoryVerification(unittest.TestCase):
             self.assertEqual(run.call_count, 1)
             self.assertIn('^' + test + '$', run.call_args.args[0])
             self.assertEqual(run.call_args.kwargs['env']['GMA_TEST_DSN'], 'postgres://localhost/gma_planner_test')
+
+
+class FocusedBrowserVerification(unittest.TestCase):
+    def test_focus_cannot_masquerade_as_complete_other_suites(self):
+        for suite in ('all', 'unit', 'integration'):
+            with self.subTest(suite=suite), \
+                 patch('sys.argv', ['verify.py', suite, '--only-browser-api']), \
+                 patch('sys.stderr', new_callable=io.StringIO), patch('subprocess.run') as run:
+                with self.assertRaises(SystemExit) as stopped:
+                    main()
+                self.assertEqual(stopped.exception.code, 2)
+                run.assert_not_called()
+
+    def test_focus_refuses_a_real_database_before_build(self):
+        with patch('sys.argv', ['verify.py', 'e2e', '--only-browser-api']), \
+             patch.dict(os.environ, {'GMA_GO_BIN': 'go', 'GMA_TEST_DSN': 'postgres://localhost/planner'}), \
+             patch('sys.stderr', new_callable=io.StringIO), patch('subprocess.run') as run:
+            with self.assertRaises(SystemExit) as stopped:
+                main()
+            self.assertEqual(stopped.exception.code, 2)
+            run.assert_not_called()
+
+    def test_focus_builds_and_requires_actual_named_browser_pass(self):
+        report = json.dumps({'Action': 'pass', 'Test': 'TestBrowserE2E'})
+        result = subprocess.CompletedProcess([], 0, stdout=report, stderr='')
+        with patch('sys.argv', ['verify.py', 'e2e', '--only-browser-api']), \
+             patch.dict(os.environ, {'GMA_GO_BIN': 'go', 'GMA_TEST_DSN': 'postgres://localhost/gma_planner_test'}), \
+             patch('sys.stdout', new_callable=io.StringIO) as output, \
+             patch('subprocess.run', return_value=result) as run:
+            self.assertEqual(main(), 0)
+            self.assertIn('not full E2E acceptance', output.getvalue())
+            self.assertEqual(run.call_count, 2)
+            self.assertEqual(run.call_args_list[0].args[0], ['npm', 'run', 'build'])
+            self.assertIn('^TestBrowserE2E$', run.call_args.args[0])
+            self.assertEqual(run.call_args.kwargs['env']['GMA_E2E'], '1')
+            self.assertEqual(run.call_args.kwargs['env']['GMA_TEST_DSN'], 'postgres://localhost/gma_planner_test')

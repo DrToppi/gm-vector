@@ -252,6 +252,9 @@ async function main() {
   assert.equal(await mapTransform(),flowCamera,'trace restores camera');
   assert.equal((await read('/projects/'+id)).project.revision,viewRevision,'map modes do not change project revision');
 
+  await require('./wp03-browser-interactions.cjs')({send,evaluate,wait,read,click,field,reload,
+    originalProject:id,sampleTask:child,setPhase});
+
   // configure real per-project weekly capacity in the UI.
   setPhase('employee-participation');
   const employeeName='Тестов Макет'; // Synthetic fixture for the accepted surname-first initials contract.

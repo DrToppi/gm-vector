@@ -42,6 +42,8 @@ def main():
                         help='explicit file with disposable gma_planner_test DSN; otherwise GMA_TEST_DSN')
     parser.add_argument('--only-test', choices=FOCUSED_INTEGRATION_TESTS,
                         help='run one named integration check; never a full-suite acceptance')
+    parser.add_argument('--only-browser-api', action='store_true',
+                        help='build web and run only real-API browser E2E; not full-suite acceptance')
     parser.add_argument('--evidence-file', type=Path,
                         help='new private log file for all child output; existing files are refused')
     parser.add_argument('--nginx-bin', type=Path,
@@ -49,6 +51,8 @@ def main():
     args = parser.parse_args()
     if args.only_test and args.suite != 'integration':
         parser.error('--only-test requires the integration suite; all/unit/e2e stay complete')
+    if args.only_browser_api and (args.suite != 'e2e' or args.only_test):
+        parser.error('--only-browser-api requires e2e; all/unit/integration stay complete')
     if args.evidence_file:
         fd = os.open(args.evidence_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         try:
@@ -99,12 +103,22 @@ def main():
             extra={'GMA_TEST_DSN': dsn}, expected_test=args.only_test)
         return 0
 
+    if args.only_browser_api:
+        print('Focused real-API browser check only; this is not full E2E acceptance.', flush=True)
+        run('Frontend build for E2E', ['npm', 'run', 'build'], ROOT / 'web')
+        run('Browser E2E (real API and PostgreSQL)',
+            [go, 'test', '-race', '-count=1', '-json', '-timeout', '5m',
+             '-run', '^TestBrowserE2E$', './internal/planner'],
+            extra={'GMA_TEST_DSN': dsn, 'GMA_E2E': '1'}, expected_test='TestBrowserE2E')
+        return 0
+
     if args.suite in ('unit', 'all'):
         run('Frontend typecheck', ['npm', 'run', 'check'], ROOT / 'web')
         run('Frontend test/config typecheck', ['npm', 'run', 'check:tests'], ROOT / 'web')
         run('Frontend correctness lint', ['npm', 'run', 'lint'], ROOT / 'web')
         run('Frontend format check', ['npm', 'run', 'format:check'], ROOT / 'web')
         run('Frontend component regression', ['npm', 'run', 'test:components'], ROOT / 'web')
+        run('Frontend module boundaries', ['node', str(ROOT / 'scripts/frontend-boundaries-check.cjs')])
         run('Frontend gate negative controls', ['node', str(ROOT / 'scripts/frontend-tooling-check.cjs')])
         run('Verification gate unit', [sys.executable, '-m', 'unittest', 'discover',
                                       '-s', str(ROOT / 'scripts'), '-p', 'test_verify.py'])

@@ -29,7 +29,9 @@ async function walk(directory) {
 }
 async function main() {
   const eslint = new ESLint({ cwd: web });
-  const files = [...await walk(path.join(web, 'src')), ...await walk(path.join(web, 'tests'))];
+  const configs = (await fs.readdir(web)).filter(filename => /\.(?:ts|tsx|mts|cts)$/.test(filename))
+    .map(filename => path.join(web, filename));
+  const files = [...await walk(path.join(web, 'src')), ...await walk(path.join(web, 'tests')), ...configs];
   assert(files.length > 20, 'real authored file inventory, not an empty glob');
   for (const filename of files) {
     assert.equal(await eslint.isPathIgnored(filename), false, 'authored source included: ' + path.basename(filename));
@@ -44,9 +46,9 @@ async function main() {
   fails('format', process.execPath, [path.join(web, 'node_modules/prettier/bin/prettier.cjs'),
     '--check', format], /Code style issues/);
   const component = await probe('tests/wp03-gate-probe.test.ts',
-    "import { it, expect } from 'vitest';\nit('WP03 expected gate failure', () => expect('actual').toBe('expected'));\n");
+    "import { it, expect } from 'vitest';\nit('WP03 expected gate failure', () => expect('actual', 'WP03_ASSERTION_NEGATIVE_CONTROL').toBe('expected'));\n");
   fails('component', process.execPath, [path.join(web, 'node_modules/vitest/vitest.mjs'),
-    'run', component], /WP03 expected gate failure/);
+    'run', component], /WP03_ASSERTION_NEGATIVE_CONTROL/);
   console.log('Frontend gate negative controls PASS: authored files covered; lint/format/component each reject a distinct temporary defect.');
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1; })

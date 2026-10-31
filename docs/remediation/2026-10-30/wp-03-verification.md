@@ -58,3 +58,43 @@ commands are required by the unified unit/all runner and therefore existing CI.
 Rule repairs, real component scenarios, extraction, native gesture/keyboard
 additions, full runner, exact-source CI and final independent review remain
 pending. No merge, deployment or operational readiness is claimed.
+
+## Repair and native-input checkpoints (2026-10-31)
+
+Repair commit 0029f1f changes 16 source files within the reviewed appendix: all
+25 lifecycle findings plus the type-only DOM timer and formatter/iterator
+refinements. No lint suppression was introduced. Actual lint, both typechecks and
+localization pass. The unified E2E attempt also completed frontend build and all
+existing workspace/history/multi-year/updater/session browser regressions before
+the new real-API native scenario failed; that overall attempt is **FAIL**, not an
+API/E2E acceptance.
+
+New native fixture failures were investigated independently of runtime repairs:
+
+1. Port dragging opened the real link editor, but the initial CDP Enter lacked a
+   text payload and did not produce the intended native submit. Adding `text` and
+   `unmodifiedText` plus an actual submit-event assertion allowed link preview/save.
+   [Chromium's protocol definition](https://raw.githubusercontent.com/ChromeDevTools/devtools-protocol/master/pdl/domains/Input.pdl)
+   documents those keyboard fields; no application submit bypass was added.
+2. After traversing a long modal by Tab, the header cross was outside its scrolled
+   viewport. Scroll-to-view plus an actual elementFromPoint assertion made the
+   native click close the dialog. The test still dispatches pointer input.
+3. The unchanged focus-return assertion then **still failed** after the dialog
+   closed. Task Enter, draft-retaining Escape, Tab/Shift-Tab containment, visible
+   computed outline and all preceding native gesture/link cases executed first.
+   This is the actual 03-09 defect under repair; its historical origin is unproven.
+
+The independently reviewed Modal layout-cleanup correction is documented before
+code in the [bounded appendix](wp-03-implementation.md). Preserve the existing
+focus assertion; no full E2E PASS until it and subsequent scenarios execute.
+Private logs SHA-256:
+
+- Full pre-extraction E2E attempt: `5a41fe86954df89b692baa5251a2b94b739300def105471237a9ea69e0d1d947`.
+- Isolated native focus RED: `9cb2b30ce61a89f111a409ec6eeb0f1c00dfe737770d9f1275b3553348200953`.
+
+The runner now offers explicitly labelled `e2e --only-browser-api` for focused
+investigation. It still builds frontend and requires the actual named Go test
+PASS on the disposable database; it cannot be used with all/unit/integration or
+silently pass a skip. Thirteen runner-guard unit tests actually passed, including
+the new scope/database/build/evidence controls. The full all/e2e default retains
+all established regressions. Final exact-SHA checks remain required.

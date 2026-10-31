@@ -240,6 +240,48 @@ its existing key transition; preserve that trigger, not only final unmount.
 
 Adding Node test types exposed one real test-project type error in
 `workspaceRefresh.ts`: the existing global `ReturnType<typeof setTimeout>` becomes
-Node `Timeout` while the implementation uses `window.setTimeout`'s number. Use
-`ReturnType<typeof window.setTimeout>` as a type-only correction; do not alter the
+Node `Timeout` while the implementation uses the browser timer number. The first
+`ReturnType<typeof window.setTimeout>` attempt still selected the ambient Node
+overload, so use the DOM interface `ReturnType<Window['setTimeout']>` as a type-only
+correction; do not alter the
 timer implementation, interval, cancellation or polling logic.
+
+Further measured lint refinements, recorded before their edits: the guarded
+each-commit Chart layout effects trigger the selected rule's direct-setter/no-deps
+heuristic. Extract named `reconcileCamera` / `applyCollapseAnchor` routines and call
+them from the each-commit effects, preserving the guards and their order. No rule
+suppression, memoization, or new camera transition is introduced. Prettier's
+formatted Intl Segmenter iterator chain triggered `no-unexpected-multiline`;
+introduce a local `segments` value and invoke its identical iterator once. Preserve
+the initials fallback and all original Unicode/locale tests.
+
+## Native keyboard finding within 03-09 (2026-10-31)
+
+Actual Chromium/API/PostgreSQL checks at runtime source 0029f1f established a red
+focus-return assertion: Enter opens the task, Escape retains its draft, native
+Tab/Shift-Tab stays inside the modal with a visible computed focus outline, and an
+actual hit-tested cross click closes it, but focus does not return to the opener.
+The same run passed real bar movement, wheel/pan/node positioning, port-created
+links, bundle endpoint highlighting/editing, cycle rejection in the dialog and
+Enter/error/corrected retry. This is not a full E2E PASS: execution stops at focus.
+The check has not established which historical revision first had this defect.
+
+Earlier fixture failures are separate: CDP Enter needed its text payload; after a
+long Tab traversal, the cross needed scrolling into view before a hit-tested click.
+Those test corrections preserved the native-input and application assertions.
+No timeout or application protection was relaxed.
+
+Independently reviewed bounded correction for the required keyboard contract: retain
+Modal's exact captured DOM node/showModal/close lifecycle, but use a layout effect
+so native close runs before React removes the dialog. The current passive cleanup
+runs after removal and is suspected of losing browser opener restoration. Obtain
+READ-ONLY review of this diagnosis/fix before code, commit it separately from
+module movement, then rerun the unchanged native focus assertion and prior modal/
+session/draft checks. Do not introduce an application-wide focus registry or
+custom cross-session opener restoration policy.
+
+A different READ-ONLY reviewer checked the source, actual failure log and
+[React layout-effect lifecycle](https://react.dev/reference/react/useLayoutEffect)
+versus [passive-effect cleanup](https://react.dev/reference/react/useEffect), and
+found this narrow fix in scope. Code may follow after the module-move commit;
+the causal hypothesis still requires unchanged native assertion RED→GREEN.

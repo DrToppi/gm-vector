@@ -10,8 +10,10 @@ implementation or deployment.
 
 The user explicitly resumed work. The verified updater was deployed and its host
 service enabled; WP-01 is independently accepted at 5812b2c, WP-02 at 400ae188 and
-WP-04 at e97971d. WP-03 planning follows under accepted D07 A/D08 A; freeze its
-tool versions, rule inventory, symbol map and bounded verification plan before code.
+WP-04 at e97971d. WP-03 implementation follows under accepted D07 A/D08 A. Its
+tool versions, rule inventory, symbol map and measured repair appendix passed a
+READ-ONLY plan gate in docs/remediation/2026-10-30/wp-03-implementation.md.
+Mechanical formatting is separate from bounded lint repairs and extraction.
 See [the updated checkpoint](docs/implementation-checkpoint.md).
 
 The user approved implementation beginning with the Git updater, followed by
