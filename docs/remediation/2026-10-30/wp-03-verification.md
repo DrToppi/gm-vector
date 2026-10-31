@@ -208,3 +208,25 @@ The existing matched backup/configuration fixture passed within its established
 boundary; restored password/TOTP/invitation/outbox usability and separately managed
 report/TLS volumes still need WP-05 evidence. Firefox/WebKit, all-image gating and
 the 60-minute operational soak are also WP-05, not claimed by this package.
+
+## Reproduced late D03 race and correction
+
+The reviewer then found an execution-time guard discrepancy, not an import issue:
+0029 replaced live `!refresh.projectID` with captured `!selectedID`. An actual
+React test at 563d64e reproduced it: a caller layout effect explicitly opens B
+when the catalog arrives, then an older pending passive auto-open selects A.
+Expected B/zero GET A, observed A/one GET A. The test uses the real controller,
+transport and guards without sleeps. RED JSON SHA-256:
+`37762c724f7ccc08d0ad4372031b2faedd9f0b3cba36cbe3063e2807da40e09f`.
+
+The fix was documented before code at 95e1014 and independently reviewed within
+the existing D03 contract. Coherent source/regression commit 7923a0e restores the
+live coordinator guard and stable coordinator dependency, removes the unused
+captured ID, and preserves polling snapshots/handlers/child intents. Actual
+GREEN: all 43 components, including seven Workspace cases; app/test types and
+whole-web lint/format pass. GREEN JSON SHA-256:
+`5bef0d0c5a324597dfb8fa020bcdcee7cfc168a74b8450693893b930e5c52cb3`.
+
+The previously successful 41/42-case runs do not accept this later source change.
+Final full regression, exact corrected-source CI and final independent review
+remain mandatory. WP-03 is not accepted at this checkpoint.
