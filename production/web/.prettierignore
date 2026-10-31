@@ -1,0 +1,5 @@
+node_modules/
+dist/
+coverage/
+src/locales/
+package-lock.json

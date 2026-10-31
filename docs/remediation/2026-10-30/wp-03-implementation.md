@@ -201,3 +201,45 @@ example Argon2), so calling x/crypto unused would be incorrect. This is a dated
 follow-up, not an identifier supplied by the earlier default CI log, a waiver,
 or a claim that every dependency is vulnerability-free. WP-05 retains policy and
 all-image scanning decisions.
+
+## Measured phase 1 and bounded repairs (independently reviewed)
+
+The selected rules ran on 43 files: exit 1, **25 errors / 0 warnings**, all
+`react-hooks/exhaustive-deps`; other selected rules produced no findings. Private
+JSON evidence SHA-256:
+`21d17098234c0cc0fa6cc27c3d16c7553521186fd2ec3c162e7cfbf1a7f2a7aa`.
+This is a red baseline, not an exception or clean lint claim. Exact dev pins
+resolved, original production package version/integrity/resolved values were
+preserved and npm audit exited 0 with zero findings. Engine/full-tree checks are
+completed: `npm ls --all` exited 0 with no problems/unmet peers and all 149
+installed package engine constraints matched. Both application and test typechecks
+currently reject the single timer type conflict below. The formatter reports
+48 files; the component command rejects an empty suite instead of passing it.
+
+| Files / number of findings | Bounded correction and required preservation |
+| --- | --- |
+| `Auth` 1 | Stable snapshot of initial enrollment/token for initial resume; stable session API dependency. Editing a token or receiving one after manual bootstrap must not trigger automatic resume. |
+| `BugReport` 1 | Stable `loadKey` callback depending only on stable API; initial key fetch and explicit retry semantics remain. |
+| `Chart` 2 | Keep camera's previous-key guard and consume-once collapse anchor, run their existing guarded layout effects each commit; do not add changing boxes/fit dependencies or refit on pan/zoom. Prove native wheel/drag plus existing camera/fold/Trace cases. |
+| `DirectorySettings` 1; `Panels` 3 | Stable read callbacks with stable API and explicit project identifier where applicable; preserve existing refresh triggers. Do not redesign legacy TimePanel or administration. |
+| `Editors` 3 | Modal cleanup captures the actual dialog element; DirectorySearch stable API and cancellation invalidation counters remain. Extraction later moves these symbols without changing their lifetime. |
+| `EmployeeAdministration` 2; `TaskComments` 1 | Add stable API dependencies; preserve current path/reload triggers and lifetime. |
+| `HistoryExportActions` 1; `ProjectImport` 1; `TaskEffort` 1 | Keep monotonic generation invalidation at unmount. Represent it with a named stable invalidation callback, not a captured numeric value or DOM-ref cleanup; retain session guards and every owned print-window cleanup. |
+| `TaskHistory` 3 | Stable invalidation callback for generation/sequence. Complete exact stable/primitive fetch dependencies; remove the captured `pager.revision` read and normalize it with a functional updater only when changed. Do not add `pager.revision` as a fetch dependency: normalization must not issue another first-page request. Fixed first-page continuation/expiry and one fetch per signature remain. |
+| `UpdatesPanel` 2 | Stable current/reset/status-read callbacks; preserve completion-driven bounded polls, uncertain-command reconciliation and no automatic mutation retry. |
+| `main` 3 | Preserve initial polling handler snapshot through a stable bridge. Read latest open handler via ref only in the existing auto-open effect, with the selected project identifier as an explicit primitive dependency; keep each child callback's render-bound intent. Add stable coordinator dependency to polling update effect. App/auth/logout have no finding and remain untouched. |
+
+These are narrowly required lint-correctness edits, not decomposition of Chart,
+Panels, authentication or history. No global suppression is allowed. Any further
+finding or behavioural conflict must be recorded before changing its contract.
+No lifecycle repair had been made at the review checkpoint. A different READ-ONLY
+reviewer inspected the actual source and all 25 diagnostics, permitting sequential
+mechanical formatting followed by these bounded repairs and regression checks.
+This is a work gate, not final acceptance. TaskEffort's invalidation also runs on
+its existing key transition; preserve that trigger, not only final unmount.
+
+Adding Node test types exposed one real test-project type error in
+`workspaceRefresh.ts`: the existing global `ReturnType<typeof setTimeout>` becomes
+Node `Timeout` while the implementation uses `window.setTimeout`'s number. Use
+`ReturnType<typeof window.setTimeout>` as a type-only correction; do not alter the
+timer implementation, interval, cancellation or polling logic.
