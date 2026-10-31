@@ -132,6 +132,12 @@ describe("task draft and effort ownership", () => {
     ).toBe("Retry this title");
     fireEvent.submit(view.container.querySelector("form")!);
     expect(controls.onSave).toHaveBeenCalledTimes(2);
+    const dialog = view.container.querySelector("dialog")!;
+    fireEvent.click(dialog);
+    const cancel = new Event("cancel", { cancelable: true });
+    fireEvent(dialog, cancel);
+    expect(cancel.defaultPrevented).toBe(true);
+    expect(controls.onClose).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: tr("ma7a4033657") }));
     expect(controls.onClose).toHaveBeenCalledTimes(1);
     expect(f.requests.filter((request) => request.method !== "GET")).toEqual(
@@ -152,6 +158,9 @@ describe("task draft and effort ownership", () => {
     const effortSubmit = screen.getByRole("button", {
       name: tr("m8d6ba6bac1"),
     });
+    fireEvent.change(screen.getByLabelText(tr("m80492ccc34")), {
+      target: { value: "Keep this rejected fact draft" },
+    });
     fireEvent.click(effortSubmit);
     fireEvent.click(screen.getByRole("button", { name: tr("ma7a4033657") }));
     expect(controls.onClose).not.toHaveBeenCalled();
@@ -170,6 +179,9 @@ describe("task draft and effort ownership", () => {
       422,
     );
     expect(screen.getByRole("alert")).toBeTruthy();
+    expect(
+      (screen.getByLabelText(tr("m80492ccc34")) as HTMLTextAreaElement).value,
+    ).toBe("Keep this rejected fact draft");
     fireEvent.click(screen.getByRole("button", { name: tr("ma7a4033657") }));
     expect(controls.onClose).toHaveBeenCalledTimes(1);
   });
