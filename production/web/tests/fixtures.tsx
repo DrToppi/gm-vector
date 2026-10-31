@@ -20,6 +20,7 @@ import {
   type Project,
   type Employee,
   type User,
+  type Calendar,
 } from "../src/types";
 
 export function deferred<T>() {
@@ -90,6 +91,29 @@ export function project(id = "A"): Project {
         exceptions: {},
       },
     ],
+  };
+}
+
+export function calendar(): Calendar {
+  const days: Calendar["days"] = {};
+  for (
+    let value = Date.UTC(2026, 0, 1);
+    value < Date.UTC(2027, 0, 1);
+    value += 86400000
+  ) {
+    const date = new Date(value);
+    days[date.toISOString().slice(0, 10)] = {
+      working: date.getUTCDay() !== 0 && date.getUTCDay() !== 6,
+      shortened: false,
+    };
+  }
+  return {
+    id: "calendar-2026",
+    year: 2026,
+    title: "Synthetic calendar",
+    source: "Synthetic component fixture",
+    checksum: "0".repeat(64),
+    days,
   };
 }
 

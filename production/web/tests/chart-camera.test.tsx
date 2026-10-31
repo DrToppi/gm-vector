@@ -41,7 +41,7 @@ describe("map camera guarded effects", () => {
         .querySelector("[data-map-content]")!
         .getAttribute("transform");
     const fitted = camera();
-    fireEvent.click(screen.getByRole("button", { name: "+", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "+" }));
     const adjusted = camera();
     expect(adjusted).not.toBe(fitted);
     view.rerender(
