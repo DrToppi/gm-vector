@@ -1,14 +1,16 @@
-# Implementation checkpoint — 2026-10-30
+# Implementation checkpoint — updated 2026-10-31
 
 Status: **RESUMED BY EXPLICIT USER REQUEST**. The pause below is historical.
 The reviewed updater commit has now been deployed and its host service enabled.
-Current work: WP-03 candidate after independently accepted WP-01, WP-02 and WP-04.
-Accepted D07 A/D08 A were implemented in feature/frontend-modules: dev tooling,
-separate formatting, bounded lifecycle repairs, 12 extracted modules and component
-regressions. Native focus RED became GREEN after a separate Modal cleanup fix.
-Final full-run/CI/independent acceptance is pending; see the
-[WP-03 evidence](remediation/2026-10-30/wp-03-verification.md). No main merge or
-working-instance update was performed.
+WP-03 is **PASS — INDEPENDENTLY VERIFIED** at
+9b03c900370f92cf4f1e7ec449d510833e34f9ff in feature/frontend-modules: pinned tooling,
+separate formatting, 12 extracted modules, 43 component cases, actual native
+keyboard/gesture coverage and RED→GREEN fixes for focus restoration and selection
+ordering. Full local checks, exact-source CI and READ-ONLY review passed; see the
+[WP-03 evidence](remediation/2026-10-30/wp-03-verification.md).
+Current work is [WP-05 planning](remediation/2026-10-30/wp-05-decisions.md);
+D09/D10/D13 remain unapproved. No main merge, release or remediation deployment
+was performed. The historical pause below does not describe the current runtime.
 
 ## Completed and verified
 

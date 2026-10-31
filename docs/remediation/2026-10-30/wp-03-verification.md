@@ -1,6 +1,7 @@
 # WP-03 verification record
 
-Status: **IN PROGRESS — NO IMPLEMENTATION ACCEPTANCE**.
+Status: **PASS — INDEPENDENTLY VERIFIED** for implementation
+`9b03c900370f92cf4f1e7ec449d510833e34f9ff`, accepted on 2026-10-31.
 See [bounded plan](wp-03-implementation.md). Baseline: accepted WP-04 e97971d,
 documentation cc19e2a, plan dd0e6f2, branch `feature/frontend-modules`.
 
@@ -230,3 +231,49 @@ whole-web lint/format pass. GREEN JSON SHA-256:
 The previously successful 41/42-case runs do not accept this later source change.
 Final full regression, exact corrected-source CI and final independent review
 remain mandatory. WP-03 is not accepted at this checkpoint.
+
+## Final exact-source acceptance
+
+The preceding red/pending checkpoints are historical. The corrected source was
+clean at full-run launch and remains the accepted implementation SHA:
+**9b03c900370f92cf4f1e7ec449d510833e34f9ff**.
+
+| Final gate | Actual result |
+| --- | --- |
+| Unified local `verify.py all` | PASS, exit 0; frontend gates, unit/race, required API/security/history/calendar/export/recovery and all established browser regressions |
+| Component layer | 43 cases in seven files passed, including member status payload, draft preservation and actual layout/passive explicit-selection regression |
+| Structural/tool controls | 50-module cycle/boundary check, app/test types, zero-warning lint, format check, three deliberate negative controls and locale checks passed |
+| Security/history compatibility | 448 access cells, zero unexpected results; required current/legacy API, cursor/export/timezone and matched DB/config recovery fixtures passed within their stated scope |
+| Native real API/PostgreSQL | PASS 24.55 seconds; native helper 4285 ms, including Gantt/map/links/bundles, keyboard menus, draft/Escape/focus and later identity/export/report paths |
+| Independent corrected unit run | PASS, exit 0; 43 cases plus type/lint/format/module/negative-control and established Go-race/pure/crypto checks |
+| [Exact-source CI 41186423535](https://github.com/DrToppi/gm-vector/actions/runs/41186423535) | SUCCESS at the accepted SHA; locked build, full runner, OpenAPI consistency, npm audit, Go reachability gate, images/proxy policy, HTTPS, packaged install and updater/migration recovery |
+| Publication privacy | 19 commits scanned; no detected leaks; public documentation uses synthetic examples and private raw artifacts stay outside Git |
+
+The different READ-ONLY reviewer checked actual code, imported bindings, controller
+return/view mapping, the full 03-01–14 matrix, red/green receipts and complete
+corrected-all log. They independently ran the corrected unit entry point and
+directly confirmed the final CI SHA and every completed step. All identified
+code/evidence blockers were resolved. Formal verdict:
+**WP-03 PASS — INDEPENDENTLY VERIFIED** for the implementation above.
+
+Final private evidence SHA-256:
+
+- Corrected local full run: `047bddfed280f4fd456c7175f97f10f91d60a3eac0d69a862f7df266732adde0`.
+- Independent corrected unit: `5f4153d6cddf3e73c908db92c69831d055e01e9230a83509b2816772d274011d`.
+- Actual selection RED: `37762c724f7ccc08d0ad4372031b2faedd9f0b3cba36cbe3063e2807da40e09f`.
+- Focused selection GREEN: `5bef0d0c5a324597dfb8fa020bcdcee7cfc168a74b8450693893b930e5c52cb3`.
+
+Final JS is 688963 bytes / gzip 240313 by the same Python gzip method; CSS remains
+23278 / gzip 6028. Earlier selection timing observations remain explicitly
+synthetic diagnostics, not a final-source performance SLO. No arbitrary coverage
+percentage or universal equivalence/security claim is made.
+
+Limits remain: representative critical UI/locale/input paths rather than every
+combination; Chromium coverage here, Firefox/WebKit in WP-05; current proxy-only
+image vulnerability policy rather than all-image enforcement. The known required-
+module advisory follow-up is not a blanket waiver or proof all dependencies are
+clean. Optional profiling skips are not counted as new load-test passes. Full
+restored credentials/outbox/artifact recovery and the 60-minute operational soak
+remain in WP-05 under its unapproved choices. No main merge, release publication
+or working-instance remediation deployment occurred. A later documentation-only
+closure does not change this accepted implementation SHA.

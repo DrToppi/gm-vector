@@ -1,6 +1,9 @@
 # WP-03 bounded implementation plan
 
-Status: **IMPLEMENTED CANDIDATE — FINAL VERIFICATION AND REVIEW PENDING**.
+Status: **PASS — INDEPENDENTLY VERIFIED** at 9b03c90. See the
+[exact-source evidence](wp-03-verification.md). The plan/gates below record the
+sequence actually followed; historical pending checkpoints are superseded by that
+final acceptance, not silently counted as earlier passes.
 The user selected D07 A and D08 A. This plan applies those decisions after
 WP-04 acceptance at `e97971ddf5125b433f27e194b1be3144c3748d67`, with documentation
 closure `cc19e2a`. Work branch: `feature/frontend-modules`; no merge or deployment.

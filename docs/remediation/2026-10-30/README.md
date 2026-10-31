@@ -1,6 +1,6 @@
 # Bounded remediation programme
 
-Status: **WP-01/WP-02/WP-04 ACCEPTED; WP-03 FINAL VERIFICATION PENDING**. Updated: 2026-10-31.
+Status: **WP-01/WP-02/WP-04/WP-03 ACCEPTED; WP-05 AWAITS DECISIONS**. Updated: 2026-10-31.
 See the [current checkpoint](../../implementation-checkpoint.md). WP-01 and the
 separate Git updater have their own independent verification records.
 Owner approval is required for architectural choices before implementation.
@@ -21,8 +21,8 @@ WP-02 progress and actual baseline failures are in its
 | WP-01 | P1 | Reproducible multi-year schedules, including 2025–2027 | PASS — INDEPENDENTLY VERIFIED at 5812b2c |
 | WP-02 | P1 | No stale UI commits; measured read-path performance | PASS — INDEPENDENTLY VERIFIED at 400ae188 |
 | WP-04 | P2 | Complete time history and explicit time-zone semantics | PASS — INDEPENDENTLY VERIFIED at e97971d; [evidence](wp-04-verification.md) |
-| WP-03 | P2 | Bounded frontend modularisation and enforceable checks | Candidate implemented under D07 A/D08 A; [evidence](wp-03-verification.md), final exact-SHA gates/review pending |
-| WP-05 | P2 | All-image scanning, restore evidence, cross-browser/security gates | Proposed; release policy pending |
+| WP-03 | P2 | Bounded frontend modularisation and enforceable checks | PASS — INDEPENDENTLY VERIFIED at 9b03c90; [evidence](wp-03-verification.md) |
+| WP-05 | P2 | All-image scanning, restore evidence, cross-browser/security gates | Proposed; human D09/D10/D13 selections pending in [the checked packet](wp-05-decisions.md) |
 
 Read [baseline](baseline.md), [work packages and test matrix](work-packages.md),
 [WP-03 and WP-05](wp-03-05.md), [decision register](decisions.md), and [evidence/review protocol](evidence.md).

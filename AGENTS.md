@@ -9,11 +9,13 @@ implementation or deployment.
 ## Current work mode
 
 The user explicitly resumed work. The verified updater was deployed and its host
-service enabled; WP-01 is independently accepted at 5812b2c, WP-02 at 400ae188 and
-WP-04 at e97971d. WP-03 implementation follows under accepted D07 A/D08 A. Its
-tool versions, rule inventory, symbol map and measured repair appendix passed a
-READ-ONLY plan gate in docs/remediation/2026-10-30/wp-03-implementation.md.
-Mechanical formatting is separate from bounded lint repairs and extraction.
+service enabled; WP-01 is independently accepted at 5812b2c, WP-02 at 400ae188,
+WP-04 at e97971d and WP-03 at 9b03c90. WP-03 evidence is recorded in
+docs/remediation/2026-10-30/wp-03-verification.md. WP-05 is planning-only until
+the human selects D09/D10/D13 in
+docs/remediation/2026-10-30/wp-05-decisions.md and its bounded plan is frozen.
+The question cards are pending; recommendations are not approval. Do not install
+WP-05 dependencies or change code/services from those proposals yet.
 See [the updated checkpoint](docs/implementation-checkpoint.md).
 
 The user approved implementation beginning with the Git updater, followed by
