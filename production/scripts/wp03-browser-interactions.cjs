@@ -74,6 +74,14 @@ module.exports = async function interactions({ send, evaluate, wait, read, click
   for (let n = 0; n < 100 && (await state()).tasks.find(t => t.id === ids[0]).start !== '2026-10-27'; n++) await sleep(30);
   assert.equal((await state()).tasks.find(t => t.id === ids[0]).start, '2026-10-27', 'actual bar move saved four date days');
   assert.equal(await evaluate("!!document.querySelector('dialog[open]')"), false, 'gesture applies without preview');
+  const movedRevision = (await state()).revision;
+  await drag(await rect(port(ids[0], 'out')), await rect(port(ids[1], 'in')));
+  await wait("document.querySelectorAll('dialog form select').length===3", 'Gantt ports open link editor');
+  assert.equal(await evaluate("document.querySelectorAll('dialog form select')[0].value"), ids[0]);
+  assert.equal(await evaluate("document.querySelectorAll('dialog form select')[1].value"), ids[1]);
+  await key('Escape', 'Escape', 27);
+  await wait("!document.querySelector('dialog')", 'cancel Gantt link');
+  assert.equal((await state()).revision, movedRevision, 'cancelled Gantt wire does not mutate the project');
 
   setPhase('wp03-native-map-camera');
   await click('Майнд-мэп'); await click('Вписать');
@@ -208,5 +216,5 @@ module.exports = async function interactions({ send, evaluate, wait, read, click
   const back = await read('/projects/' + originalProject);
   assert(back.project.id === originalProject, 'original fixture preserved');
   await reload("document.querySelector('.project-header h1')?.textContent==='E2E synthetic project'", 'original fixture restored');
-  console.log('WP03 native browser PASS: bar save, wheel/pan/node, port links/edit/cycle/retry, bundle selection/endpoints, Tab/Shift-Tab/Enter/Escape/focus/draft; elapsed_ms=' + Math.round(performance.now() - started));
+  console.log('WP03 native browser PASS: bar save/Gantt wire cancel, wheel/pan/node, port links/edit/cycle/retry, bundle selection/endpoints, Tab/Shift-Tab/Enter/Escape/focus/draft; elapsed_ms=' + Math.round(performance.now() - started));
 };

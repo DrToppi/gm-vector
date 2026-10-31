@@ -6,8 +6,8 @@ corresponding functionality is implemented.
 
 Current work is [resumed from the documented checkpoint](implementation-checkpoint.md).
 The verified updater is deployed; WP-01, WP-02 and WP-04 are independently accepted.
-WP-03 [bounded planning](remediation/2026-10-30/wp-03-implementation.md) is next
-under accepted D07 A/D08 A.
+WP-03 [bounded implementation](remediation/2026-10-30/wp-03-implementation.md)
+under D07 A/D08 A awaits final verification and independent acceptance.
 
 ## Install and operate
 
@@ -43,7 +43,7 @@ under accepted D07 A/D08 A.
 ## Planned remediation
 
 The [2026-10-30 remediation programme](remediation/2026-10-30/README.md) is currently
-**in progress, now planning WP-03**. The user approved starting with the
+**in progress, now verifying WP-03**. The user approved starting with the
 separate updater, followed by the ordered work packages. WP-01/WP-02/WP-04 have
 exact-SHA acceptance records; D07 A/D08 A are accepted for WP-03. It defines WP-01
 through WP-05, the implementation order,

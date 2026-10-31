@@ -3,7 +3,9 @@
 const assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),http=require('node:http'),{spawn}=require('node:child_process'),vm=require('node:vm');
 const {build,buildSync}=require('../web/node_modules/esbuild');
 const {instrumentWorkspace,checkInstrumentation}=require('./workspace-fixture-source.cjs');
-const web=path.resolve(__dirname,'../web'),sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const alternate=process.argv.indexOf('--source-web'),benchmark=process.argv.includes('--benchmark-selection');
+assert(alternate<0||benchmark,'alternate source is only for explicitly labelled synthetic benchmarking');
+const web=alternate>=0?path.resolve(process.argv[alternate+1]):path.resolve(__dirname,'../web'),sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 let server,chrome,socket,profile,sequence=0,delivery=0,scenario='',employeeName='Old synthetic employee',states={},gates=[],held=[],requests=[];
 const pending=new Map(),browserErrors=[];
 function chromeDiagnostic(stderr){return stderr.replace(/\x1b\[[0-9;]*[A-Za-z]/g,'').replace(/[\x00-\x08\x0b-\x1f\x7f]/g,'').replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi,'<url>').replace(/\b[A-Z]:\\[^\s"'<>]+/gi,'<path>').replace(/\/[^\s"'<>\])]+/g,'<path>').replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,'<email>').replace(/\b(token|password|secret|credential|authorization)\s*[:=]\s*[^\s,;]+/gi,'$1=<redacted>').trim().slice(-4096)}
@@ -98,6 +100,19 @@ async function main(){
  socket.onmessage=event=>{const m=JSON.parse(event.data);if(m.id){const p=pending.get(m.id);if(p){pending.delete(m.id);clearTimeout(p.timer);m.error?p.reject(Error('CDP failure')):p.resolve(m.result)}}else if(m.method==='Runtime.exceptionThrown')browserErrors.push('browser exception')};
  await send('Page.enable');await send('Runtime.enable');
  await send('Page.addScriptToEvaluateOnNewDocument',{source:'{localStorage.setItem("gm-vector.locale","ru");const real=window.fetch.bind(window);window.__fixtureDeliveries=[];window.fetch=async(url,options={})=>{const {signal,...rest}=options;const response=await real(url,rest),json=response.json.bind(response);response.json=async()=>{const value=await json();window.__fixtureDeliveries.push(Number(response.headers.get("X-Fixture-Delivery")));return value};return response};const timeout=window.setTimeout.bind(window),interval=window.setInterval.bind(window),clearTimeout=window.clearTimeout.bind(window),clearInterval=window.clearInterval.bind(window);let id=100000;const timers=new Map();window.setTimeout=(fn,delay,...args)=>delay===5000?(timers.set(++id,{fn:()=>fn(...args),once:true}),id):timeout(fn,delay,...args);window.setInterval=(fn,delay,...args)=>delay===5000?(timers.set(++id,{fn:()=>fn(...args),once:false}),id):interval(fn,delay,...args);window.clearTimeout=number=>{timers.delete(number);clearTimeout(number)};window.clearInterval=number=>{timers.delete(number);clearInterval(number)};window.__tickPoll=()=>{for(const [number,timer]of [...timers]){if(timer.once)timers.delete(number);timer.fn()}};window.__setHidden=value=>{Object.defineProperty(document,"hidden",{configurable:true,value});Object.defineProperty(document,"visibilityState",{configurable:true,value:value?"hidden":"visible"});document.dispatchEvent(new Event("visibilitychange"))};window.__setOnline=value=>{Object.defineProperty(navigator,"onLine",{configurable:true,value});window.dispatchEvent(new Event(value?"online":"offline"))};}'});
+ if(benchmark){
+  console.log('Synthetic selection benchmark only; CSS omitted and API is a loopback fixture. Not regression acceptance or a production SLO.');
+  await reset();const samples=[];
+  for(let index=0;index<35;index++){
+   const id=index%2?'A':'B';
+   const ms=await evaluate(`new Promise((resolve,reject)=>{const started=performance.now(),expected=${JSON.stringify('Project ')}+${JSON.stringify(id)};const button=[...document.querySelectorAll('nav button')].find(x=>x.textContent.includes(expected));if(!button)return reject(Error('benchmark target absent'));button.click();const frame=()=>{if(document.querySelector('.project-header h1')?.textContent===expected&&[...document.querySelectorAll('button')].some(x=>x.textContent.trim()==='Настройки проекта'))return requestAnimationFrame(()=>resolve(performance.now()-started));if(performance.now()-started>4000)return reject(Error('benchmark readiness timeout'));requestAnimationFrame(frame)};requestAnimationFrame(frame)})`);
+   if(index>=5)samples.push(ms);
+  }
+  assert.deepEqual(browserErrors,[],'benchmark has no browser exceptions');
+  const sorted=[...samples].sort((a,b)=>a-b),version=await send('Browser.getVersion');
+  console.log(JSON.stringify({fixture:'synthetic-selection-to-ready-frame',warmup:5,samples:30,browser:version.product,node:process.version,median_ms:sorted[14],p95_ms:sorted[28],max_ms:sorted.at(-1),values_ms:samples}));
+  return;
+ }
  const tests={
   async selection(){
    await reset();const old=hold('/projects/A');await chooseProject('A');await waitHeld(old);await chooseProject('B');await wait('document.querySelector(".project-header h1")?.textContent==="Project B"','new B');await release(old);assert.equal(await heading(),'Project B','old A must not replace B');

@@ -98,3 +98,59 @@ PASS on the disposable database; it cannot be used with all/unit/integration or
 silently pass a skip. Thirteen runner-guard unit tests actually passed, including
 the new scope/database/build/evidence controls. The full all/e2e default retains
 all established regressions. Final exact-SHA checks remain required.
+
+## Extraction, components and focus GREEN
+
+Module move 4ff9ecf introduces the twelve planned controller/view/editor/helper
+modules and keeps the Editors compatibility barrel. No runtime cycle is present
+in the actual 50-module graph; the view has no direct transport dependency.
+The strengthened structural comparison uses actual Git 0029f1f and 4ff9ecf
+snapshots: 18 body/props/controller-prefix/render comparisons and 19 negative
+controls pass, including template fragments, raw literals, BigInt, regex and JSX.
+It is structural evidence, not a whole-program proof: imports/export bindings
+are separately reviewed and tested. Private receipt SHA-256:
+`c0c0d7cdda666a3c8aff85e6b95f78550ae250f9b96eae97434abe6f81d48ca7`.
+
+Separate fix 249abf2 changes only Modal's hook import/call to useLayoutEffect.
+The original native focus assertion and subsequent scenario now pass: real
+API/PostgreSQL browser test 24.47 seconds, native helper 3782 ms. This focused run
+also completes the existing authentication, scheduling, exports, invitations,
+recovery and Bug Report paths. Private GREEN log SHA-256:
+`bf6d440728b032b14de94587fc5cf84c2914749d09a9e6dea5fff2d1f63cacad`.
+An additional Gantt wire-open/cancel assertion is included for the final full run;
+it was added after that focused GREEN and must execute before acceptance.
+
+Test commit e748ab9 freezes seven files with **41 executed component cases**:
+workspace races/polling/teardown, task drafts/effort/busy/roles, participation
+weekdays/exceptions/errors, history cursor/revision/former employees, all owned
+PDF-window cleanup, initial-resume/session/seven-locale forms, and Chart camera
+retention across unrelated rerenders. The full component run and both typechecks,
+whole-web lint/format gates passed. Native assertions remain separate evidence.
+
+## Bounded size and interaction observations
+
+Same gzip method (Python gzip, mtime=0): baseline e979 JS 687182 / gzip 239485 bytes;
+candidate 249abf2 JS 688975 / gzip 240331 (+1793 / +846). CSS stays 23278 / gzip 6028
+bytes. Vite transforms 117 rather than 105 modules, as expected for extraction.
+No arbitrary size or numeric performance acceptance budget is claimed.
+
+An explicitly optional `--benchmark-selection` path in the existing workspace
+fixture measures browser click-to-ready-frame through the actual controller and
+synthetic loopback API. It uses five warmups, thirty alternating A/B selections,
+fresh Chrome 156.0.8078.73, Node 24.21.0 and the same fixture/machine/dependencies.
+CSS is omitted and five-second background timers are controlled; this is not a
+production render/network/backend SLO. Baseline tracked sources/config from 0029f1f
+were copied to an isolated temporary directory; the first incomplete copy lacked
+JSX/module configuration and failed readiness, then was corrected from the same
+Git revision without changing source or expectations.
+
+| Source | Median | p95 | Maximum |
+| --- | --- | --- | --- |
+| Pre-extraction 0029f1f | 32.5 ms | 32.7 ms | 36.7 ms |
+| Post-extraction 249abf2 | 32.6 ms | 32.7 ms | 32.7 ms |
+
+Both corrected runs exited 0 with all thirty samples and no browser exception.
+Use `--source-web` only with this labelled benchmark; alternate sources cannot
+silently replace sources for the required regression run. The final full run,
+exact-source CI, independent bindings/evidence review and package acceptance are
+still pending.
