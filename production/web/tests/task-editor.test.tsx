@@ -186,6 +186,39 @@ describe("task draft and effort ownership", () => {
     expect(controls.onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("submits a member status change while preserving the task plan and other draft fields", async () => {
+    const f = current();
+    f.sidecars();
+    const controls = { ...props(), canManage: false, canWrite: true };
+    const original = structuredClone(controls.task);
+    const view = await renderReady(
+      <Clock>
+        <TaskEditor {...controls} />
+      </Clock>,
+    );
+    const status = screen.getByLabelText(
+      tr("m225077c6d4"),
+    ) as HTMLSelectElement;
+    expect(status.value).toBe("todo");
+    fireEvent.change(status, { target: { value: "doing" } });
+    fireEvent.change(screen.getByLabelText(tr("m4be3fc8ac8")), {
+      target: { value: "Member progress draft" },
+    });
+    expect(status.value).toBe("doing");
+    expect(
+      (screen.getByLabelText(tr("m455768fd15")) as HTMLInputElement).value,
+    ).toBe("8");
+    fireEvent.submit(view.container.querySelector("form")!);
+    expect(controls.onSave).toHaveBeenCalledTimes(1);
+    expect(controls.onSave).toHaveBeenCalledWith({
+      ...original,
+      status: "doing",
+      brief: "Member progress draft",
+    });
+    expect(controls.task).toEqual(original);
+    expect(f.requests.every((request) => request.method === "GET")).toBe(true);
+  });
+
   it.each([false, true])(
     "preserves viewer/member property restrictions, writable=%s",
     async (canWrite) => {
