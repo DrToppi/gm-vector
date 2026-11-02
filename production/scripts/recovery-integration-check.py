@@ -66,6 +66,7 @@ def main():
             fixture.initialize()
             fixture.seed()
             columns, expected = fixture.fingerprint()
+            original_schema = fixture.schema_state()
             backup_args, archive, artifacts, snapshot_bounds = fixture.snapshot(root / 'archives')
             values, meta, complete = f.backup.read_archive(backup_args, archive)
             assert complete and meta['format'] == 2
@@ -115,6 +116,7 @@ def main():
             assert 'runtime_verified' not in bad_output.getvalue()
             started = time.monotonic()
             fixture.restore(backup_args, archive, artifacts)
+            assert fixture.schema_state() == original_schema, 'matching restoration did not recover the exact source schema'
             fixture.verify_usable(expected, columns)
             elapsed = time.monotonic() - started
             assert elapsed <= 1800, 'reference recovery exceeded accepted30-minute target'

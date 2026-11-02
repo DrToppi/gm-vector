@@ -138,6 +138,7 @@ def main():
                 fixture.initialize()
                 fixture.seed()
                 columns, expected = fixture.fingerprint()
+                original_schema = fixture.schema_state()
                 backup_args, archive, artifacts, bounds = fixture.snapshot(fixture.root / 'archives')
                 origin_installer, origin_manifest = fixture.installer, fixture.manifest
                 same_infrastructure_images = all(origin_manifest['images'][k] == candidate_manifest['images'][k]
@@ -154,7 +155,12 @@ def main():
                 else:
                     assert admission == current_admission
                 if branch == 'forward':
+                    migration_proof = fixture.prove_migrations(candidate, candidate_manifest, original_schema, expected, columns)
                     if app_only:
+                        # This origin already has the target schema; restoring its
+                        # unchanged services permits the real Engine.assert_current.
+                        with contextlib.redirect_stdout(io.StringIO()):
+                            fixture.installer.prepare(fixture.state, fixture.manifest)
                         engine = prepared_engine(fixture, updater, candidate, candidate_manifest, candidate_sha)
                         engine.apply()
                         assert engine.status()['state'] == 'succeeded'
@@ -164,9 +170,12 @@ def main():
                     else:
                         operator_activate(fixture, candidate, candidate_manifest, candidate_sha)
                     fixture.verify_usable(expected, columns)
+                    target_versions = fixture.schema_state()['versions']
+                    assert target_versions == fixture.candidate_schema_versions()
+                    assert target_versions[:len(original_schema['versions'])] == original_schema['versions']
                     fixture.verify_new_features()
                     f.receipt(REQUIRED[2], origin=origin_sha, candidate=candidate_sha, admission=admission,
-                              actual_images=candidate_manifest['images'])
+                              actual_images=candidate_manifest['images'], migration_proof=migration_proof)
                     completed.append(REQUIRED[2])
                 else:
                     if app_only:
@@ -199,6 +208,7 @@ def main():
                         fixture.restore(backup_args, archive, artifacts, installer=origin_installer,
                                         manifest=origin_manifest, sha=origin_sha)
                     assert fixture.sql("SELECT to_regclass('public.synthetic_failed_upgrade_marker') IS NULL") == 't'
+                    assert fixture.schema_state() == original_schema, 'rollback left a candidate schema behind the origin image'
                     fixture.verify_usable(expected, columns)
                     elapsed = time.monotonic() - started
                     assert elapsed <= 1800

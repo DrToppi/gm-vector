@@ -65,8 +65,8 @@ def evidence(path):
         os.close(fd)
 
 
-def command(argv, *, data=None, timeout=300):
-    result = subprocess.run(argv, input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
+def command(argv, *, data=None, timeout=300, env=None):
+    result = subprocess.run(argv, input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout, env=env)
     if result.returncode:
         raise RuntimeError('synthetic fixture subprocess failed')
     return result.stdout
@@ -368,6 +368,112 @@ class Fixture:
             result[table] = hashlib.sha256(raw.encode()).hexdigest()
         return projection, result
 
+    def schema_state(self):
+        return {
+            'versions': self.sql('SELECT version,checksum FROM schema_versions ORDER BY version').splitlines(),
+            'columns': self.sql("SELECT table_name,column_name,data_type,is_nullable,coalesce(column_default,'') FROM information_schema.columns WHERE table_schema='public' ORDER BY table_name,ordinal_position").splitlines(),
+            'constraints': self.sql("SELECT c.relname,k.conname,pg_get_constraintdef(k.oid) FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' ORDER BY c.relname,k.conname").splitlines(),
+        }
+
+    def candidate_schema_versions(self, source=None):
+        directory = (Path(source) if source is not None else self.source) / 'production/internal/planner'
+        files = [directory / 'schema.sql'] + sorted(directory.glob('schema-[0-9][0-9][0-9].sql'))
+        return [str(n + 1) + '|' + hashlib.sha256(path.read_bytes()).hexdigest()
+                for n, path in enumerate(files)]
+
+    def prove_migrations(self, candidate, manifest, schema, expected, columns):
+        """Actual migration contenders, cancellation/rollback and repeated apply."""
+        self.stop_writers()
+        installer = module(Path(candidate) / 'production/deploy/install.py', 'migration_proof_' + secrets.token_hex(6))
+        compose, env = installer.context(self.state, manifest)
+        suffix = secrets.token_hex(8)
+        initial_name, inspection_name = 'recovery-migration-initial-' + suffix, 'recovery-migration-inspect-' + suffix
+        blockers, migrations, names = [], [], []
+        pending = len(schema['versions']) < len(self.candidate_schema_versions(candidate))
+
+        def barrier(sql, timeout=20):
+            deadline = time.monotonic() + timeout
+            while time.monotonic() < deadline:
+                result = self.sql(sql)
+                if result:
+                    return result
+            raise AssertionError('actual migration lock barrier was not reached')
+
+        def psql_blocker(application, sql):
+            child = subprocess.Popen(self.installer.docker() + ['exec', '-i', self.container('db'), 'psql', '-X',
+                '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'planner', '-d', 'planner'], stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            blockers.append(child)
+            child.stdin.write(("BEGIN; SET LOCAL application_name=" + literal(application) + '; ' + sql + ';\n').encode())
+            child.stdin.flush()
+            return child
+
+        def release(child):
+            child.stdin.write(b'ROLLBACK;\n\\q\n'); child.stdin.flush(); child.stdin.close()
+            assert child.wait(timeout=5) == 0
+
+        def migrate():
+            name = 'gm-vector-migration-' + secrets.token_hex(8)
+            names.append(name)
+            child = subprocess.Popen(compose + ['run', '--rm', '--no-deps', '--name', name, 'migrate'], env=env,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            migrations.append(child)
+            return child
+
+        advisory_wait = "SELECT a.pid FROM pg_stat_activity a WHERE a.datname='planner' AND a.usename='planner_migrator' AND a.wait_event_type='Lock' AND EXISTS(SELECT 1 FROM pg_locks l WHERE l.pid=a.pid AND l.locktype='advisory' AND NOT l.granted)"
+        ddl_wait = "SELECT a.pid FROM pg_stat_activity a WHERE a.datname='planner' AND a.usename='planner_migrator' AND a.wait_event_type='Lock' AND EXISTS(SELECT 1 FROM pg_locks l WHERE l.pid=a.pid AND l.relation='public.tasks'::regclass AND l.mode='AccessExclusiveLock' AND NOT l.granted) AND EXISTS(SELECT 1 FROM pg_locks l WHERE l.pid=a.pid AND l.relation='public.projects'::regclass AND l.mode='AccessExclusiveLock' AND l.granted)"
+        try:
+            initial = psql_blocker(initial_name, 'LOCK TABLE tasks IN ACCESS SHARE MODE' if pending else 'SELECT pg_advisory_xact_lock(789501)')
+            barrier("SELECT pid FROM pg_stat_activity WHERE application_name=" + literal(initial_name) + " AND state='idle in transaction'")
+            first = migrate()
+            first_pid = barrier(ddl_wait if pending else advisory_wait)
+            assert re.fullmatch('[0-9]+', first_pid)
+            # Queue inspection before the second contender, so cancellation of
+            # the first allows an exact old-schema/data assertion before retry.
+            if pending:
+                inspection = psql_blocker(inspection_name, 'SELECT pg_advisory_xact_lock(789501)')
+                barrier("SELECT pid FROM pg_stat_activity WHERE application_name=" + literal(inspection_name) + " AND wait_event_type='Lock'")
+            else:
+                inspection = initial
+            second = migrate()
+            second_pid = barrier(advisory_wait + ' AND a.pid<>' + first_pid)
+            assert re.fullmatch('[0-9]+', second_pid)
+            assert self.sql("SELECT pg_terminate_backend(pid,1000) FROM pg_stat_activity WHERE pid=" + first_pid + " AND datname='planner' AND usename='planner_migrator'") == 't'
+            assert first.wait(timeout=15) != 0
+            barrier("SELECT pid FROM pg_stat_activity WHERE application_name=" + literal(inspection_name if pending else initial_name) + " AND state='idle in transaction'")
+            assert self.schema_state() == schema, 'cancelled migration left a partial schema/checksum state'
+            assert self.fingerprint(columns)[1] == expected, 'cancelled migration changed authoritative data'
+            release(inspection)
+            if pending:
+                assert barrier(ddl_wait + ' AND a.pid=' + second_pid) == second_pid
+                release(initial)
+            assert second.wait(timeout=30) == 0
+            migrated = self.schema_state()
+            assert migrated['versions'] == self.candidate_schema_versions(candidate)
+            assert migrated['versions'][:len(schema['versions'])] == schema['versions']
+            assert self.fingerprint(columns)[1] == expected
+            command(compose + ['run', '--rm', '--no-deps', 'migrate'], timeout=60, env=env)
+            assert self.schema_state() == migrated, 'repeated migration changed schema/checksums'
+            return {'concurrent_serialization': True, 'cancelled_migration_unchanged': True,
+                    'repeated_schema_unchanged': True, 'interruption_phase':
+                    'after_projects_ddl_before_tasks_ddl' if pending else 'advisory_wait_no_pending_schema'}
+        finally:
+            # Every name/PID belongs to this private fixture. No caller supplied
+            # DB or host daemon resources are discovered or terminated here.
+            self.sql("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='planner' AND usename='planner' AND application_name IN (" + literal(initial_name) + ',' + literal(inspection_name) + ');')
+            for child in blockers:
+                if not child.stdin.closed:
+                    try: child.stdin.close()
+                    except BrokenPipeError: pass
+                try: child.wait(timeout=2)
+                except subprocess.TimeoutExpired: child.kill(); child.wait(timeout=2)
+            for name in names:
+                subprocess.run(installer.docker() + ['rm', '-f', name], stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL, timeout=10)
+            for child in migrations:
+                try: child.wait(timeout=2)
+                except subprocess.TimeoutExpired: child.kill(); child.wait(timeout=2)
+
     def active_files(self):
         """Fixed compose mappings; never treat staging files as active secrets."""
         values = backup.collect_secrets(self.state / 'config')
@@ -472,6 +578,7 @@ class Fixture:
                 path.chmod(0o644)
         if installer is not None:
             self.installer = installer
+            self.source = Path(installer.ROOT).parents[1]
             self.manifest = manifest
             self.sha = sha
         self.compose, self.env = self.installer.context(self.state, self.manifest)
