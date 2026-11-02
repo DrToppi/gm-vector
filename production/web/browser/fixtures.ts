@@ -23,10 +23,12 @@ import {
   validateFixture,
   validatePackages,
   versions,
+  certificateFailure,
   type Fixture,
   type Scenario,
 } from "./contracts";
 export { expect };
+export { certificateFailure, proveServer };
 export const test = base.extend<{ fixture: Fixture }>({
   fixture: async ({}, provide, info) => {
     const { fixture } = loadFixture();

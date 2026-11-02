@@ -20,6 +20,8 @@ import {
   validateNegativeContracts,
   decryptBug,
   wrongReportKey,
+  certificateFailure,
+  proveServer,
 } from "./fixtures";
 import type { BrowserContext } from "@playwright/test";
 
@@ -414,6 +416,46 @@ test("critical real workspace B01-B09", async ({
           (t: any) => t.id === childID,
         ).planned_minutes,
       ).toBe(960);
+      const resized = (
+        await api(page, "/projects/" + projectID)
+      ).project.tasks.find((task: any) => task.id === childID);
+      expect(resized.requested_start).toBe("2026-10-23");
+      expect(resized.duration_days).toBe(5);
+      expect(resized.start).toBe("2026-10-23");
+      expect(resized.end).toBe("2026-10-29");
+      const tracedProject = (await api(page, "/projects/" + projectID)).project;
+      const traceTask = (id: string, title: string) => ({
+        ...resized,
+        id,
+        title,
+        parent: "",
+        responsibility: "customer",
+        customer_owner: "",
+        customer_due: "",
+        customer_email: "",
+        requested_start: "2026-10-23",
+        start: "2026-10-23",
+        end: "2026-10-23",
+        duration_days: 1,
+        planned_minutes: 0,
+        actual_minutes: 0,
+        summary: false,
+        assignments: [],
+      });
+      tracedProject.tasks.push(
+        traceTask("pw-predecessor", "PW predecessor"),
+        traceTask("pw-successor", "PW successor"),
+        traceTask("pw-unrelated", "PW unrelated"),
+      );
+      tracedProject.links = [
+        { from: "pw-predecessor", to: childID, mode: "together", days: 0 },
+        { from: childID, to: "pw-successor", mode: "after", days: 0 },
+      ];
+      await api(page, "/projects/" + projectID, "PUT", {
+        project: payload(tracedProject),
+        override_reason: "",
+      });
+      await page.reload();
       await click(page, "Майнд-мэп");
       await click(page, "Flow");
       const camera = await page
@@ -421,6 +463,18 @@ test("critical real workspace B01-B09", async ({
         .getAttribute("transform");
       await page.locator('[aria-label="Trace PW child"]').click();
       await expect(page.locator('[data-map-mode="trace"]')).toBeVisible();
+      for (const id of ["pw-predecessor", childID, "pw-successor"])
+        await expect(page.locator('[data-task="' + id + '"]')).toHaveCount(1);
+      await expect(page.locator('[data-task="pw-unrelated"]')).toHaveCount(0);
+      await expect(
+        page.locator('[data-from="pw-predecessor"][data-to="' + childID + '"]'),
+      ).toHaveCount(1);
+      await expect(
+        page.locator('[data-from="' + childID + '"][data-to="pw-successor"]'),
+      ).toHaveCount(1);
+      await expect(
+        page.locator('[data-map-mode="trace"] [data-link]'),
+      ).toHaveCount(2);
       await click(page, "Выйти из Trace");
       await expect(page.locator("[data-map-content]")).toHaveAttribute(
         "transform",
@@ -557,21 +611,58 @@ test("critical real workspace B01-B09", async ({
           .locator('[data-bug-report-field="' + name + '"]')
           .fill("Synthetic " + name);
       await page.locator('[data-bug-report="issue-preview"]').click();
-      await page.evaluate(() =>
+      const nativeClipboard = await page.evaluate(() => ({
+        secure: isSecureContext,
+        available: typeof navigator.clipboard?.writeText === "function",
+      }));
+      expect(nativeClipboard.secure).toBe(true);
+      await page.locator('[data-bug-report="issue-copy"]').click();
+      await expect
+        .poll(async () =>
+          [ru.issueCopied, ru.issueCopyError].includes(
+            (await page.locator(".public-issue [role=status]").textContent()) ||
+              "",
+          ),
+        )
+        .toBe(true);
+      const nativeStatus = await page
+        .locator(".public-issue [role=status]")
+        .textContent();
+      const nativeOutcome = !nativeClipboard.available
+        ? "api-unavailable"
+        : nativeStatus === ru.issueCopied
+          ? "write-succeeded"
+          : "write-denied";
+      if (!nativeClipboard.available)
+        expect(nativeStatus).toBe(ru.issueCopyError);
+      info.annotations.push({
+        type: "pw-native-clipboard",
+        description: nativeOutcome,
+      });
+      await page.evaluate(() => {
+        (window as any).__pwClipboardCounts = { success: 0, denied: 0 };
         Object.defineProperty(navigator, "clipboard", {
           configurable: true,
-          value: { writeText: async () => {} },
-        }),
-      );
+          value: {
+            writeText: async () => {
+              (window as any).__pwClipboardCounts.success++;
+            },
+          },
+        });
+      });
       await page.locator('[data-bug-report="issue-copy"]').click();
       await expect(page.locator(".public-issue [role=status]")).toHaveText(
         ru.issueCopied,
       );
+      expect(
+        await page.evaluate(() => (window as any).__pwClipboardCounts.success),
+      ).toBe(1);
       await page.evaluate(() =>
         Object.defineProperty(navigator, "clipboard", {
           configurable: true,
           value: {
             writeText: async () => {
+              (window as any).__pwClipboardCounts.denied++;
               throw Error("Synthetic denied");
             },
           },
@@ -581,6 +672,13 @@ test("critical real workspace B01-B09", async ({
       await expect(page.locator(".public-issue [role=status]")).toHaveText(
         ru.issueCopyError,
       );
+      expect(
+        await page.evaluate(() => (window as any).__pwClipboardCounts.denied),
+      ).toBe(1);
+      info.annotations.push({
+        type: "pw-clipboard-ui",
+        description: "controlled-success-and-denial",
+      });
     });
     await step(info, "B08", async () => {
       const marker = "PW_PRIVATE_" + f.nonce;
@@ -639,18 +737,23 @@ test("critical real workspace B01-B09", async ({
       validateNegativeContracts(f);
       const strict = await browser.newContext({ ignoreHTTPSErrors: false });
       extra.push(strict);
-      for (const target of [
-        f.origin,
-        f.origin.replace("127.0.0.1", "localhost"),
-      ]) {
+      for (const target of [f.origin, f.mismatch_origin]) {
+        await proveServer(f, target === f.mismatch_origin);
         const probe = await strict.newPage();
-        let rejected = false;
+        let classification: string | null = null;
         try {
           await probe.goto(target);
-        } catch {
-          rejected = true;
+        } catch (cause) {
+          classification = certificateFailure(
+            f.engine,
+            (cause as Error).message,
+          );
         }
-        expect(rejected).toBe(true);
+        expect(classification).toBe(f.engine + "-certificate-rejected");
+        info.annotations.push({
+          type: "pw-certificate-rejection",
+          description: classification!,
+        });
         await probe.close();
       }
       expect(info.retry).toBe(0);

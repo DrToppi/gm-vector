@@ -3,6 +3,21 @@ import path from "node:path";
 import https from "node:https";
 export const engines = ["chromium", "firefox", "webkit"] as const;
 export type Engine = (typeof engines)[number];
+export function certificateFailure(
+  engine: Engine,
+  message: string,
+): string | null {
+  const patterns: Record<Engine, RegExp> = {
+    chromium:
+      /\bnet::ERR_CERT_(?:AUTHORITY_INVALID|INVALID|COMMON_NAME_INVALID)\b/,
+    firefox:
+      /\b(?:SSL_ERROR_UNKNOWN|SEC_ERROR_UNKNOWN_ISSUER|MOZILLA_PKIX_ERROR_SELF_SIGNED_CERT|SSL_ERROR_BAD_CERT_DOMAIN)\b/,
+    webkit: /\bUnacceptable TLS certificate\b/,
+  };
+  return patterns[engine].test(message)
+    ? engine + "-certificate-rejected"
+    : null;
+}
 export const scenarios = [
   "B01",
   "B02",
@@ -77,6 +92,8 @@ export type Fixture = {
   nonce: string;
   origin: string;
   certificate: string;
+  mismatch_origin: string;
+  mismatch_certificate: string;
   username: string;
   password: string;
   report_private_key: string;
@@ -94,6 +111,8 @@ export function validateFixture(value: unknown): Fixture {
     "nonce",
     "origin",
     "certificate",
+    "mismatch_origin",
+    "mismatch_certificate",
     "username",
     "password",
     "report_private_key",
@@ -111,25 +130,29 @@ export function validateFixture(value: unknown): Fixture {
   for (const key of keys.filter((k) => k !== "schema_version"))
     if (typeof (f as unknown as Record<string, unknown>)[key] !== "string")
       throw Error("PW_IPC_TYPE");
-  const u = new URL(f.origin);
-  if (
-    u.protocol !== "https:" ||
-    u.hostname !== "127.0.0.1" ||
-    !u.port ||
-    ["9443", "19443", "29443"].includes(u.port) ||
-    u.username ||
-    u.password ||
-    u.pathname !== "/" ||
-    u.search ||
-    u.hash ||
-    f.origin !== u.origin
-  )
-    throw Error("PW_IPC_ORIGIN");
+  for (const origin of [f.origin, f.mismatch_origin]) {
+    const u = new URL(origin);
+    if (
+      u.protocol !== "https:" ||
+      u.hostname !== "127.0.0.1" ||
+      !u.port ||
+      ["9443", "19443", "29443"].includes(u.port) ||
+      u.username ||
+      u.password ||
+      u.pathname !== "/" ||
+      u.search ||
+      u.hash ||
+      origin !== u.origin
+    )
+      throw Error("PW_IPC_ORIGIN");
+  }
+  if (f.origin === f.mismatch_origin) throw Error("PW_IPC_ORIGIN");
   if (
     !/^[A-Za-z0-9_-]{40,64}$/.test(f.nonce) ||
     f.password.length < 15 ||
     f.password.length > 128 ||
     !f.certificate.startsWith("-----BEGIN CERTIFICATE-----") ||
+    !f.mismatch_certificate.startsWith("-----BEGIN CERTIFICATE-----") ||
     !f.report_private_key.startsWith("-----BEGIN PRIVATE KEY-----")
   )
     throw Error("PW_IPC_VALUE");
@@ -179,11 +202,16 @@ export function loadFixture(): { fixture: Fixture; directory: string } {
     fs.closeSync(fd);
   }
 }
-export async function proveServer(f: Fixture): Promise<void> {
+export async function proveServer(f: Fixture, mismatch = false): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const req = https.get(
-      f.origin + "/readyz",
-      { ca: f.certificate, rejectUnauthorized: true, timeout: 15000 },
+      (mismatch ? f.mismatch_origin : f.origin) + "/readyz",
+      {
+        ca: mismatch ? f.mismatch_certificate : f.certificate,
+        ...(mismatch ? { servername: "playwright-mismatch.invalid" } : {}),
+        rejectUnauthorized: true,
+        timeout: 15000,
+      },
       (res) => {
         res.resume();
         if (

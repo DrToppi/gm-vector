@@ -12,6 +12,9 @@ export default class RedactedReporter implements Reporter {
   private results: { id: string; status: string; attempts: number }[] = [];
   private count = 0;
   private actualVersion = "";
+  private nativeClipboard = "";
+  private clipboardUI = "";
+  private certificateRejections: string[] = [];
   private failurePhase = "";
   private failureSite = "";
   private failureClass = "";
@@ -32,6 +35,23 @@ export default class RedactedReporter implements Reporter {
         /^[0-9.]+$/.test(item.description || "")
       )
         this.actualVersion = item.description!;
+      if (
+        item.type === "pw-native-clipboard" &&
+        ["write-succeeded", "write-denied", "api-unavailable"].includes(
+          item.description || "",
+        )
+      )
+        this.nativeClipboard = item.description!;
+      if (
+        item.type === "pw-clipboard-ui" &&
+        item.description === "controlled-success-and-denial"
+      )
+        this.clipboardUI = item.description;
+      if (
+        item.type === "pw-certificate-rejection" &&
+        item.description === this.input.fixture.engine + "-certificate-rejected"
+      )
+        this.certificateRejections.push(item.description);
     }
     if (result.status !== "passed") {
       this.failurePhase = scenarios[this.results.length] || "cleanup";
@@ -66,6 +86,9 @@ export default class RedactedReporter implements Reporter {
       playwright_version: "1.64.1",
       browser_revision: revisions[f.engine],
       browser_version: this.actualVersion,
+      native_clipboard: this.nativeClipboard,
+      clipboard_ui: this.clipboardUI,
+      certificate_rejections: this.certificateRejections,
       status: result.status,
       test_count: this.count,
       ...(this.failurePhase
@@ -78,7 +101,9 @@ export default class RedactedReporter implements Reporter {
       scenarios: this.results,
       functional_tls: "owned-loopback-self-signed-exception",
       strict_tls:
-        "unknown-ca-and-mismatch-rejected-not-isolated-hostname-proof",
+        this.certificateRejections.length === 2
+          ? "unknown-ca-and-mismatch-rejected-not-isolated-hostname-proof"
+          : "not-completed",
     };
     const output = JSON.stringify(receipt);
     if (Buffer.byteLength(output) > 262144) throw Error("PW_RECEIPT_LIMIT");

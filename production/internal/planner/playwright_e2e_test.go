@@ -3,15 +3,20 @@ package planner
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"io"
+	"log"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -26,6 +31,7 @@ import (
 
 var pwEngines = []string{"chromium", "firefox", "webkit"}
 var pwRevisions = map[string]string{"chromium": "1248", "firefox": "1555", "webkit": "2370"}
+var pwVersions = map[string]string{"chromium": "156.0.8078.4", "firefox": "157.0", "webkit": "27.2"}
 var pwScenarios = []string{"B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B09"}
 
 // Call logs may include credentials, so they remain private and bounded. The
@@ -60,21 +66,24 @@ type pwScenario struct {
 	Attempts int    `json:"attempts"`
 }
 type pwReceipt struct {
-	FailurePhase  string       `json:"failure_phase,omitempty"`
-	FailureSite   string       `json:"failure_site,omitempty"`
-	FailureClass  string       `json:"failure_class,omitempty"`
-	Format        string       `json:"format"`
-	SchemaVersion int          `json:"schema_version"`
-	Nonce         string       `json:"run_nonce"`
-	Engine        string       `json:"engine"`
-	Playwright    string       `json:"playwright_version"`
-	Revision      string       `json:"browser_revision"`
-	Browser       string       `json:"browser_version"`
-	Status        string       `json:"status"`
-	TestCount     int          `json:"test_count"`
-	Scenarios     []pwScenario `json:"scenarios"`
-	FunctionalTLS string       `json:"functional_tls"`
-	StrictTLS     string       `json:"strict_tls"`
+	FailurePhase          string       `json:"failure_phase,omitempty"`
+	FailureSite           string       `json:"failure_site,omitempty"`
+	FailureClass          string       `json:"failure_class,omitempty"`
+	Format                string       `json:"format"`
+	SchemaVersion         int          `json:"schema_version"`
+	Nonce                 string       `json:"run_nonce"`
+	Engine                string       `json:"engine"`
+	Playwright            string       `json:"playwright_version"`
+	Revision              string       `json:"browser_revision"`
+	Browser               string       `json:"browser_version"`
+	Status                string       `json:"status"`
+	TestCount             int          `json:"test_count"`
+	Scenarios             []pwScenario `json:"scenarios"`
+	FunctionalTLS         string       `json:"functional_tls"`
+	StrictTLS             string       `json:"strict_tls"`
+	NativeClipboard       string       `json:"native_clipboard"`
+	ClipboardUI           string       `json:"clipboard_ui"`
+	CertificateRejections []string     `json:"certificate_rejections"`
 }
 
 func validatePWReceipt(raw []byte, engine, nonce string) error {
@@ -95,10 +104,16 @@ func validatePWReceipt(raw []byte, engine, nonce string) error {
 	if receipt.FailurePhase != "" || receipt.FailureSite != "" || receipt.FailureClass != "" {
 		return fail
 	}
-	if receipt.Format != "gm-vector-browser-receipt" || receipt.SchemaVersion != 1 || receipt.Engine != engine || pwRevisions[engine] == "" || receipt.Nonce != nonce || receipt.Playwright != "1.64.1" || receipt.Revision != pwRevisions[engine] || !regexp.MustCompile(`^[0-9]+(\.[0-9]+)+$`).MatchString(receipt.Browser) || receipt.Status != "passed" || receipt.TestCount != 1 || len(receipt.Scenarios) != 9 {
+	if receipt.Format != "gm-vector-browser-receipt" || receipt.SchemaVersion != 1 || receipt.Engine != engine || pwRevisions[engine] == "" || receipt.Nonce != nonce || receipt.Playwright != "1.64.1" || receipt.Revision != pwRevisions[engine] || receipt.Browser != pwVersions[engine] || receipt.Status != "passed" || receipt.TestCount != 1 || len(receipt.Scenarios) != 9 {
 		return fail
 	}
 	if receipt.FunctionalTLS != "owned-loopback-self-signed-exception" || receipt.StrictTLS != "unknown-ca-and-mismatch-rejected-not-isolated-hostname-proof" {
+		return fail
+	}
+	if len(receipt.CertificateRejections) != 2 || receipt.CertificateRejections[0] != engine+"-certificate-rejected" || receipt.CertificateRejections[1] != engine+"-certificate-rejected" {
+		return fail
+	}
+	if (receipt.NativeClipboard != "write-succeeded" && receipt.NativeClipboard != "write-denied" && receipt.NativeClipboard != "api-unavailable") || receipt.ClipboardUI != "controlled-success-and-denial" {
 		return fail
 	}
 	for i, item := range receipt.Scenarios {
@@ -168,7 +183,8 @@ func TestPlaywrightHarnessValidation(t *testing.T) {
 		t.Fatal("private IPC/reporter unit failed")
 	}
 
-	good := pwReceipt{Format: "gm-vector-browser-receipt", SchemaVersion: 1, Nonce: "synthetic", Engine: "chromium", Playwright: "1.64.1", Revision: "1248", Browser: "156.0.8078.4", Status: "passed", TestCount: 1, FunctionalTLS: "owned-loopback-self-signed-exception", StrictTLS: "unknown-ca-and-mismatch-rejected-not-isolated-hostname-proof"}
+	good := pwReceipt{Format: "gm-vector-browser-receipt", SchemaVersion: 1, Nonce: "synthetic", Engine: "chromium", Playwright: "1.64.1", Revision: "1248", Browser: "156.0.8078.4", Status: "passed", TestCount: 1, FunctionalTLS: "owned-loopback-self-signed-exception", StrictTLS: "unknown-ca-and-mismatch-rejected-not-isolated-hostname-proof", NativeClipboard: "write-succeeded", ClipboardUI: "controlled-success-and-denial"}
+	good.CertificateRejections = []string{"chromium-certificate-rejected", "chromium-certificate-rejected"}
 	for _, id := range pwScenarios {
 		good.Scenarios = append(good.Scenarios, pwScenario{id, "passed", 1})
 	}
@@ -177,10 +193,15 @@ func TestPlaywrightHarnessValidation(t *testing.T) {
 		t.Fatal("valid receipt rejected")
 	}
 	mutations := map[string]func(*pwReceipt){"wrong_nonce": func(v *pwReceipt) { v.Nonce = "other" }, "wrong_engine": func(v *pwReceipt) { v.Engine = "firefox" }, "wrong_revision": func(v *pwReceipt) { v.Revision = "old" }, "wrong_version": func(v *pwReceipt) { v.Playwright = "1.0" }, "zero_tests": func(v *pwReceipt) { v.TestCount = 0 }, "extra_tests": func(v *pwReceipt) { v.TestCount = 2 }, "failed": func(v *pwReceipt) { v.Status = "failed" }, "missing": func(v *pwReceipt) { v.Scenarios = v.Scenarios[:8] }, "duplicate": func(v *pwReceipt) { v.Scenarios[1].ID = "B01" }, "skipped": func(v *pwReceipt) { v.Scenarios[0].Status = "skipped" }, "retried": func(v *pwReceipt) { v.Scenarios[0].Attempts = 2 }, "empty_browser": func(v *pwReceipt) { v.Browser = "" }, "tls_claim": func(v *pwReceipt) { v.FunctionalTLS = "trusted" }}
+	mutations["missing_tls_result"] = func(v *pwReceipt) { v.CertificateRejections = v.CertificateRejections[:1] }
+	mutations["transport_as_tls"] = func(v *pwReceipt) { v.CertificateRejections[0] = "connection-refused" }
+	mutations["missing_native_clipboard"] = func(v *pwReceipt) { v.NativeClipboard = "" }
+	mutations["false_clipboard_claim"] = func(v *pwReceipt) { v.ClipboardUI = "native-success-and-denial" }
 	for name, mutate := range mutations {
 		t.Run(name, func(t *testing.T) {
 			v := good
 			v.Scenarios = append([]pwScenario{}, good.Scenarios...)
+			v.CertificateRejections = append([]string{}, good.CertificateRejections...)
 			mutate(&v)
 			if validatePWReceipt(encode(v), "chromium", "synthetic") == nil {
 				t.Fatal("invalid receipt admitted")
@@ -260,6 +281,7 @@ func runPWEngine(t *testing.T, parent context.Context, node, web, dsn, engine st
 		t.Fatal("fixture migration failed")
 	}
 	server := httptest.NewUnstartedServer(nil)
+	server.Config.ErrorLog = log.New(io.Discard, "", 0)
 	defer server.Close()
 	runDir := t.TempDir()
 	if os.Chmod(runDir, 0700) != nil {
@@ -280,6 +302,29 @@ func runPWEngine(t *testing.T, parent context.Context, node, web, dsn, engine st
 		t.Fatal("app fixture unavailable")
 	}
 	nonce := token()
+	// A second exact loopback fixture has no IP SAN. Its DNS name is used only
+	// by the private ownership proof; strict browser access uses its IP origin.
+	mismatchKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal("synthetic mismatch key unavailable")
+	}
+	template := &x509.Certificate{SerialNumber: big.NewInt(1), DNSNames: []string{"playwright-mismatch.invalid"}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour), KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, BasicConstraintsValid: true, IsCA: true}
+	mismatchDER, err := x509.CreateCertificate(rand.Reader, template, template, &mismatchKey.PublicKey, mismatchKey)
+	if err != nil {
+		t.Fatal("synthetic mismatch certificate unavailable")
+	}
+	mismatch := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-GM-Playwright-Run", nonce)
+		if r.URL.Path != "/readyz" {
+			http.NotFound(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	mismatch.TLS = &tls.Config{Certificates: []tls.Certificate{{Certificate: [][]byte{mismatchDER}, PrivateKey: mismatchKey}}, MinVersion: tls.VersionTLS12}
+	mismatch.Config.ErrorLog = log.New(io.Discard, "", 0)
+	mismatch.StartTLS()
+	defer mismatch.Close()
 	handler := app.Handler()
 	server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-GM-Playwright-Run", nonce)
@@ -303,7 +348,7 @@ func runPWEngine(t *testing.T, parent context.Context, node, web, dsn, engine st
 	}
 
 	key, _ := x509.MarshalPKCS8PrivateKey(support)
-	input := map[string]any{"format": "gm-vector-playwright-fixture", "schema_version": 1, "engine": engine, "nonce": nonce, "origin": cfg.Origin, "certificate": string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})), "username": "pw-admin", "password": token() + "-synthetic", "report_private_key": string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: key})), "calendar_id": calendar.ID, "history_project": "pw-history"}
+	input := map[string]any{"format": "gm-vector-playwright-fixture", "schema_version": 1, "engine": engine, "nonce": nonce, "origin": cfg.Origin, "certificate": string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})), "mismatch_origin": mismatch.URL, "mismatch_certificate": string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: mismatchDER})), "username": "pw-admin", "password": token() + "-synthetic", "report_private_key": string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: key})), "calendar_id": calendar.ID, "history_project": "pw-history"}
 	raw, _ := json.Marshal(input)
 	file := filepath.Join(runDir, "fixture.json")
 	ipc, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
@@ -362,5 +407,9 @@ func runPWEngine(t *testing.T, parent context.Context, node, web, dsn, engine st
 		}
 		t.Fatalf("three-engine scenario failed; engine=%s phase=%s site=%s class=Error; private output not published", engine, phase, site)
 	}
-	t.Log("Playwright engine=" + engine + " version=1.64.1 scenarios=B01-B09 passed=9 skipped=0 retries=0 functional_tls=synthetic-only")
+	var accepted pwReceipt
+	if json.Unmarshal(receipt, &accepted) != nil {
+		t.Fatal("validated receipt unavailable")
+	}
+	t.Log("Playwright engine=" + engine + " playwright=1.64.1 browser_version=" + accepted.Browser + " browser_revision=" + accepted.Revision + " scenarios=B01-B09 passed=9 skipped=0 retries=0 functional_tls=synthetic-only native_clipboard=" + accepted.NativeClipboard + " clipboard_ui=controlled-success-and-denial")
 }

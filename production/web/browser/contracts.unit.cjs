@@ -45,6 +45,7 @@ try {
       validateFixture,
       validatePackages,
       validateHost,
+      certificateFailure,
       revisions,
       versions,
     } = load("contracts"),
@@ -56,6 +57,8 @@ try {
     nonce: crypto.randomBytes(32).toString("base64url"),
     origin: "https://127.0.0.1:43199",
     certificate: "-----BEGIN CERTIFICATE-----\n" + marker,
+    mismatch_origin: "https://127.0.0.1:43200",
+    mismatch_certificate: "-----BEGIN CERTIFICATE-----\n" + marker,
     username: "synthetic",
     password: marker,
     report_private_key: "-----BEGIN PRIVATE KEY-----\n" + marker,
@@ -71,6 +74,24 @@ try {
     );
   process.env.GMA_PW_FIXTURE_FILE = file;
   write(fixture);
+  for (const [engine, message] of [
+    ["chromium", "page.goto: net::ERR_CERT_AUTHORITY_INVALID"],
+    ["firefox", "page.goto: SSL_ERROR_UNKNOWN"],
+    ["webkit", "page.goto: Unacceptable TLS certificate"],
+  ])
+    assert.equal(
+      certificateFailure(engine, message),
+      engine + "-certificate-rejected",
+    );
+  for (const engine of ["chromium", "firefox", "webkit"])
+    for (const message of [
+      "net::ERR_CONNECTION_REFUSED",
+      "NS_ERROR_UNKNOWN_HOST",
+      "TimeoutError",
+      "Page crashed",
+      "Operation was cancelled",
+    ])
+      assert.equal(certificateFailure(engine, message), null);
   for (const release of [
     'ID=ubuntu\nVERSION_ID="24.04"',
     'ID=ubuntu\nVERSION_ID="26.04"',
@@ -163,6 +184,9 @@ try {
       annotations: [
         { type: "pw-scenario", description: marker },
         { type: "pw-browser-version", description: marker },
+        { type: "pw-native-clipboard", description: marker },
+        { type: "pw-clipboard-ui", description: marker },
+        { type: "pw-certificate-rejection", description: marker },
       ],
     },
     {
