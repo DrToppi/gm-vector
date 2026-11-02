@@ -138,9 +138,7 @@ def close_snapshot_owner(child, container, application):
   except subprocess.TimeoutExpired:
    # Killing docker exec alone need not kill the remote psql process. Address
    # only this random application name, never another backup/user session.
-   sql="SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='planner' AND usename='planner' AND application_name='"+application+"' AND pid<>pg_backend_pid();"
-   result=subprocess.run(DOCKER+['exec',container,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U','planner','-d','planner','-c',sql],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=5)
-   if result.returncode:raise RuntimeError('backup snapshot cleanup failed')
+   terminate_owned_backend(container,application)
    child.wait(timeout=2)
  finally:
   child.stdout.close()
@@ -148,6 +146,13 @@ def close_snapshot_owner(child, container, application):
    child.terminate()
    try:child.wait(timeout=2)
    except subprocess.TimeoutExpired:child.kill();child.wait(timeout=2)
+
+def terminate_owned_backend(container, application):
+ """Bounded cleanup of only one randomly identified backup operation."""
+ if not re.fullmatch(r'gm-vector-backup-(?:dump-)?[0-9a-f]{24}',application):raise ValueError('invalid backup operation identity')
+ sql="SELECT pg_terminate_backend(pid,1000) FROM pg_stat_activity WHERE datname='planner' AND usename='planner' AND application_name='"+application+"' AND pid<>pg_backend_pid();"
+ result=subprocess.run(DOCKER+['exec',container,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U','planner','-d','planner','-c',sql],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=5)
+ if result.returncode or len(result.stdout)>4096 or any(line!=b't' for line in result.stdout.splitlines()):raise RuntimeError('backup remote session cleanup failed')
 
 @contextlib.contextmanager
 def database_snapshot(container):
@@ -163,8 +168,15 @@ def database_snapshot(container):
   close_snapshot_owner(child,container,application)
 
 def capture_database(container):
+ application='gm-vector-backup-dump-'+secrets.token_hex(12)
  with database_snapshot(container) as (snapshot,rows):
-  dump=run(['exec',container,'pg_dump','-U','planner','-d','planner','-Fc','--no-owner','--no-acl','--snapshot='+snapshot])
+  try:
+   dump=run(['exec','-e','PGAPPNAME='+application,container,'pg_dump','-U','planner','-d','planner','-Fc','--no-owner','--no-acl','--snapshot='+snapshot])
+  except BaseException:
+   # docker exec's CLI can stop while its remote pg_dump continues. Explicitly
+   # close only this operation's backend before releasing its exported snapshot.
+   terminate_owned_backend(container,application)
+   raise
   if len(dump)>MAX_ARCHIVE-MAX_SECRET*16:raise ValueError('database dump exceeds limit')
  return dump,rows
 

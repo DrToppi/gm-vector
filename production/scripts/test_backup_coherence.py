@@ -1,5 +1,6 @@
 """Bounded protocol and failure cleanup units; no Docker or user configuration."""
 import importlib.util
+import contextlib
 import json
 from pathlib import Path
 import subprocess
@@ -15,6 +16,35 @@ spec.loader.exec_module(b)
 
 
 class BackupCoherenceProtocolTests(unittest.TestCase):
+    def test_dump_failure_targets_only_its_owned_backend(self):
+        @contextlib.contextmanager
+        def snapshot(*args):
+            yield '00000003-00000022-1', 'synthetic-counts'
+        with patch.object(b, 'database_snapshot', snapshot), patch.object(b, 'run', side_effect=subprocess.TimeoutExpired(['synthetic'], 180)) as run, patch.object(b, 'terminate_owned_backend') as cleanup:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                b.capture_database('synthetic-container')
+        cleanup.assert_called_once()
+        container, operation = cleanup.call_args.args
+        self.assertEqual(container, 'synthetic-container')
+        self.assertRegex(operation, r'^gm-vector-backup-dump-[0-9a-f]{24}$')
+        self.assertIn('PGAPPNAME=' + operation, run.call_args.args[0])
+
+    def test_remote_cleanup_rejects_unowned_identity_and_failure(self):
+        with patch.object(b.subprocess, 'run') as run:
+            for invalid in ('pg_dump', '', 'gm-vector-backup-dump-unsafe;sql'):
+                with self.assertRaises(ValueError):
+                    b.terminate_owned_backend('synthetic', invalid)
+            run.assert_not_called()
+            operation = 'gm-vector-backup-dump-' + 'a' * 24
+            for output in (b'f\n', b'unknown\n', b't' * 5000):
+                run.return_value = types.SimpleNamespace(returncode=0, stdout=output)
+                with self.assertRaisesRegex(RuntimeError, 'cleanup failed'):
+                    b.terminate_owned_backend('synthetic', operation)
+            run.return_value = types.SimpleNamespace(returncode=0, stdout=b't\n')
+            b.terminate_owned_backend('synthetic', operation)
+            sql = run.call_args.args[0][-1]
+            self.assertIn("datname='planner' AND usename='planner'", sql)
+            self.assertIn("application_name='" + operation + "'", sql)
     def test_exported_snapshot_protocol_has_exact_members(self):
         payload = 'SNAPSHOT|00000003-00000022-1\n' + '\n'.join(n + '|0' for n in b.COUNT_TABLES) + '\nREADY\n'
         variants = [payload.replace('users|0', 'users|invalid'), payload.replace('users|0', 'projects|0'),
