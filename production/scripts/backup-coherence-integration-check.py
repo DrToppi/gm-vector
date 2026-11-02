@@ -123,9 +123,87 @@ def failure_cases(root, name, args, original):
         # A normal independent writer still succeeds after exporter cleanup.
         original(['exec', name, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'planner', '-d', 'planner',
                   '-c', "INSERT INTO users VALUES('after-" + scenario + "')"])
+        if scenario == REQUIRED[2]:
+            blocked_dump_cleanup(name, args, original)
         print(json.dumps({'scenario': scenario, 'status': 'PASS', 'leaked_snapshot_owners': 0,
                           'published_archives': 0, 'failure': 'actual_owner_termination' if scenario == REQUIRED[1]
-                          else 'injected_subprocess_timeout_after_real_snapshot'}), flush=True)
+                          else 'injected_timeout_and_actual_blocked_pg_dump_timeout'}), flush=True)
+
+
+def blocked_dump_cleanup(name, args, original):
+    """A real lock wait proves whether killing docker exec also kills pg_dump."""
+    locker = None
+    dump = None
+    reached = False
+    application = 'coherence-blocked-dump'
+    args.destination += '-actual-blocked-dump'
+
+    def query(sql):
+        return original(['exec', name, 'psql', '-X', '-qAt', '-U', 'planner', '-d', 'planner', '-c', sql]).decode().strip()
+
+    def barrier(sql):
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            if query(sql) == '1':
+                return
+        raise AssertionError('actual PostgreSQL lock barrier was not reached')
+
+    def timed_run(argv, data=None):
+        nonlocal locker, dump, reached, application
+        if argv[0] != 'exec' or 'pg_dump' not in argv:
+            return original(argv, data)
+        locker = subprocess.Popen(b.DOCKER + ['exec', '-i', name, 'psql', '-X', '-qAt', '-v',
+                    'ON_ERROR_STOP=1', '-U', 'planner', '-d', 'planner'], stdin=subprocess.PIPE,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        locker.stdin.write(b"BEGIN; SET LOCAL application_name='coherence-exclusive-lock'; LOCK TABLE users IN ACCESS EXCLUSIVE MODE;\n")
+        locker.stdin.flush()
+        # The snapshot's AccessShare lock makes this real exclusive lock queue.
+        barrier("SELECT count(*) FROM pg_stat_activity WHERE application_name='coherence-exclusive-lock' AND wait_event_type='Lock'")
+        environment = next((value for value in argv if value.startswith('PGAPPNAME=')), None)
+        if environment:
+            application = environment.split('=', 1)[1]
+            actual_argv = argv
+        else:
+            actual_argv = [argv[0], '-e', 'PGAPPNAME=' + application] + argv[1:]
+        dump = subprocess.Popen(b.DOCKER + actual_argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        barrier("SELECT count(*) FROM pg_stat_activity WHERE application_name='" + application + "' AND wait_event_type='Lock'")
+        reached = True
+        try:
+            dump.communicate(timeout=.05)  # Test-only caller budget after a DB wait, not a sleep.
+        except subprocess.TimeoutExpired:
+            dump.kill()
+            dump.communicate(timeout=2)
+            raise
+        raise AssertionError('actual blocked pg_dump unexpectedly completed')
+
+    b.run = timed_run
+    try:
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                b.backup(args)
+        except subprocess.TimeoutExpired:
+            pass
+        else:
+            raise AssertionError('real blocked dump timeout was not propagated')
+        assert reached
+        assert not list(Path(args.destination).glob('*.gma'))
+        leaked = query("SELECT count(*) FROM pg_stat_activity WHERE application_name='" + application + "'")
+        assert leaked == '0', 'C03 actual timed-out docker exec left a remote pg_dump DB session alive'
+    finally:
+        b.run = original
+        # Clean only this controlled fixture, including the deliberately leaked
+        # baseline session; the RED itself must not leave resources behind.
+        query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name IN ('" + application + "','coherence-exclusive-lock')")
+        if locker:
+            try:
+                locker.stdin.close()
+                locker.wait(timeout=2)
+            except (BrokenPipeError, subprocess.TimeoutExpired):
+                locker.kill();locker.wait(timeout=2)
+        if dump:
+            if dump.poll() is None:
+                dump.kill();dump.wait(timeout=2)
+            dump.stdout.close();dump.stderr.close()
 
 
 def main():

@@ -44,6 +44,39 @@ Crypto/protocol checkpoint `fd37fbd` and genuine recovery-fixture checkpoint
 `3955caa` have passing focused units/syntax checks, but no real packaged recovery
 or origin-upgrade result is claimed here.
 
+## Snapshot correction and real cancellation follow-up
+
+Checkpoint `72243cc` shares one exported PostgreSQL snapshot between counts and
+dump. C01–C03 actually passed in the isolated Docker fixture (exit 0); private log
+SHA-256 `10d088b266c70602b98356ffb0407017360c1c42a75caf96274f59a3e9b9416f`.
+The initial C03 used an honestly labelled injected timeout after a real exporter
+started. It did not establish remote pg_dump cleanup after killing Docker CLI.
+
+A stronger deterministic follow-up on 2026-11-02 produced an actual **RED** at
+unchanged production `72243cc`: real exporter AccessShare lock, queued exclusive
+locker, real pg_dump observed blocked, then a test-only 50 ms communication
+deadline. The Docker CLI was killed but the remote pg_dump session remained,
+failing the zero-owned-session oracle. Fixture cleanup terminated only its owned
+dump/locker and removed the disposable container.
+
+Frozen failing harness SHA-256:
+`3086b2c8872d39b31fab9a30db4c96642f1b10f4c3788c6053462f42ef4b8d11`;
+private RED log SHA-256:
+`68f5a9ced1d6216f017ed1805bd564e0ce92321cbee082e948eb0ee7093bbcb4`.
+Allowed narrow correction: random per-dump PGAPPNAME, structured exec arguments,
+and a bounded cleanup query terminating only that exact owned dump session on
+capture failure. Preserve archive/CLI/updater contracts; do not terminate other
+database sessions. This correction still needs actual GREEN and review.
+
+The genuine R01–R08 tool diagnostic also passed against clean accepted WP-04
+`e97971d` and its matching pre-existing images. It covered 5×300 tasks, 30 staff,
+1001 facts, production DB roles, restored credentials/invitation/replay, write/
+export/restart, operator artifacts and wrong application-key rejection despite
+readyz. Measured prepared recovery action was 19.798 seconds. Log SHA-256:
+`2e3b47e0af8be27a5b4acdce860beaa6ac3ba1108cc10c1be4d1b61db9c2e446`.
+This validates the tool on that older accepted runtime; it does not replace
+final-candidate recovery or three origin-upgrade acceptance.
+
 ## Browser scaffold
 
 Checkpoint `6e636fa039f5ea0f20f66357faef96f0906ef456` contains the three-engine
