@@ -11,10 +11,13 @@ import secrets
 import tempfile
 import time
 import types
+import subprocess
 
 spec = importlib.util.spec_from_file_location('coherence_backup', Path(__file__).with_name('backup.py'))
 b = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(b)
+REQUIRED = ('C01_online_dump_manifest_snapshot', 'C02_snapshot_owner_failure_cleanup',
+            'C03_snapshot_timeout_cleanup')
 
 
 def private_write(path, data):
@@ -77,9 +80,52 @@ def online_snapshot(root):
         assert restored == meta['counts'], 'C01 manifest counted a different snapshot than the actual restored dump'
         print(json.dumps({'scenario': 'C01_online_dump_manifest_snapshot', 'status': 'PASS',
                           'actual_dump_restore': True, 'concurrent_writer_committed': True}), flush=True)
+        failure_cases(root, name, args, original)
     finally:
         b.run = original
         original(['rm', '-f', name])
+
+
+def failure_cases(root, name, args, original):
+    def owner_count():
+        return original(['exec', name, 'psql', '-X', '-qAt', '-U', 'planner', '-d', 'planner', '-c',
+                         "SELECT count(*) FROM pg_stat_activity WHERE application_name LIKE 'gm-vector-backup-%'"]).decode().strip()
+    for scenario in REQUIRED[1:]:
+        reached = False
+        args.destination = str(root / scenario)
+
+        def controlled_run(argv, data=None):
+            nonlocal reached
+            if argv[0] == 'exec' and 'pg_dump' in argv:
+                assert owner_count() == '1', 'actual exported snapshot owner missing'
+                reached = True
+                if scenario == REQUIRED[1]:
+                    terminated = original(['exec', name, 'psql', '-X', '-qAt', '-U', 'planner', '-d', 'planner', '-c',
+                        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name LIKE 'gm-vector-backup-%'"])
+                    assert terminated.decode().strip() == 't'
+                else:
+                    raise subprocess.TimeoutExpired(['synthetic-pg-dump'], 180)
+            return original(argv, data)
+
+        b.run = controlled_run
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                b.backup(args)
+        except (RuntimeError, subprocess.TimeoutExpired):
+            pass
+        else:
+            raise AssertionError('failed snapshot capture unexpectedly published an archive')
+        finally:
+            b.run = original
+        assert reached, 'controlled failure did not reach a real exported snapshot'
+        assert owner_count() == '0', 'exported snapshot transaction leaked'
+        assert not list(Path(args.destination).glob('*.gma')), 'partial archive was published'
+        # A normal independent writer still succeeds after exporter cleanup.
+        original(['exec', name, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'planner', '-d', 'planner',
+                  '-c', "INSERT INTO users VALUES('after-" + scenario + "')"])
+        print(json.dumps({'scenario': scenario, 'status': 'PASS', 'leaked_snapshot_owners': 0,
+                          'published_archives': 0, 'failure': 'actual_owner_termination' if scenario == REQUIRED[1]
+                          else 'injected_subprocess_timeout_after_real_snapshot'}), flush=True)
 
 
 def main():
@@ -93,6 +139,8 @@ def main():
         os.close(fd)
     with tempfile.TemporaryDirectory(prefix='gm-vector-coherence-fixture-') as temp:
         online_snapshot(Path(temp))
+    print(json.dumps({'suite': 'backup_coherence', 'required': list(REQUIRED), 'passed': list(REQUIRED),
+                      'status': 'PASS'}), flush=True)
 
 
 if __name__ == '__main__':

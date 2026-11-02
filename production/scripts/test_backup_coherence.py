@@ -15,6 +15,41 @@ spec.loader.exec_module(b)
 
 
 class BackupCoherenceProtocolTests(unittest.TestCase):
+    def test_exported_snapshot_protocol_has_exact_members(self):
+        payload = 'SNAPSHOT|00000003-00000022-1\n' + '\n'.join(n + '|0' for n in b.COUNT_TABLES) + '\nREADY\n'
+        variants = [payload.replace('users|0', 'users|invalid'), payload.replace('users|0', 'projects|0'),
+                    payload.replace('00000003-00000022-1', 'unsafe;sql'), payload.replace('READY', 'UNKNOWN'),
+                    payload.replace('READY', 'x' * 5000)]
+        for text in [payload] + variants:
+            child = subprocess.Popen([sys.executable, '-c', 'import sys;sys.stdout.write(' + repr(text) + ')'],
+                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            try:
+                if text == payload:
+                    self.assertEqual(b.snapshot_protocol(child), ('00000003-00000022-1', '\n'.join(n + '|0' for n in b.COUNT_TABLES)))
+                else:
+                    with self.assertRaises((ValueError, RuntimeError)):
+                        b.snapshot_protocol(child)
+            finally:
+                child.stdout.close()
+                child.wait(timeout=2)
+
+    def test_actual_exporter_closes_on_consumer_failure(self):
+        payload = 'SNAPSHOT|00000003-00000022-1\n' + '\n'.join(n + '|0' for n in b.COUNT_TABLES) + '\nREADY\n'
+        program = 'import sys;sys.stdout.write(' + repr(payload) + ');sys.stdout.flush()\nfor line in sys.stdin:\n if line.startswith("ROLLBACK"):break\n'
+        children = []
+        original = subprocess.Popen
+        def observed(*args, **kwargs):
+            child = original(*args, **kwargs)
+            children.append(child)
+            return child
+        with patch.object(b, 'DOCKER', [sys.executable, '-c', program]), patch.object(b.subprocess, 'Popen', observed):
+            with self.assertRaisesRegex(RuntimeError, 'controlled'):
+                with b.database_snapshot('synthetic-no-docker'):
+                    raise RuntimeError('controlled')
+        self.assertEqual(len(children), 1)
+        self.assertIsNotNone(children[0].poll())
+        self.assertTrue(children[0].stdin.closed)
+        self.assertTrue(children[0].stdout.closed)
     def test_snapshot_protocol_is_bounded_and_strict(self):
         with patch.object(b, 'DOCKER', [sys.executable]):
             self.assertEqual(list(b.process_lines(['-c', 'print("bounded")'])), [b'bounded'])
@@ -69,7 +104,7 @@ class BackupCoherenceProtocolTests(unittest.TestCase):
             (cfg / 'config.json').write_text(json.dumps({'secret_file': '/run/secrets/encryption.key'}))
             args = types.SimpleNamespace(config=str(cfg), destination=str(root / 'archives'),
                                          key=str(root / 'backup.key'), container='synthetic-not-contacted')
-            with patch.object(b, 'run', side_effect=subprocess.TimeoutExpired(['synthetic'], 180)):
+            with patch.object(b, 'capture_database', side_effect=subprocess.TimeoutExpired(['synthetic'], 180)):
                 with self.assertRaises(subprocess.TimeoutExpired):
                     b.backup(args)
             self.assertEqual(list((root / 'archives').glob('*.gma')), [])

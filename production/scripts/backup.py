@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Encrypted local backup. Restore test always creates its own disposable DB."""
-import argparse,datetime,hashlib,io,json,os,secrets,select,stat,subprocess,tarfile,time
+import argparse,contextlib,datetime,hashlib,io,json,os,re,secrets,select,stat,subprocess,tarfile,time
 from pathlib import Path
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 ROOT=Path(__file__).resolve().parents[2]
@@ -94,9 +94,79 @@ def read_archive(args,path):
  complete=validate_members(values,meta)
  return values,meta,complete
 
+COUNT_SQL="SELECT 'projects',count(*) FROM projects UNION ALL SELECT 'tasks',count(*) FROM tasks UNION ALL SELECT 'dependencies',count(*) FROM dependencies UNION ALL SELECT 'users',count(*) FROM users UNION ALL SELECT 'time_entries',count(*) FROM time_entries UNION ALL SELECT 'calendars',count(*) FROM calendars ORDER BY 1;"
+COUNT_TABLES=('calendars','dependencies','projects','tasks','time_entries','users')
 def counts(container, database="planner"):
- sql="SELECT 'projects',count(*) FROM projects UNION ALL SELECT 'tasks',count(*) FROM tasks UNION ALL SELECT 'dependencies',count(*) FROM dependencies UNION ALL SELECT 'users',count(*) FROM users UNION ALL SELECT 'time_entries',count(*) FROM time_entries UNION ALL SELECT 'calendars',count(*) FROM calendars ORDER BY 1;"
- return run(['exec',container,'psql','-U','planner','-d',database,'-At','-c',sql]).decode().strip()
+ return run(['exec',container,'psql','-U','planner','-d',database,'-At','-c',COUNT_SQL]).decode().strip()
+
+def snapshot_protocol(child, timeout=180):
+ """Consume exactly one bounded snapshot/counts/ready protocol from psql."""
+ deadline=time.monotonic()+timeout;pending=b'';total=0;lines=[]
+ while True:
+  remaining=deadline-time.monotonic()
+  if remaining<=0 or not select.select([child.stdout],[],[],max(remaining,0))[0]:raise TimeoutError('backup snapshot protocol timed out')
+  chunk=os.read(child.stdout.fileno(),4096)
+  if not chunk:raise RuntimeError('backup snapshot owner stopped before ready')
+  total+=len(chunk)
+  if total>4096:raise ValueError('backup snapshot protocol exceeds limit')
+  pending+=chunk
+  while b'\n' in pending:
+   line,pending=pending.split(b'\n',1)
+   if len(line)>256 or len(lines)>=8:raise ValueError('invalid backup snapshot protocol')
+   lines.append(line)
+   if line==b'READY':
+    if pending or len(lines)!=8:raise ValueError('invalid backup snapshot protocol')
+    try:
+     marker,snapshot=lines[0].decode('ascii').split('|')
+     if marker!='SNAPSHOT' or not re.fullmatch(r'[0-9A-Fa-f]{8}-[0-9A-Fa-f]{8}-[0-9]{1,10}',snapshot):raise ValueError()
+     for table,record in zip(COUNT_TABLES,lines[1:7]):
+      name,count=record.decode('ascii').split('|')
+      if name!=table or not re.fullmatch(r'[0-9]{1,19}',count):raise ValueError()
+    except (ValueError,UnicodeError):raise ValueError('invalid backup snapshot protocol') from None
+    return snapshot,b'\n'.join(lines[1:7]).decode('ascii')
+  if len(pending)>256:raise ValueError('invalid backup snapshot protocol')
+
+def close_snapshot_owner(child, container, application):
+ """Rollback this exporter only; do not leak a server transaction on errors."""
+ try:
+  if child.poll() is None:
+   try:child.stdin.write(b'ROLLBACK;\n\\q\n');child.stdin.flush()
+   except (BrokenPipeError,OSError):pass
+  try:child.stdin.close()
+  except (BrokenPipeError,OSError):pass
+  try:child.wait(timeout=2)
+  except subprocess.TimeoutExpired:
+   # Killing docker exec alone need not kill the remote psql process. Address
+   # only this random application name, never another backup/user session.
+   sql="SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='planner' AND usename='planner' AND application_name='"+application+"' AND pid<>pg_backend_pid();"
+   result=subprocess.run(DOCKER+['exec',container,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U','planner','-d','planner','-c',sql],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=5)
+   if result.returncode:raise RuntimeError('backup snapshot cleanup failed')
+   child.wait(timeout=2)
+ finally:
+  child.stdout.close()
+  if child.poll() is None:
+   child.terminate()
+   try:child.wait(timeout=2)
+   except subprocess.TimeoutExpired:child.kill();child.wait(timeout=2)
+
+@contextlib.contextmanager
+def database_snapshot(container):
+ application='gm-vector-backup-'+secrets.token_hex(12)
+ child=subprocess.Popen(DOCKER+['exec','-i',container,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U','planner','-d','planner'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
+ try:
+  sql="BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;\nSET LOCAL statement_timeout='180s';\nSET LOCAL idle_in_transaction_session_timeout='185s';\nSET LOCAL application_name='"+application+"';\nSELECT 'SNAPSHOT|'||pg_export_snapshot();\n"+COUNT_SQL+"\nSELECT 'READY';\n"
+  child.stdin.write(sql.encode());child.stdin.flush()
+  snapshot,rows=snapshot_protocol(child)
+  yield snapshot,rows
+  if child.poll() is not None:raise RuntimeError('backup snapshot owner stopped during capture')
+ finally:
+  close_snapshot_owner(child,container,application)
+
+def capture_database(container):
+ with database_snapshot(container) as (snapshot,rows):
+  dump=run(['exec',container,'pg_dump','-U','planner','-d','planner','-Fc','--no-owner','--no-acl','--snapshot='+snapshot])
+  if len(dump)>MAX_ARCHIVE-MAX_SECRET*16:raise ValueError('database dump exceeds limit')
+ return dump,rows
 
 def process_lines(argv, *, timeout=180, max_line=MAX_SECRET*2+64, max_output=MAX_ARCHIVE*3):
  """Read a fixed internal protocol without buffering arbitrary DB output."""
@@ -170,10 +240,9 @@ def backup(args):
  config=Path(args.config);dest=Path(args.destination)
  values=collect_secrets(config)
  dest.mkdir(parents=True,exist_ok=True,mode=0o700);k=key(Path(args.key),True)
- dump=run(['exec',args.container,'pg_dump','-U','planner','-d','planner','-Fc','--no-owner','--no-acl'])
- if len(dump)>MAX_ARCHIVE-MAX_SECRET*16:raise ValueError('database dump exceeds limit')
+ dump,snapshot_counts=capture_database(args.container)
  values['database.dump']=dump
- meta={'created_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'dump_sha256':hashlib.sha256(dump).hexdigest(),'counts':counts(args.container),'format':2,'files':{n:{'size':len(v),'sha256':hashlib.sha256(v).hexdigest()} for n,v in values.items()}}
+ meta={'created_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'dump_sha256':hashlib.sha256(dump).hexdigest(),'counts':snapshot_counts,'format':2,'files':{n:{'size':len(v),'sha256':hashlib.sha256(v).hexdigest()} for n,v in values.items()}}
  values['manifest.json']=json.dumps(meta).encode()
  validate_members(values,meta)
  buf=io.BytesIO()
