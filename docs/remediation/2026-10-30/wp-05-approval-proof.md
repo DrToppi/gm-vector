@@ -1,6 +1,7 @@
 # D14 — evidence of vulnerability-exception approval
 
-Status: **PROPOSED — HUMAN SELECTION REQUIRED**. Checked on 2026-10-31.
+Status: **A ACCEPTED BY THE USER ON 2026-11-02**. Initial sources checked 2026-10-31;
+recheck GitHub capabilities and freeze the bounded verifier plan before setup.
 D10 B already allows narrowly scoped exceptions for at most 14 days, approved
 only by the owner. It does not choose how the gate authenticates that approval.
 A JSON field saying approved_by is self-declared and cannot prove authorization.
@@ -14,7 +15,7 @@ No particular advisory exception has been approved.
 | B — offline Ed25519-signed exception bundle, pinned maintainer public key | Verifiable without a live approval API; exact content is cryptographically bound | Separate protected private key, signing procedure, public-key rotation and CI bundle delivery | Lost/compromised signing key and key-replacement trust must be managed; signature does not replace expiry/scope checks |
 | C — explicit owner Issue comment containing the canonical waiver digest, verified through GitHub API | Familiar text approval and visible history; no additional private key | Depends on comment availability, API access/rate limits and a strict content parser | Edited/deleted/foreign comments must fail validation; owner-account compromise remains a risk |
 
-Recommendation **A**, not approval. This environment is a CI security gate and
+Selected choice **A**. This environment is a CI security gate and
 does not deploy the application. Normal runs with no exceptions must never wait
 for manual approval. Blocked findings remain blocked until a concrete scoped
 exception is separately approved; selecting D14 is not that approval.
@@ -43,8 +44,8 @@ comment contents. Approval failure/unavailability stays a blocking result.
 
 Strict scans, freshness/identity validation, complete reports, negative controls,
 browser and recovery work do not need a waiver and may proceed under the accepted
-WP-05 plan. Exception admission remains disabled until this decision is selected
-and its bounded verification design is reviewed. No environment, approval Issue,
+WP-05 plan. D14 A is now selected; exception admission remains disabled until
+its bounded verification design is reviewed and implemented. No environment, approval Issue,
 signing key or repository protection setting has been created by this proposal.
 
 ## Current primary references
@@ -56,5 +57,5 @@ signing key or repository protection setting has been created by this proposal.
 - [Ed25519 signing/verification primitives](https://cryptography.io/en/latest/hazmat/primitives/asymmetric/ed25519/).
 
 These describe available mechanisms; they do not establish that a particular
-review, signature or exception exists. Record the user's selection before
-implementing or configuring exception admission.
+review, signature or exception exists. The user selected the protected-environment
+answer explicitly. No individual vulnerability waiver has been approved.

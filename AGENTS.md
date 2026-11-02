@@ -15,8 +15,9 @@ docs/remediation/2026-10-30/wp-03-verification.md. The user selected WP-05 D09 A
 D10 B and D13 A in docs/remediation/2026-10-30/wp-05-decisions.md. Work is now
 phase-1 implementation in feature/operational-hardening under the independently
 admitted docs/remediation/2026-10-30/wp-05-implementation.md plan. Tools, ownership,
-required scenarios and evidence entry points are frozen there. D14 exception
-admission/configuration stays disabled until human selection and bounded review.
+required scenarios and evidence entry points are frozen there. D14 A was selected
+on 2026-11-02; exception admission/configuration stays disabled until bounded
+verifier review and implementation. No individual waiver has been approved.
 No individual vulnerability exception, main merge, release or deployment is
 authorized by that selection. Existing implementation authorization remains valid
 once the bounded plan is ready; routine in-scope work needs no repeated approval.

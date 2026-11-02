@@ -5,15 +5,16 @@ No implementation result is implied. At admission no WP-05 code or dependencies
 had been installed. Exception admission remains held as described below.
 Baseline runtime: accepted WP-03 9b03c90, documentation closure f516d48.
 Branch: feature/operational-hardening. User choices D09 A/D10 B/D13 A are recorded
-in [the accepted packet](wp-05-decisions.md); [D14](wp-05-approval-proof.md) is
-unselected. This plan applies the full [05-01–17 matrix](wp-03-05.md).
+in [the accepted packet](wp-05-decisions.md); [D14 A](wp-05-approval-proof.md) was
+selected on 2026-11-02. Its bounded verifier review/setup is a separate gate.
+This plan applies the full [05-01–17 matrix](wp-03-05.md).
 
 ## Admission and exclusions
 
 After independent READ-ONLY plan review, phase 1 may implement strict/no-waiver
 image gates, browser fixtures, recovery controls and their scoped corrections.
-Exception admission/configuration is a separate held phase until D14 is selected
-and its exact trust/artifact verification is reviewed. No individual waiver exists.
+Exception admission/configuration is a separate held phase until D14 A's exact
+trust/artifact verification is reviewed and implemented. No individual waiver exists.
 The package cannot be accepted with an unimplemented selected approval path.
 
 The reviewer independently checked accepted choices, current source, exact pins,
