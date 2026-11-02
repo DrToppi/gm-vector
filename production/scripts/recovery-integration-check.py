@@ -7,6 +7,7 @@ import io
 import json
 from pathlib import Path
 import secrets
+import subprocess
 import tarfile
 import tempfile
 import time
@@ -49,6 +50,65 @@ def envelope(args, path, values, *, manifest=True):
     nonce = secrets.token_bytes(12)
     f.private(path, b'GMABK01' + nonce + AESGCM(Path(args.key).read_bytes()).encrypt(
         nonce, buffer.getvalue(), b'GMA|Planner backup v1'))
+
+
+def failed_restore_target(args, archive, mode):
+    """Real owned DB/disk failure; not an invented failed subprocess result."""
+    original = f.backup.run
+    target = None
+    reached = False
+    disk_full = False
+    failed = False
+
+    def controlled(argv, data=None):
+        nonlocal target, reached, disk_full
+        argv = list(argv)
+        if argv[0] == 'run' and '--name' in argv:
+            target = argv[argv.index('--name') + 1]
+            assert target.startswith('gma-restore-check-')
+            if mode == 'disk_full':
+                argv[argv.index('--tmpfs') + 1] = '/var/lib/postgresql:size=96m'
+            argv[-1:-1] = ['--memory', '512m', '--cpus', '1', '--pids-limit', '128']
+        if argv[0] == 'exec' and target in argv and 'pg_restore' in argv:
+            result = subprocess.run(f.backup.DOCKER + argv, input=data, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, timeout=180)
+            if result.returncode:
+                if mode == 'disk_full':
+                    logs = subprocess.run(f.backup.DOCKER + ['logs', '--tail', '100', target],
+                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+                    disk_full = b'no space left on device' in (result.stderr + logs.stdout + logs.stderr).lower()
+                raise RuntimeError('controlled restore target unavailable')
+            return result.stdout
+        result = original(argv, data)
+        if argv[0] == 'exec' and target in argv and 'pg_isready' in argv and not reached:
+            if mode == 'db_unavailable':
+                original(['stop', '--time', '0', target])
+            else:
+                disk = original(['exec', target, 'df', '-Pk', '/var/lib/postgresql'])
+                available = int(disk.decode().splitlines()[-1].split()[3])
+                assert 64 < available <= 96 * 1024
+                reached = True
+                original(['exec', '--user', '0:0', target, 'dd', 'if=/dev/zero',
+                          'of=/var/lib/postgresql/synthetic-restore-pressure', 'bs=1024', 'count=' + str(available - 64)])
+                remaining = original(['exec', target, 'df', '-Pk', '/var/lib/postgresql'])
+                assert int(remaining.decode().splitlines()[-1].split()[3]) <= 64
+            reached = True
+        return result
+
+    f.backup.run = controlled
+    try:
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            try:
+                f.backup.verify(args, archive)
+            except RuntimeError:
+                failed = True
+        assert reached and failed, 'real restore-target failure did not reach its intended oracle'
+        assert 'runtime_verified' not in output.getvalue()
+        if mode == 'disk_full':
+            assert disk_full, 'disk-full negative lacked actual ENOSPC evidence'
+    finally:
+        f.backup.run = original
+    return {'actual_failure': mode, 'enospc_observed': disk_full, 'runtime_success_emitted': False}
 
 
 def main():
@@ -105,7 +165,14 @@ def main():
                 f.backup.verify(backup_args, legacy_path)
             legacy_receipt = json.loads(legacy_output.getvalue())
             assert legacy_receipt['legacy_database_only'] is True and legacy_receipt['runtime_verified'] is False
-            f.receipt(REQUIRED[4]); completed.append(REQUIRED[4])
+            frozen_config = fixture.active_files()
+            archive_hash = hashlib.sha256(archive.read_bytes()).hexdigest()
+            failures = [failed_restore_target(backup_args, archive, mode) for mode in ('db_unavailable', 'disk_full')]
+            assert fixture.active_files() == frozen_config
+            assert hashlib.sha256(archive.read_bytes()).hexdigest() == archive_hash
+            fixture.admin.call('/auth/me')
+            f.receipt(REQUIRED[4], target_failures=failures, source_and_archive_unchanged=True)
+            completed.append(REQUIRED[4])
             wrong_application = dict(values)
             wrong_application['secrets/encryption.key'] = secrets.token_bytes(32)
             bad_application_path = root / 'wrong-application-key.gma'
