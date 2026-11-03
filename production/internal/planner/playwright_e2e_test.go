@@ -432,6 +432,9 @@ func runPWLifecycle(parent context.Context, node, web, engine, runDirectory, non
 			out.Reason = "invalid_interrupted_receipt"
 		}
 	}
+	if absolute, ok := probe.Deadline(); out.Reason == "" && (probe.Err() != nil || ok && !time.Now().Before(absolute)) {
+		out.Reason = "probe_deadline"
+	}
 	return
 }
 
