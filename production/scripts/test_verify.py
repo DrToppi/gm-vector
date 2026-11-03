@@ -135,3 +135,103 @@ class FocusedBrowserVerification(unittest.TestCase):
             self.assertIn('^TestBrowserE2E$', run.call_args.args[0])
             self.assertEqual(run.call_args.kwargs['env']['GMA_E2E'], '1')
             self.assertEqual(run.call_args.kwargs['env']['GMA_TEST_DSN'], 'postgres://localhost/gma_planner_test')
+
+
+class ThreeEngineVerification(unittest.TestCase):
+    def test_engine_filter_cannot_enter_complete_suites(self):
+        for suite in ('all', 'unit', 'integration', 'e2e'):
+            with self.subTest(suite=suite), \
+                 patch('sys.argv', ['verify.py', suite, '--playwright-diagnostic-engine', 'webkit']), \
+                 patch('sys.stderr', new_callable=io.StringIO), patch('subprocess.run') as run:
+                with self.assertRaises(SystemExit) as result:
+                    main()
+                self.assertEqual(result.exception.code, 2)
+                run.assert_not_called()
+
+    def test_existing_debug_directory_is_never_reused(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             patch('sys.argv', ['verify.py', 'e2e', '--only-playwright', '--browser-debug-dir', directory]), \
+             patch('sys.stderr', new_callable=io.StringIO), patch('subprocess.run') as run:
+            with self.assertRaises(SystemExit) as result:
+                main()
+            self.assertEqual(result.exception.code, 2)
+            run.assert_not_called()
+
+    def test_parent_green_cannot_hide_missing_or_skipped_engine(self):
+        from verify import PLAYWRIGHT_TEST, PLAYWRIGHT_CHILDREN
+        good = [{'Action': 'pass', 'Test': name} for name in (*PLAYWRIGHT_CHILDREN, PLAYWRIGHT_TEST)]
+        require_go_test('\n'.join(map(json.dumps, good)), PLAYWRIGHT_TEST, PLAYWRIGHT_CHILDREN)
+        for missing in PLAYWRIGHT_CHILDREN:
+            with self.subTest(engine=missing), self.assertRaises(RuntimeError):
+                require_go_test('\n'.join(json.dumps(x) for x in good if x['Test'] != missing),
+                                PLAYWRIGHT_TEST, PLAYWRIGHT_CHILDREN)
+        skipped = [dict(x, Action='skip') if x['Test'] == PLAYWRIGHT_CHILDREN[1] else x for x in good]
+        with self.assertRaises(RuntimeError):
+            require_go_test('\n'.join(map(json.dumps, skipped)), PLAYWRIGHT_TEST, PLAYWRIGHT_CHILDREN)
+
+    def test_focus_never_masquerades_as_another_suite_or_focus(self):
+        for arguments in (['all'], ['unit'], ['integration'], ['e2e', '--only-browser-api']):
+            with self.subTest(arguments=arguments), \
+                 patch('sys.argv', ['verify.py', *arguments, '--only-playwright']), \
+                 patch('sys.stderr', new_callable=io.StringIO), patch('subprocess.run') as run:
+                with self.assertRaises(SystemExit) as result:
+                    main()
+                self.assertEqual(result.exception.code, 2)
+                run.assert_not_called()
+
+    def test_focus_runs_named_parent_and_every_engine_with_disposable_db(self):
+        from verify import PLAYWRIGHT_TEST, PLAYWRIGHT_CHILDREN
+        report = '\n'.join(json.dumps({'Action': 'pass', 'Test': name})
+                           for name in (*PLAYWRIGHT_CHILDREN, PLAYWRIGHT_TEST))
+        result = subprocess.CompletedProcess([], 0, stdout=report, stderr='')
+        with patch('sys.argv', ['verify.py', 'e2e', '--only-playwright']), \
+             patch.dict(os.environ, {'GMA_GO_BIN': 'go', 'GMA_TEST_DSN': 'postgres://localhost/gma_planner_test'}), \
+             patch('sys.stdout', new_callable=io.StringIO) as output, \
+             patch('subprocess.run', return_value=result) as run:
+            self.assertEqual(main(), 0)
+            self.assertIn('not complete E2E acceptance', output.getvalue())
+            self.assertEqual(run.call_count, 2)
+            self.assertIn('^TestPlaywrightE2E$', run.call_args.args[0])
+            self.assertEqual(run.call_args.kwargs['env']['GMA_PLAYWRIGHT_E2E'], '1')
+
+
+class CompleteRecoveryVerification(unittest.TestCase):
+    def test_partial_or_irrelevant_image_overrides_fail_before_work(self):
+        image = 'sha256:' + 'a' * 64
+        for arguments in (['all', '--app-image', image],
+                          ['unit', '--app-image', image, '--db-image', image, '--proxy-image', image],
+                          ['integration', '--only-test', 'TestPlaywrightMemberMilestoneRegression', '--app-image', image]):
+            with self.subTest(arguments=arguments), \
+                 patch('sys.argv', ['verify.py', *arguments]), \
+                 patch('sys.stderr', new_callable=io.StringIO), patch('subprocess.run') as run:
+                with self.assertRaises(SystemExit) as result:
+                    main()
+                self.assertEqual(result.exception.code, 2)
+                run.assert_not_called()
+
+    def test_complete_integration_keeps_security_coherence_and_exact_recovery_images(self):
+        images = {role: 'sha256:' + character * 64 for role, character in
+                  (('app', 'a'), ('db', 'b'), ('proxy', 'c'))}
+        arguments = [item for role, image in images.items() for item in ('--' + role + '-image', image)]
+
+        def passed(command, **_):
+            report = ''
+            if '-json' in command:
+                test = command[command.index('-run') + 1].removeprefix('^').removesuffix('$')
+                report = json.dumps({'Action': 'pass', 'Test': test})
+            return subprocess.CompletedProcess(command, 0, stdout=report, stderr='')
+
+        with patch('sys.argv', ['verify.py', 'integration', *arguments]), \
+             patch.dict(os.environ, {'GMA_GO_BIN': 'go', 'GMA_TEST_DSN': 'postgres://localhost/gma_planner_test'}), \
+             patch('sys.stdout', new_callable=io.StringIO), patch('subprocess.run', side_effect=passed) as run:
+            self.assertEqual(main(), 0)
+        commands = [call.args[0] for call in run.call_args_list]
+        tests = {command[command.index('-run') + 1] for command in commands if '-json' in command}
+        for required in ('TestSecurityAuditMatrix', 'TestSecurityAuditResilience',
+                         'TestSecurityAuditRevocationSeatRace', 'TestPlaywrightMemberMilestoneRegression'):
+            self.assertIn('^' + required + '$', tests)
+        self.assertTrue(any(command[-1].endswith('/backup-coherence-integration-check.py') for command in commands))
+        recovery = next(command for command in commands if any(
+            item.endswith('/recovery-integration-check.py') for item in command))
+        for role, image in images.items():
+            self.assertEqual(recovery[recovery.index('--' + role + '-image') + 1], image)
