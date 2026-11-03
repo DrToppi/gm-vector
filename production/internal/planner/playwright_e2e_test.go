@@ -311,15 +311,25 @@ func TestPlaywrightHarnessValidation(t *testing.T) {
 // A real API regression for the member preview/apply path observed in B06.
 // It never attaches to an installed application or prints response bodies.
 func TestPlaywrightMemberMilestoneRegression(t *testing.T) {
+	for _, state := range []string{"ready", "blocked_capacity"} {
+		t.Run(state, func(t *testing.T) { testPWMemberMilestone(t, state) })
+	}
+}
+
+func testPWMemberMilestone(t *testing.T, state string) {
 	f := newReadPathFixture(t, 1)
 	ctx := context.Background()
 	project := f.projects[0]
 	project.Brief = "PW protected manager brief"
 	project.People = project.People[:1]
+	if state == "blocked_capacity" {
+		project.People[0].Week = map[string]Activity{"1": {Active: false}}
+	}
 	project.Links = []Link{}
 	project.Tasks = []Task{
 		{ID: "pw-milestone", Title: "PW milestone", Status: "todo", Responsibility: "internal", Assignments: []Assignment{}},
 		{ID: "pw-owned-leaf", Parent: "pw-milestone", Title: "PW owned leaf", Status: "todo", Responsibility: "internal", RequestedStart: project.Start, Planned: 192, Assignments: []Assignment{{EmployeeID: "profile-employee-00", Daily: 96}}},
+		{ID: "pw-unowned-leaf", Title: "PW unowned leaf", Status: "todo", Responsibility: "customer", RequestedStart: project.Start, Start: project.Start, End: project.Start, DurationDays: 1, Assignments: []Assignment{}},
 	}
 	if _, err := f.store.DB.Exec(ctx, "UPDATE employees SET user_id='profile-user-01' WHERE id='profile-employee-00'"); err != nil {
 		t.Fatal("member employee binding unavailable")
@@ -385,6 +395,9 @@ func TestPlaywrightMemberMilestoneRegression(t *testing.T) {
 		t.Fatal("member regression project role precondition failed")
 	}
 	stored = envelope.Project
+	if stored.CalculationState != state {
+		t.Fatal("member regression calculation state precondition failed")
+	}
 	var desired Project
 	cloned, _ := json.Marshal(stored)
 	decode(cloned, &desired)
@@ -424,6 +437,61 @@ func TestPlaywrightMemberMilestoneRegression(t *testing.T) {
 	if !reflect.DeepEqual(snapshotProject(desired), snapshotProject(saved)) {
 		t.Fatal("member preview apply changed protected fields")
 	}
+	clone := func(project Project) Project {
+		raw, _ := json.Marshal(project)
+		var copied Project
+		decode(raw, &copied)
+		return copied
+	}
+	forged := clone(saved)
+	forged.Tasks[0].Status = "done"
+	status, raw = call("PUT", "/projects/"+project.ID, saveRequest{Project: snapshotProject(forged)}, 1)
+	if status != 200 {
+		t.Fatalf("derived-only milestone transport HTTP%d, expected200", status)
+	}
+	var normalized Project
+	decode(raw, &normalized)
+	saved.Revision++
+	if normalized.CalculationState != state || normalized.Tasks[0].Status != "doing" || !reflect.DeepEqual(snapshotProject(saved), snapshotProject(normalized)) {
+		t.Fatal("forged milestone status persisted or protected fields changed")
+	}
+	storedRaw, err := readProject(ctx, f.store.DB, project.ID)
+	if err != nil || storedRaw.Tasks[0].Status != "doing" {
+		t.Fatal("forged milestone status reached storage")
+	}
+	for _, control := range []struct {
+		name   string
+		mutate func(*Project)
+	}{
+		{"parent_title", func(p *Project) { p.Tasks[0].Title = "Forbidden parent title" }},
+		{"parent_brief", func(p *Project) { p.Tasks[0].Brief = "Forbidden parent brief" }},
+		{"parent_plan", func(p *Project) { p.Tasks[0].Planned++ }},
+		{"forged_summary_leaf", func(p *Project) { p.Tasks[2].Status = "doing"; p.Tasks[2].Summary = true }},
+	} {
+		t.Run(control.name, func(t *testing.T) {
+			attempt := clone(normalized)
+			control.mutate(&attempt)
+			status, raw := call("PUT", "/projects/"+project.ID, saveRequest{Project: snapshotProject(attempt)}, 1)
+			var failure struct {
+				Error struct {
+					Code string `json:"code"`
+				} `json:"error"`
+			}
+			decode(raw, &failure)
+			if status != 403 || failure.Error.Code != "forbidden" {
+				t.Fatal("protected member mutation was not forbidden")
+			}
+			status, raw = call("GET", "/projects/"+project.ID, nil, 1)
+			var after struct {
+				Project Project `json:"project"`
+			}
+			decode(raw, &after)
+			if status != 200 || !reflect.DeepEqual(snapshotProject(normalized), snapshotProject(after.Project)) {
+				t.Fatal("forbidden member mutation changed project state")
+			}
+		})
+	}
+	t.Log("PW_MEMBER_MILESTONE forged_parent_done_not_persisted=true protected_parent_fields=forbidden forged_summary_leaf=forbidden unchanged_after_denial=true state=" + state)
 }
 
 // The three engines always run; a manually filtered Go child cannot become a
