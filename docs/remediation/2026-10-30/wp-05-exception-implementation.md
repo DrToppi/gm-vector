@@ -15,6 +15,12 @@ boundary; this does not defend against the owner rewriting the workflow. CI has
 only `contents: read` and `actions: read`. Never put an owner credential in CI or
 grant `deployments: write`/`administration: write` to it. Reject exception admission
 on forks, pull-request workflows, another repository/run/attempt or foreign artifacts.
+That restriction concerns NONEMPTY exceptions. Existing strict zero-request PR
+checks remain supported: GITHUB_SHA can be a merge commit while REST head_sha is
+the PR head. Bind validated scan candidate SHA to trusted GITHUB_SHA, and artifact
+head_sha to the live GET-run head_sha separately. Nonempty dispatch requires
+exact candidate/head/workflow identity in the expected repository, with no
+foreign head repository; a strict fork check cannot authorize a waiver.
 
 Expected public repository ID: 1438943020 (DrToppi/gm-vector); owner reviewer ID:
 161593815 (DrToppi). Pin those numeric identities, not a display name alone.
@@ -114,11 +120,16 @@ with an old prepared bundle must fail, even if an older approval remains visible
 Create the concrete environment with only DrToppi as required reviewer. Sole-owner
 runs require self-review prevention off; this proves account authorization, not
 physical presence or two-person control. Disable administrator bypass and record
-actual readback. Current documented REST/GraphQL APIs do not expose that bypass
-toggle. API setup/readback must not call an absent field false or claim it was
-verified. If no supported observable API becomes available, prepare the concrete
-environment first, then request the exact owner UI disable/readback step. Keep
-exception admission held until that setup gate is completed. The owner review
+actual readback. Published REST/GraphQL schemas initially omitted the bypass
+toggle, but the actual REST2022-11-28 response on 2026-11-03 exposes it. Authorized
+PUT false was honored, and a separate independent GET confirmed literal boolean
+`can_admins_bypass: false` for environment26111380009. This observed capability
+was independently admitted as a procedural refinement, not a new policy.
+Require that live field to be exactly false on every admission: missing/null/0/
+string/true blocks. Fingerprint it with the other actual protection settings;
+never infer absent means false. This concrete installation needs no UI fallback.
+Fail closed if the observed API capability disappears. Keep exception admission
+held until setup/code verification is complete. The owner review
 record is still checked for every concrete exception; a self-declared JSON
 approved_by field, setup flag or ordinary Issue comment cannot authorize it.
 
@@ -199,11 +210,12 @@ Document that credentials, internal addresses/customer details are forbidden.
 Env/private-file transport prevents shell injection; it does not make input secret.
 
 The checked-out environment setup record pins numeric environment/reviewer/repo
-IDs, canonical digest of live API-observable reviewer/self-review/wait/branch
-settings and explicit owner UI disable/readback evidence with its UTC date. It
-must match the current live environment. No absent admin-bypass field is treated
-as false. Unfinished setup blocks the exception path only; the setup record is a
-prerequisite and can NEVER substitute for a concrete owner review record.
+IDs and the canonical digest of actual reviewer/self-review/admin-bypass/wait/
+branch settings. `bypass_disable_verification` has method api_readback, UTC
+verified_at and evidence_sha256. It must match the live environment and literal
+false bypass field. No absent field is false. Unfinished setup blocks the
+exception path only; the record is a prerequisite and can NEVER substitute for
+a concrete owner review record.
 
 Final invariants: prepare-result MUST be success. Zero requests require raw
 strict PASS, admission-result skipped and no receipt flags. Nonempty requests
@@ -221,5 +233,6 @@ ADMITTED_WITH_EXCEPTIONS result and retain the original strict finding state.
 - [Pinned upload action](https://github.com/actions/upload-artifact/tree/v7.0.2) and
   [pinned download action](https://github.com/actions/download-artifact/tree/v8.0.2).
 
-Read-only metadata/source checks supplied these version/capability facts; no
-environment, artifact, approval event or individual exception was created by this plan.
+Read-only source checks supplied version/capability facts at initial admission.
+The concrete environment was subsequently created and verified as described
+above. No approval event or individual exception has been created.

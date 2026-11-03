@@ -3,8 +3,9 @@
 Status: **A ACCEPTED BY THE USER ON 2026-11-02**. Initial sources checked 2026-10-31;
 recheck GitHub capabilities and freeze the bounded verifier plan before setup.
 The [bounded implementation contract](wp-05-exception-implementation.md) has
-subsequently received independent plan admission. Concrete setup, code/evidence
-review and the owner UI bypass-disable/readback gate remain required.
+subsequently received independent plan admission. Actual REST setup/readback on
+2026-11-03 confirmed owner-only review and disabled administrator bypass; see the
+bounded contract. Code/evidence review remains required. No individual waiver exists.
 D10 B already allows narrowly scoped exceptions for at most 14 days, approved
 only by the owner. It does not choose how the gate authenticates that approval.
 A JSON field saying approved_by is self-declared and cannot prove authorization.

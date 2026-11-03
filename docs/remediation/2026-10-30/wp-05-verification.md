@@ -93,6 +93,14 @@ launches still require verification.
 
 ## Remaining acceptance
 
+D14 environment security-exceptions was created on 2026-11-03 with numeric ID
+26111380009, sole reviewer161593815 and self-review prevention false. Contrary to
+the earlier published-schema assumption, actual REST2022-11-28 GET exposed
+can_admins_bypass. PUT false succeeded and a separate independent read confirmed
+literal false. Require that exact typed state on every admission and fail closed
+on absence/change. No UI action, approval event or individual waiver was used.
+The helper/workflow admission path remains unverified and disabled.
+
 Finish and review source/build/package/all-layer privacy, all-image actual scans,
 D14 protected approval binding (no individual exception currently approved),
 coherent backup C01–C03, real R01–R08 and three fresh U01–U06 origins with rollback,
