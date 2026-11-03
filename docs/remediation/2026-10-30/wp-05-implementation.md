@@ -15,6 +15,10 @@ After independent READ-ONLY plan review, phase 1 may implement strict/no-waiver
 image gates, browser fixtures, recovery controls and their scoped corrections.
 Exception admission/configuration is a separate held phase until D14 A's exact
 trust/artifact verification is reviewed and implemented. No individual waiver exists.
+The separate [D14 contract](wp-05-exception-implementation.md) now has independent
+plan admission; its helper writer owns only the named new admission modules,
+while root retains workflow/scanner/privacy/setup ownership. Operational admission
+still waits for implementation checks and the concrete environment/UI setup gate.
 The package cannot be accepted with an unimplemented selected approval path.
 
 The reviewer independently checked accepted choices, current source, exact pins,
