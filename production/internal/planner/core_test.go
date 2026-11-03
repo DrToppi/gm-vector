@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base32"
 	"net/http"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -140,6 +141,83 @@ func TestMemberChangeDoesNotMutateInput(t *testing.T) {
 	p.Tasks[0].Title = "forbidden"
 	if memberChange(Principal{User: User{EmployeeID: "e"}}, "member", old, p) == nil {
 		t.Fatal("member modified title")
+	}
+}
+
+func TestMemberMilestoneComparisonBoundaries(t *testing.T) {
+	base, _, _ := fixture()
+	leaf := base.Tasks[0]
+	leaf.Parent = "middle"
+	base.Tasks = []Task{
+		{ID: "root", Title: "Root", Status: "todo", Responsibility: "internal"},
+		{ID: "middle", Parent: "root", Title: "Middle", Status: "todo", Responsibility: "internal"},
+		leaf,
+		{ID: "other", Parent: "root", Title: "Other", Status: "todo", Responsibility: "internal"},
+	}
+	principal := Principal{User: User{EmployeeID: "e"}}
+	draft := copyStartProject(t, base)
+	draft.Tasks[0].Status, draft.Tasks[1].Status = "doing", "doing"
+	draft.Tasks[2].Status, draft.Tasks[2].Brief = "doing", "Owned note"
+	beforeOld, beforeDraft := copyStartProject(t, base), copyStartProject(t, draft)
+	if err := memberChange(principal, "member", base, draft); err != nil {
+		t.Fatal("derived nested milestone status blocked an owned leaf", err)
+	}
+	if !reflect.DeepEqual(base, beforeOld) || !reflect.DeepEqual(draft, beforeDraft) {
+		t.Fatal("comparison mutated input")
+	}
+	for name, change := range map[string]func(*Project){
+		"unowned leaf with forged summary": func(p *Project) { p.Tasks[3].Status, p.Tasks[3].Summary = "done", true },
+		"unowned parent title":             func(p *Project) { p.Tasks[0].Title = "forged" },
+		"unowned parent brief":             func(p *Project) { p.Tasks[0].Brief = "forged" },
+		"unowned parent effort":            func(p *Project) { p.Tasks[0].Planned = 1 },
+		"unowned parent assignment":        func(p *Project) { p.Tasks[0].Assignments = []Assignment{{EmployeeID: "e", Daily: 60}} },
+		"hierarchy":                        func(p *Project) { p.Tasks[3].Parent = "middle" },
+		"task identity":                    func(p *Project) { p.Tasks[3].ID = "another" },
+		"owned leaf protected title":       func(p *Project) { p.Tasks[2].Title = "forged" },
+		"owned leaf protected plan":        func(p *Project) { p.Tasks[2].Planned++ },
+	} {
+		t.Run(name, func(t *testing.T) {
+			forged := copyStartProject(t, draft)
+			change(&forged)
+			if memberChange(principal, "member", base, forged) == nil {
+				t.Fatal("protected change was permitted")
+			}
+		})
+	}
+	// Assignment-based summary brief permission is preserved.
+	owned := copyStartProject(t, base)
+	owned.Tasks[0].Assignments = []Assignment{{EmployeeID: "e", Daily: 60}}
+	ownedDraft := copyStartProject(t, owned)
+	ownedDraft.Tasks[0].Brief = "Assigned summary note"
+	if memberChange(principal, "member", owned, ownedDraft) != nil {
+		t.Fatal("existing assigned summary brief permission changed")
+	}
+}
+
+func TestMemberForgedMilestoneStatusAlwaysRollsUp(t *testing.T) {
+	for _, mode := range []string{"ready", "needs_participation", "blocked_capacity"} {
+		t.Run(mode, func(t *testing.T) {
+			old, cal, employees := fixture()
+			old.Tasks[0].Parent = "root"
+			old.Tasks = append(old.Tasks, Task{ID: "root", Title: "Root", Status: "todo", Responsibility: "internal"})
+			if mode == "needs_participation" {
+				old.People[0].Week = nil
+			} else if mode == "blocked_capacity" {
+				old.People[0].Week = map[string]Activity{"1": {Active: false}}
+			}
+			draft := copyStartProject(t, old)
+			draft.Tasks[0].Status = "doing"
+			draft.Tasks[1].Status = "done" // A forged aggregate value must never survive.
+			if memberChange(Principal{User: User{EmployeeID: "e"}}, "member", old, draft) != nil {
+				t.Fatal("read-only aggregate transport value was rejected")
+			}
+			if err := Calculate(&draft, cal, employees, time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)); err != nil {
+				t.Fatal(err)
+			}
+			if draft.CalculationState != mode || draft.Tasks[1].Status != "doing" || !draft.Tasks[1].Summary {
+				t.Fatal("forged summary state survived authoritative calculation")
+			}
+		})
 	}
 }
 func TestPasswordAndEncryption(t *testing.T) {

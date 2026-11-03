@@ -226,6 +226,12 @@ func memberChange(u Principal, role string, old, p Project) error {
 	if !reflect.DeepEqual(before, after) || len(old.Tasks) != len(p.Tasks) {
 		return denied()
 	}
+	parents := map[string]bool{}
+	for _, task := range old.Tasks {
+		if task.Parent != "" {
+			parents[task.Parent] = true
+		}
+	}
 	for i, t := range p.Tasks {
 		b := old.Tasks[i]
 		owned := false
@@ -235,6 +241,11 @@ func memberChange(u Principal, role string, old, p Project) error {
 		if owned {
 			t.Status = b.Status
 			t.Brief = b.Brief
+		}
+		// Only stored parenthood identifies a read-only milestone status. The
+		// calculator rolls it up again before every successful preview/save.
+		if parents[b.ID] {
+			t.Status = b.Status
 		}
 		// Internal active dates are derived and may change after another project or global limit changes.
 		// RequestedStart and DurationDays stay protected; completed/customer ranges stay immutable to members.
