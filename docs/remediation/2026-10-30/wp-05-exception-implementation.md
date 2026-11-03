@@ -159,6 +159,15 @@ missing/skipped/cancelled conditional job and private markers in public projecti
 Actual strict CI and environment setup/readback are separate required evidence;
 selecting the mechanism does not establish any approved vulnerability exception.
 
+The helper-only slice was independently reviewed at `3a22fc3` on 2026-11-03:
+31 pure tests passed independently. A reproduced private-endpoint leak in package
+identities was closed by rejecting recognized private IP literals in every public
+projection string, preserving exact membership rather than redacting it. Ordinary
+version and PURL positive controls pass. Workflow upload/download, the real
+read-only CI token's environment visibility and required-final integration remain
+unverified; this scoped result does not enable a waiver or establish WP-05
+acceptance. No concrete exception or approval event has been created.
+
 ## Frozen contract appendix
 
 Canonical bytes C(value) are UTF-8 JSON, sorted object keys, ensure_ascii false,

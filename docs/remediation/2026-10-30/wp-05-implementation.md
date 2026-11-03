@@ -308,15 +308,15 @@ Record exact source/harness/runtime metadata, machine/cgroup resources, DB/CPU/h
 series, rates/counts/latencies and quiet execution window. No competing DB/Chrome
 benchmarks or code changes during the hour; READ-ONLY review may proceed.
 
-The final wrapper uses an explicit80-minute owned-process deadline and a16MiB
-private Go JSON output budget; the ordinary runner retains600-second bounds.
+The final wrapper uses an explicit 80-minute owned-process deadline and a 16 MiB
+private Go JSON output budget; the ordinary runner retains 600-second bounds.
 Refuse smoke/duration overrides, non-disposable/non-loopback DSNs, dirty sources,
 missing/skipped/shortened phase evidence and stale source after the run. Record
 CPU count/affinity, OS/kernel and bounded cgroup CPU/memory limits without a
 hostname or unrelated process data. The existing fixture supplies combined
 client/server Go CPU/heap/pool/SQL series. Supplement its explicitly excluded
 PostgreSQL resource scope with ten-second read-only Docker statistics for the
-verified disposable `gma-planner-test-db` container bound to local15432, recording
+verified disposable `gma-planner-test-db` container bound to local port 15432, recording
 its immutable image/container identity and limits. Never read container secrets,
 monitor unrelated workloads or change DB settings. Missing resource observations
 remain a verification failure, not an invented zero. This is reference-test
