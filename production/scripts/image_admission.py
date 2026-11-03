@@ -11,7 +11,12 @@ import json
 import os
 from pathlib import Path
 import re
+import selectors
 import stat
+import struct
+import subprocess
+import sys
+import time
 import unicodedata
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
@@ -44,7 +49,7 @@ SECRET = re.compile(r'(?i)(?:gh[pousr]_[a-z0-9]{20,}|github_pat_[a-z0-9_]{20,}|A
                     r'-----BEGIN[^\n]{0,30}PRIVATE KEY-----|\bbearer\s+\S+|'
                     r'\b(?:password|passwd|api[_ -]?key|secret|access[_ -]?token)\s*[:=]\s*\S+)')
 EMAIL = re.compile(r'[\w.+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\b|$)')
-PRIVATE_PATH = re.compile(r'(?i)(?:/home/|/Users/|[a-z]:\\Users\\|/run/secrets|/tmp/|file://|'
+PRIVATE_PATH = re.compile(r'(?i)(?:/home/|/root/|/Users/|[a-z]:\\Users\\|/run/secrets|/tmp/|file://|'
                           r'\b(?:localhost|[a-z0-9.-]+\.(?:internal|corp|lan|local))\b)')
 
 
@@ -623,6 +628,57 @@ class NoRedirect(HTTPRedirectHandler):
         raise AdmissionError('GitHub API redirect refused')
 
 
+def _bounded_get(path, token, *, timeout=10, worker_factory=None):
+    """A separate owned process bounds DNS/connect/body time, not just sockets.
+
+    worker_factory and timeout are private unit injection points, never CLI or
+    environment fault controls. Token transport is exclusively an environment.
+    """
+    command = worker_factory(path) if worker_factory else [sys.executable, str(Path(__file__).resolve()), '_github_get', path]
+    deadline = time.monotonic() + timeout
+    child = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             env={'GITHUB_TOKEN': token, 'PYTHONNOUSERSITE': '1', 'LANG': 'C.UTF-8'})
+    selector = selectors.DefaultSelector()
+    output = bytearray()
+    try:
+        for stream in (child.stdout, child.stderr):
+            os.set_blocking(stream.fileno(), False)
+            selector.register(stream, selectors.EVENT_READ)
+        while selector.get_map():
+            remaining = deadline - time.monotonic()
+            require(remaining > 0, 'GitHub read request deadline exceeded')
+            for key, _ in selector.select(remaining):
+                data = os.read(key.fileobj.fileno(), 65536)
+                if not data:
+                    selector.unregister(key.fileobj)
+                    continue
+                require(key.fileobj is child.stdout, 'GitHub worker diagnostic output refused')
+                require(len(output) + len(data) <= BUNDLE_LIMIT + 16384 + 4, 'GitHub worker output exceeds budget')
+                output.extend(data)
+        remaining = deadline - time.monotonic()
+        require(remaining > 0, 'GitHub read request deadline exceeded')
+        try:
+            code = child.wait(timeout=remaining)
+        except subprocess.TimeoutExpired:
+            raise AdmissionError('GitHub read request deadline exceeded') from None
+        require(code == 0 and len(output) >= 4, 'GitHub read request failed')
+        length = struct.unpack('>I', output[:4])[0]
+        require(length <= 16384 and 4 + length < len(output), 'invalid GitHub worker protocol')
+        raw = bytes(output[4 + length:])
+        require(len(raw) <= BUNDLE_LIMIT, 'GitHub response exceeds budget')
+        try:
+            link = bytes(output[4:4 + length]).decode('utf-8')
+        except UnicodeError:
+            raise AdmissionError('invalid GitHub worker protocol') from None
+        return raw, link
+    finally:
+        selector.close()
+        if child.poll() is None:
+            child.kill()
+        child.wait(timeout=2)
+        child.stdout.close(); child.stderr.close()
+
+
 class GitHubAPI:
     """Only read endpoints, fixed origin, bounded bodies/pages and TLS defaults."""
     def __init__(self, *, env=None, opener=None):
@@ -630,9 +686,11 @@ class GitHubAPI:
         require(type(token) is str and 0 < len(token) <= 4096 and '\r' not in token and '\n' not in token,
                 'read-only GitHub credential unavailable')
         self._token = token
-        self._opener = opener or build_opener(ProxyHandler({}), NoRedirect())
+        self._opener = opener
 
     def _page(self, path):
+        require(type(path) is str and 0 < len(path) <= 2048 and path.isascii()
+                and not any(c.isspace() or unicodedata.category(c) == 'Cc' for c in path), 'unsafe API endpoint')
         prefix = '/repos/' + REPOSITORY
         allowed = (r'/actions/runs/[1-9][0-9]*(?:/approvals|/artifacts)?',
                    r'/actions/artifacts/[1-9][0-9]*',
@@ -648,6 +706,9 @@ class GitHubAPI:
         require(not query or (set(query) == {'per_page', 'page'} and query['per_page'] == ['100']
                 and len(query['page']) == 1 and query['page'][0] in [str(x) for x in range(1, 11)]),
                 'unsupported API pagination')
+        if self._opener is None:
+            raw, link = _bounded_get(path, self._token)
+            return parse(raw), link
         request = Request('https://api.github.com' + path, method='GET', headers={
             'Accept': 'application/vnd.github+json', 'Authorization': 'Bearer ' + self._token,
             'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'gm-vector-image-admission'})
@@ -656,6 +717,7 @@ class GitHubAPI:
                 require(response.status == 200, 'GitHub read request failed')
                 raw = response.read(BUNDLE_LIMIT + 1)
                 link = response.headers.get('Link', '')
+            require(type(link) is str and len(link.encode('utf-8')) <= 16384, 'API header exceeds budget')
             return parse(raw), link
         except (OSError, HTTPError, URLError, ValueError):
             raise AdmissionError('GitHub read request failed') from None
@@ -865,3 +927,21 @@ def final_result(bundle_dir, artifact_id, artifact_digest, prepare_result, admis
     return {'status': 'ADMITTED_WITH_EXCEPTIONS', 'strict_status': bundle['manifest']['strict_status'],
             'context': context, 'bundle_digest': bundle['bundle_digest'], 'approval_digest': attached['approval_digest'],
             'admission_artifact_id': admitted['id'], 'admission_artifact_digest': admitted['digest']}
+
+
+def _worker_main():
+    require(len(sys.argv) == 3 and sys.argv[1] == '_github_get', 'invalid private worker invocation')
+    api = GitHubAPI(opener=build_opener(ProxyHandler({}), NoRedirect()))
+    value, link = api._page(sys.argv[2])
+    raw, header = canonical(value), link.encode('utf-8')
+    require(0 < len(raw) <= BUNDLE_LIMIT and len(header) <= 16384, 'API worker budget exceeded')
+    sys.stdout.buffer.write(struct.pack('>I', len(header)) + header + raw)
+    sys.stdout.buffer.flush()
+
+
+if __name__ == '__main__':
+    try:
+        _worker_main()
+    except BaseException:
+        # No remote body, exception diagnostic or credential is an error channel.
+        raise SystemExit(1)

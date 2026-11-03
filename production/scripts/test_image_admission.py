@@ -1,5 +1,6 @@
 """Synthetic D14 tests: no API requests, approval events or vulnerable images."""
 import copy
+import contextlib
 import datetime as dt
 import io
 import json
@@ -48,6 +49,7 @@ class FakeAPI:
                     'repository': {'id': int(a.REPOSITORY_ID)}, 'head_repository': {'id': int(a.REPOSITORY_ID)},
                     'path': a.WORKFLOW, 'head_branch': 'feature/operational-hardening'}
         self.environment = environment()
+        self.branch_policies = []
         self.records = []
         self.artifacts = {}
         self.calls = []
@@ -71,7 +73,7 @@ class FakeAPI:
         self.calls.append(path)
         if path.endswith('/approvals'): return copy.deepcopy(self.records)
         if path.endswith('/artifacts'): return copy.deepcopy(list(self.artifacts.values()))
-        if path.endswith('/deployment-branch-policies'): return []
+        if path.endswith('/deployment-branch-policies'): return copy.deepcopy(self.branch_policies)
         raise a.AdmissionError('synthetic pagination failure')
 
 
@@ -321,11 +323,29 @@ class AdmissionTests(unittest.TestCase):
 
     def test_verbatim_unicode_reason_and_raw_status_privacy(self):
         self.blocked_report()
-        request = self.request(); request['requests'][0]['reason'] = '  Prepare upstream correction.\nRecheck the fix.  '
+        request = self.request(); request['requests'][0]['reason'] = '  Prepare correction: проверить исправление.\nRecheck.  '
         bundle, _ = self.prepare(request)
         self.assertEqual(a.parse((bundle / 'waivers.json').read_bytes())['requests'][0]['reason'], request['requests'][0]['reason'])
         self.blocked_report(status='ghp_' + 'Q' * 36)
         with self.assertRaises(a.AdmissionError): self.prepare(request)
+
+    def test_absent_status_is_null_and_custom_branch_policy_is_live_bound(self):
+        self.blocked_report()
+        self.raw.change_report(lambda r: r['Results'][0]['Vulnerabilities'][0].pop('Status'))
+        bundle, _ = self.prepare(self.request())
+        projected = a.parse((bundle / 'app.report.json').read_bytes())
+        self.assertIsNone(projected['results'][0]['vulnerabilities'][0]['status'])
+        bound = a.bind(bundle, '201', '1' * 64, context=self.ctx, api=self.api, now=NOW)
+        self.api.records = [{'state': 'approved', 'comment': bound['review_comment'], 'user': {'id': int(a.OWNER_ID)},
+                             'environments': [{'id': 26111380009, 'name': a.ENVIRONMENT}]}]
+        self.api.environment['deployment_branch_policy'] = {'protected_branches': False, 'custom_branch_policies': True}
+        self.api.branch_policies = [{'id': 123, 'name': 'feature/*', 'type': 'branch'}]
+        config = setup()
+        config['api_settings_sha256'] = a.digest(a.canonical(a.environment_settings(self.api.environment, self.api.branch_policies)))
+        a.approve(bundle, '201', '1' * 64, config, context=self.ctx, api=self.api, now=NOW)
+        self.api.branch_policies[0]['name'] = 'other/*'
+        with self.assertRaises(a.AdmissionError):
+            a.approve(bundle, '201', '1' * 64, config, context=self.ctx, api=self.api, now=NOW)
 
     def test_component_and_report_group_budgets(self):
         report, sbom = rawfixtures.report_fixture('app', self.raw.manifest['images']['app'])
@@ -403,6 +423,60 @@ class APITransportTests(unittest.TestCase):
                 return self.Response([{}] * 100 if page == 1 else [{}], link)
         api = a.GitHubAPI(env={'GITHUB_TOKEN': 'synthetic-only'}, opener=Numeric())
         self.assertEqual(len(api.pages('/repos/' + a.REPOSITORY + '/actions/runs/101/approvals')), 101)
+
+    def test_actual_child_deadline_kills_and_reaps_without_token_arguments(self):
+        from unittest.mock import patch
+        children, calls = [], []
+        original = subprocess.Popen
+        token = 'ghs_' + os.urandom(18).hex()
+        def observed(*args, **kwargs):
+            calls.append((args[0], kwargs['env']))
+            child = original(*args, **kwargs); children.append(child); return child
+        with patch.object(a.subprocess, 'Popen', observed):
+            with self.assertRaisesRegex(a.AdmissionError, 'deadline'):
+                a._bounded_get('/repos/' + a.REPOSITORY, token, timeout=.1,
+                               worker_factory=lambda _: [sys.executable, '-c', 'import time;time.sleep(30)'])
+        self.assertEqual(len(children), 1)
+        self.assertIsNotNone(children[0].poll())
+        self.assertLess(children[0].returncode, 0)
+        self.assertTrue(children[0].stdout.closed and children[0].stderr.closed)
+        self.assertTrue(all(token not in argument for argument in calls[0][0]), 'token escaped into child arguments')
+        self.assertTrue(calls[0][1].get('GITHUB_TOKEN') == token, 'private credential transport mismatch')
+
+    def test_actual_child_protocol_output_budgets_and_private_diagnostics(self):
+        token = 'ghs_' + os.urandom(18).hex()
+        valid = 'import sys,struct;sys.stdout.buffer.write(struct.pack(">I",0)+b\'{"ok":true}\')'
+        raw, link = a._bounded_get('/repos/' + a.REPOSITORY, token,
+                                  worker_factory=lambda _: [sys.executable, '-c', valid])
+        self.assertEqual(a.parse(raw), {'ok': True}); self.assertEqual(link, '')
+        programs = [
+            'import os,sys,time;sys.stderr.write(os.environ["GITHUB_TOKEN"]);sys.stderr.flush();time.sleep(30)',
+            'import os,sys;sys.stdout.write(os.environ["GITHUB_TOKEN"])',
+            'import sys;sys.stdout.buffer.write(b"x"*' + str(a.BUNDLE_LIMIT + 16384 + 5) + ')',
+        ]
+        for index, program in enumerate(programs):
+            with self.subTest(case=index), contextlib.redirect_stdout(io.StringIO()) as stdout, contextlib.redirect_stderr(io.StringIO()) as stderr:
+                with self.assertRaises(a.AdmissionError) as error:
+                    a._bounded_get('/repos/' + a.REPOSITORY, token,
+                                   worker_factory=lambda _, body=program: [sys.executable, '-c', body])
+                self.assertTrue(token not in str(error.exception) + stdout.getvalue() + stderr.getvalue(),
+                                'worker diagnostic exposed a canary')
+
+    def test_cancellation_reaps_only_the_owned_worker(self):
+        from unittest.mock import patch
+        children = []
+        original = subprocess.Popen
+        selector = a.selectors.DefaultSelector()
+        def observed(*args, **kwargs):
+            child = original(*args, **kwargs); children.append(child); return child
+        with patch.object(a.subprocess, 'Popen', observed), patch.object(a.selectors, 'DefaultSelector', return_value=selector), patch.object(selector, 'select', side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                a._bounded_get('/repos/' + a.REPOSITORY, 'synthetic-only',
+                               worker_factory=lambda _: [sys.executable, '-c', 'import time;time.sleep(30)'])
+        self.assertEqual(len(children), 1)
+        self.assertIsNotNone(children[0].poll())
+        self.assertLess(children[0].returncode, 0)
+        self.assertTrue(children[0].stdout.closed and children[0].stderr.closed)
 
 
 if __name__ == '__main__': unittest.main()
