@@ -370,7 +370,39 @@ test("critical real workspace B01-B09", async ({
           mimeType: "application/json",
           buffer: Buffer.from(JSON.stringify(portable)),
         });
-      await expect(page.locator("[data-timezone-ack]")).toBeVisible();
+      await expect(page.locator(".new-project-import .error")).toContainText(
+        "обычный импорт не создаёт людей",
+      );
+      await expect(page.locator("[data-timezone-ack]")).toHaveCount(0);
+      portable.project.people = [];
+      for (const task of portable.project.tasks) task.assignments = [];
+      await page
+        .locator('.new-project-import input[type="file"]')
+        .setInputFiles({
+          name: "synthetic-portable-template.json",
+          mimeType: "application/json",
+          buffer: Buffer.from(JSON.stringify(portable)),
+        });
+      try {
+        await expect(page.locator("[data-timezone-ack]")).toBeVisible();
+      } catch (cause) {
+        if (process.env.GMA_PW_PRIVATE_DEBUG === "1")
+          console.error(
+            "PW_PRIVATE_ERROR " +
+              JSON.stringify({
+                message:
+                  "PW_PORTABLE_IMPORT_UI " +
+                  (
+                    await page
+                      .locator(".new-project-import .error")
+                      .allTextContents()
+                  )
+                    .join(" ")
+                    .slice(0, 4096),
+              }),
+          );
+        throw cause;
+      }
       await expect(
         page.locator(".new-project-import .toolbar button").first(),
       ).toBeDisabled();
@@ -382,9 +414,15 @@ test("critical real workspace B01-B09", async ({
       const copy = (await api(page, "/projects")).find(
         (x: any) => x.title === "PW portable copy",
       );
-      expect((await api(page, "/projects/" + copy.id)).project.start).toBe(
-        start,
-      );
+      const imported = (await api(page, "/projects/" + copy.id)).project;
+      expect(imported.start).toBe(start);
+      expect(imported.people).toHaveLength(0);
+      expect(
+        imported.tasks.every((task: any) => !task.assignments.length),
+      ).toBe(true);
+      expect(
+        imported.tasks.find((task: any) => task.id === childID).requested_start,
+      ).toBe("2026-10-23");
       await selectProject(page, "E2E synthetic project");
     });
     await step(info, "B05", async () => {
@@ -444,6 +482,7 @@ test("critical real workspace B01-B09", async ({
         planned_minutes: 0,
         actual_minutes: 0,
         summary: false,
+        status: id === "pw-predecessor" ? "done" : "todo",
         assignments: [],
       });
       tracedProject.tasks.push(
@@ -509,6 +548,11 @@ test("critical real workspace B01-B09", async ({
       const adminPage = await adminContext.newPage();
       await adminPage.goto(f.origin);
       await login(adminPage, f.username, f.password, admin.recovery.shift()!);
+      expect(
+        (await api(adminPage, "/projects/" + projectID)).project.tasks.find(
+          (task: any) => task.id === childID,
+        ).blocked,
+      ).toBe(false);
       const employee = (await api(adminPage, "/employees")).find(
         (x: any) => x.name === "PW worker",
       );

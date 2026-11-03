@@ -84,8 +84,12 @@ export async function ownedContext(
     ignoreHTTPSErrors: true,
     viewport: { width: 1440, height: 1000 },
   });
-  await context.addInitScript(() =>
-    localStorage.setItem("gm-vector.locale", "ru"),
+  await context.addInitScript(
+    ({ origin }) => {
+      if (location.origin === origin)
+        localStorage.setItem("gm-vector.locale", "ru");
+    },
+    { origin: fixture.origin },
   );
   await context.route("**/*", (route) => {
     const url = new URL(route.request().url());
@@ -206,7 +210,22 @@ export async function apply(page: Page) {
   await click(page, "Проверить и сохранить");
   await expect(page.locator("dialog h2")).toHaveText("Проверка изменений");
   await click(page, "Применить изменения");
-  await expect(page.locator("dialog")).toHaveCount(0);
+  try {
+    await expect(page.locator("dialog")).toHaveCount(0);
+  } catch (cause) {
+    if (process.env.GMA_PW_PRIVATE_DEBUG === "1")
+      console.error(
+        "PW_PRIVATE_ERROR " +
+          JSON.stringify({
+            message:
+              "PW_APPLY_ERROR " +
+              (await page.locator("dialog .error").allTextContents())
+                .join(" ")
+                .slice(0, 4096),
+          }),
+      );
+    throw cause;
+  }
 }
 export async function selectProject(page: Page, title: string) {
   await page.locator("nav button").filter({ hasText: title }).first().click();
@@ -287,7 +306,44 @@ export async function nativeInteractions(
 ) {
   const require = createRequire(import.meta.url);
   const native = require("../../scripts/wp03-browser-interactions.cjs");
+  let nativePhase = "setup";
+  const focusTrail: unknown[] = [];
+  const focusState = (details = true) =>
+    page.evaluate((details) => {
+      const dialog = document.querySelector("dialog");
+      const controls = [
+        ...(dialog?.querySelectorAll<HTMLElement>(
+          "button,input,select,textarea,summary,[tabindex]",
+        ) || []),
+      ].filter(
+        (element) =>
+          !element.matches(":disabled") && element.getClientRects().length > 0,
+      );
+      return {
+        activeTag: document.activeElement?.tagName,
+        activeType: document.activeElement?.getAttribute("type"),
+        activeControlIndex: controls.indexOf(
+          document.activeElement as HTMLElement,
+        ),
+        inDialog: !!dialog?.contains(document.activeElement),
+        dialogOpen: !!dialog?.open,
+        documentFocused: document.hasFocus(),
+        controls: details
+          ? controls.map((element, index) => ({
+              index,
+              tag: element.tagName,
+              type: element.getAttribute("type"),
+              tabIndex: element.tabIndex,
+            }))
+          : undefined,
+      };
+    }, details);
   const evaluate = (expression: string) => page.evaluate(expression);
+  const waitForNative = async (expression: string) => {
+    await expect
+      .poll(() => evaluate(expression), { timeout: 5000 })
+      .toBeTruthy();
+  };
   const send = async (method: string, p: any) => {
     if (method === "Input.dispatchMouseEvent") {
       await page.mouse.move(p.x, p.y);
@@ -310,25 +366,53 @@ export async function nativeInteractions(
       } else {
         await page.keyboard.up(p.key);
         if (p.modifiers & 8) await page.keyboard.up("Shift");
+        if (
+          process.env.GMA_PW_PRIVATE_DEBUG === "1" &&
+          nativePhase.includes("keyboard") &&
+          focusTrail.length < 100 &&
+          ["Tab", "Enter", "Escape"].includes(p.key)
+        )
+          focusTrail.push({
+            phase: nativePhase,
+            key: p.key,
+            shift: !!(p.modifiers & 8),
+            ...(await focusState(false)),
+          });
       }
     } else throw Error("PW_NATIVE_METHOD");
   };
-  await native({
-    send,
-    evaluate,
-    wait: (expression: string) =>
-      page.waitForFunction(expression, undefined, { timeout: 5000 }),
-    read: (suffix: string) => api(page, suffix),
-    click: (name: string) => click(page, name),
-    field: (selector: string, value: string) => field(page, selector, value),
-    reload: async (expression: string) => {
-      await page.reload();
-      await page.waitForFunction(expression);
-    },
-    originalProject: project,
-    sampleTask,
-    setPhase: () => {},
-  });
+  try {
+    await native({
+      send,
+      evaluate,
+      wait: waitForNative,
+      read: (suffix: string) => api(page, suffix),
+      click: (name: string) => click(page, name),
+      field: (selector: string, value: string) => field(page, selector, value),
+      reload: async (expression: string) => {
+        await page.reload();
+        await waitForNative(expression);
+      },
+      originalProject: project,
+      sampleTask,
+      setPhase: (phase: string) => {
+        nativePhase = phase;
+      },
+    });
+  } catch (cause) {
+    if (process.env.GMA_PW_PRIVATE_DEBUG === "1") {
+      const state = await focusState();
+      console.error(
+        "PW_PRIVATE_ERROR " +
+          JSON.stringify({
+            message:
+              "PW_NATIVE_STATE " +
+              JSON.stringify({ phase: nativePhase, ...state, focusTrail }),
+          }),
+      );
+    }
+    throw cause;
+  }
 }
 export function validateNegativeContracts(f: Fixture) {
   for (const mutate of [

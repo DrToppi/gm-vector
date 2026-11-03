@@ -19,6 +19,14 @@ export default class RedactedReporter implements Reporter {
   private failurePhase = "";
   private failureSite = "";
   private failureClass = "";
+  onStdErr(chunk: string | Buffer) {
+    const value = String(chunk);
+    if (
+      process.env.GMA_PW_PRIVATE_DEBUG === "1" &&
+      value.startsWith("PW_PRIVATE_ERROR ")
+    )
+      process.stderr.write(value.slice(0, 65536));
+  }
   private debug(error?: TestError) {
     if (process.env.GMA_PW_PRIVATE_DEBUG !== "1" || !error) return;
     // The Go fixture directs both streams exclusively into its capped0600 log.

@@ -16,7 +16,11 @@ function load(name) {
       exports,
       Buffer,
       URL,
-      process,
+      process: {
+        env: process.env,
+        getuid: process.getuid,
+        stderr: { write: (value) => output.push(String(value)) },
+      },
       console: {
         log: (value) => output.push(String(value)),
         error: (value) => output.push(String(value)),
@@ -225,6 +229,7 @@ try {
     },
   );
   reporter.onError();
+  reporter.onStdErr("PW_PRIVATE_ERROR " + marker);
   reporter.onEnd({ status: "failed" });
   assert(!output.join("\n").includes(marker));
   const receipt = JSON.parse(
@@ -241,6 +246,7 @@ try {
   );
   process.env.GMA_PW_PRIVATE_DEBUG = "1";
   reporter.onError({ message: marker, stack: marker });
+  reporter.onStdErr("PW_PRIVATE_ERROR " + marker);
   assert(
     output.some(
       (value) =>
