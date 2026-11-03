@@ -258,6 +258,21 @@ class AdmissionTests(unittest.TestCase):
         self.raw.change_report(lambda r: r['Results'][0]['Packages'][0].update(Name=marker))
         with self.assertRaises(a.AdmissionError): self.prepare()
 
+    def test_private_addresses_are_refused_in_all_public_identity_strings(self):
+        for value in ('http://10.11.12.13/private-module', 'https://[fd12:3456::1]/package',
+                      '169.254.169.254/metadata', 'http://127.0.0.1/module', 'https://[::1]/module'):
+            with self.subTest(value=value), self.assertRaises(a.AdmissionError):
+                a.public_string(value)
+        for value in ('1.2.3.4', '1:4.5.6-rc.1+deb12u1', 'pkg:deb/debian/libexample@1.2.3?arch=amd64',
+                      'pkg:golang/example.com/module@v1.2.3', 'https://example.com/module'):
+            self.assertEqual(a.public_string(value), value)
+
+    def test_raw_gate_success_cannot_publish_a_private_package_endpoint(self):
+        self.raw.change_report(lambda r: r['Results'][0]['Packages'][0].update(
+            Name='http://10.11.12.13/private-module'))
+        self.assertEqual(self.raw.validate()['status'], 'PASS')
+        with self.assertRaises(a.AdmissionError): self.prepare()
+
     def test_privacy_binding_and_inventory_cannot_be_self_asserted(self):
         path = self.privacy(); value = a.parse(path.read_bytes())
         for mutate in (lambda x: x.update(status='PASS', source_tree_clean=False), lambda x: x.update(scan_manifest_sha256='0' * 64),

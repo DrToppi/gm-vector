@@ -142,16 +142,15 @@ def public_string(value, *, maximum=1024, nullable=False, rationale=False):
             'unsafe control character in public text')
     require(not SECRET.search(value) and not EMAIL.search(value) and not PRIVATE_PATH.search(value),
             'sensitive content refused in public projection')
-    if rationale:
-        candidates = re.findall(r'(?<![0-9.])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9.])', value)
-        candidates += re.findall(r'(?:[0-9a-fA-F]{0,4}:){2,}[0-9a-fA-F:.]+', value)
-        for candidate in candidates:
-            try:
-                address = ipaddress.ip_address(candidate)
-            except ValueError:
-                continue
-            require(not (address.is_private or address.is_loopback or address.is_link_local),
-                    'private address refused in public text')
+    candidates = re.findall(r'(?<![0-9.])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9.])', value)
+    candidates += re.findall(r'(?:[0-9a-fA-F]{0,4}:){2,}[0-9a-fA-F:.]+', value)
+    for candidate in candidates:
+        try:
+            address = ipaddress.ip_address(candidate)
+        except ValueError:
+            continue
+        require(not (address.is_private or address.is_loopback or address.is_link_local),
+                'private address refused in public text')
     return value
 
 
