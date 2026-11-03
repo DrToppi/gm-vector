@@ -198,7 +198,7 @@ try {
     ],
     {
       cwd: path.join(__dirname, ".."),
-      env: process.env,
+      env: { ...process.env, GMA_PW_LIFECYCLE_PROBE: "" },
       encoding: "utf8",
       timeout: 15000,
       maxBuffer: 65536,
@@ -206,8 +206,31 @@ try {
   );
   assert.equal(discovery.status, 0);
   assert(discovery.stdout.includes("Total: 3 tests in 1 file"));
+  assert(discovery.stdout.includes("critical real workspace B01-B09"));
   for (const engine of ["chromium", "firefox", "webkit"])
     assert(discovery.stdout.includes("[" + engine + "]"));
+  const lifecycleDiscovery = spawnSync(
+    process.execPath,
+    [
+      path.join(__dirname, "../node_modules/@playwright/test/cli.js"),
+      "test",
+      "--config=playwright.config.ts",
+      "--list",
+      "--reporter=list",
+    ],
+    {
+      cwd: path.join(__dirname, ".."),
+      env: { ...process.env, GMA_PW_LIFECYCLE_PROBE: "1" },
+      encoding: "utf8",
+      timeout: 15000,
+      maxBuffer: 65536,
+    },
+  );
+  assert.equal(lifecycleDiscovery.status, 0);
+  assert(lifecycleDiscovery.stdout.includes("Total: 3 tests in 1 file"));
+  assert(
+    lifecycleDiscovery.stdout.includes("owned browser cancellation lifecycle"),
+  );
   const Reporter = load("redacted-reporter").default,
     reporter = new Reporter();
   reporter.onTestEnd(

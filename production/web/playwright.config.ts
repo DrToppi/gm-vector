@@ -10,7 +10,10 @@ validateHost(
 );
 export default defineConfig({
   testDir: "./browser",
-  testMatch: "critical.spec.ts",
+  testMatch:
+    process.env.GMA_PW_LIFECYCLE_PROBE === "1"
+      ? "cancellation.mjs"
+      : "critical.spec.ts",
   workers: 1,
   fullyParallel: false,
   retries: 0,

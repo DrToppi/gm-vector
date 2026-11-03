@@ -25,7 +25,10 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -35,6 +38,402 @@ var pwEngines = []string{"chromium", "firefox", "webkit"}
 var pwRevisions = map[string]string{"chromium": "1248", "firefox": "1555", "webkit": "2370"}
 var pwVersions = map[string]string{"chromium": "156.0.8078.4", "firefox": "157.0", "webkit": "27.2"}
 var pwScenarios = []string{"B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B09"}
+
+type pwProcessID struct {
+	PID   int
+	Start uint64
+	UID   uint32
+}
+type pwProcessInfo struct {
+	ID     pwProcessID
+	Parent int
+}
+
+// Read only same-user process identity/parent metadata, never env or argv.
+func readPWProcess(pid int) (pwProcessInfo, bool, error) {
+	var out pwProcessInfo
+	if pid <= 0 {
+		return out, false, errors.New("invalid process identity")
+	}
+	directory := filepath.Join("/proc", strconv.Itoa(pid))
+	info, err := os.Stat(directory)
+	if os.IsNotExist(err) {
+		return out, false, nil
+	}
+	if err != nil {
+		return out, false, errors.New("ownership observation unavailable")
+	}
+	owner, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return out, false, errors.New("ownership metadata unavailable")
+	}
+	if int(owner.Uid) != os.Getuid() {
+		return out, false, nil
+	}
+	raw, err := os.ReadFile(filepath.Join(directory, "stat"))
+	if os.IsNotExist(err) {
+		return out, false, nil
+	}
+	if err != nil || len(raw) > 4096 {
+		return out, false, errors.New("process metadata unavailable")
+	}
+	end := strings.LastIndex(string(raw), ") ")
+	if end < 0 {
+		return out, false, errors.New("invalid process metadata")
+	}
+	fields := strings.Fields(string(raw)[end+2:])
+	if len(fields) < 20 {
+		return out, false, errors.New("invalid process metadata")
+	}
+	parent, e1 := strconv.Atoi(fields[1])
+	start, e2 := strconv.ParseUint(fields[19], 10, 64)
+	if e1 != nil || e2 != nil || start == 0 {
+		return out, false, errors.New("invalid process identity")
+	}
+	return pwProcessInfo{ID: pwProcessID{pid, start, owner.Uid}, Parent: parent}, true, nil
+}
+
+func observePWDescendants(root pwProcessID, seen map[pwProcessID]bool) error {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return errors.New("ownership observation unavailable")
+	}
+	current := map[int]pwProcessInfo{}
+	for _, entry := range entries {
+		pid, err := strconv.Atoi(entry.Name())
+		if err != nil {
+			continue
+		}
+		info, exists, err := readPWProcess(pid)
+		if err != nil {
+			return err
+		}
+		if exists {
+			current[pid] = info
+		}
+	}
+	owned := map[int]bool{}
+	if info, exists := current[root.PID]; exists && info.ID == root {
+		owned[root.PID] = true
+	}
+	for id := range seen {
+		if info, exists := current[id.PID]; exists && info.ID == id {
+			owned[id.PID] = true
+		}
+	}
+	for change := true; change; {
+		change = false
+		for pid, info := range current {
+			if !owned[pid] && owned[info.Parent] {
+				owned[pid], seen[info.ID], change = true, true, true
+			}
+		}
+	}
+	return nil
+}
+
+func remainingPWProcesses(seen map[pwProcessID]bool) ([]pwProcessID, error) {
+	remaining := []pwProcessID{}
+	for id := range seen {
+		info, exists, err := readPWProcess(id.PID)
+		if err != nil {
+			return nil, err
+		}
+		if exists && info.ID == id {
+			remaining = append(remaining, id)
+		}
+	}
+	return remaining, nil
+}
+
+func forcePWCleanup(identities []pwProcessID) bool {
+	forced := false
+	for _, id := range identities {
+		process, err := os.FindProcess(id.PID)
+		if err != nil {
+			continue
+		}
+		info, exists, err := readPWProcess(id.PID)
+		if err == nil && exists && info.ID == id {
+			forced = true
+			_ = process.Kill()
+		}
+		_ = process.Release()
+	}
+	return forced
+}
+
+type pwReady struct {
+	Format        string `json:"format"`
+	SchemaVersion int    `json:"schema_version"`
+	Nonce         string `json:"run_nonce"`
+	Engine        string `json:"engine"`
+	Playwright    string `json:"playwright_version"`
+	Revision      string `json:"browser_revision"`
+	Browser       string `json:"browser_version"`
+	WorkerPID     int    `json:"worker_pid"`
+	Stage         string `json:"stage"`
+}
+
+func validatePWReady(raw []byte, engine, nonce string) (pwReady, error) {
+	var ready pwReady
+	fail := errors.New("invalid lifecycle readiness")
+	if len(raw) == 0 || len(raw) > 4096 || !uniquePWJSON(raw) {
+		return ready, fail
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&ready) != nil || ready.Format != "gm-vector-browser-ready" || ready.SchemaVersion != 1 || ready.Nonce != nonce || ready.Engine != engine || ready.Playwright != "1.64.1" || pwRevisions[engine] == "" || ready.Revision != pwRevisions[engine] || ready.Browser != pwVersions[engine] || ready.WorkerPID <= 0 || ready.Stage != "owned-page-created" {
+		return ready, fail
+	}
+	return ready, nil
+}
+
+func ownedPWReady(root pwProcessID, ready pwReady, seen map[pwProcessID]bool) bool {
+	worker, exists, err := readPWProcess(ready.WorkerPID)
+	live, liveErr := remainingPWProcesses(seen)
+	return err == nil && liveErr == nil && exists && ready.WorkerPID != root.PID && seen[worker.ID] && len(live) >= 2
+}
+
+func readPWPrivate(file string, limit int64) ([]byte, bool, error) {
+	info, err := os.Lstat(file)
+	if os.IsNotExist(err) {
+		return nil, false, nil
+	}
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 || info.Size() > limit {
+		return nil, true, errors.New("invalid private lifecycle artifact")
+	}
+	owner, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || int(owner.Uid) != os.Getuid() {
+		return nil, true, errors.New("invalid lifecycle artifact owner")
+	}
+	raw, err := os.ReadFile(file)
+	if err != nil || int64(len(raw)) > limit {
+		return nil, true, errors.New("private lifecycle artifact unavailable")
+	}
+	return raw, true, nil
+}
+
+func pwCommand(ctx context.Context, node, web, engine string, env []string, output io.Writer) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, node, filepath.Join(web, "node_modules/@playwright/test/cli.js"), "test", "--config=playwright.config.ts", "--project="+engine)
+	cmd.Dir, cmd.Env, cmd.Stdout, cmd.Stderr = web, env, output, output
+	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	cmd.WaitDelay = 5 * time.Second
+	return cmd
+}
+
+type pwLifecycle struct {
+	Ready               bool
+	Signal              string
+	Observed, Remaining int
+	Forced              bool
+	Reason              string
+}
+
+func passedPWLifecycle(out pwLifecycle) bool {
+	return out.Reason == "" && out.Ready && out.Signal == "SIGINT" && out.Observed >= 2 && out.Remaining == 0 && !out.Forced
+}
+
+func runPWLifecycle(parent context.Context, node, web, engine, runDirectory, nonce string, input []byte, environment []string) (out pwLifecycle) {
+	out.Signal = "none"
+	directory, err := os.MkdirTemp(runDirectory, "lifecycle-")
+	if err != nil {
+		out.Reason = "private_directory"
+		return
+	}
+	var private *os.File
+	defer func() {
+		if private != nil {
+			_ = private.Close()
+		}
+		if out.Reason != "" && retainPWFailure(os.Getenv("GMA_PW_DEBUG_DIRECTORY"), directory, engine) != nil {
+			out.Reason += "+debug_copy_failed"
+		}
+		_ = os.RemoveAll(directory)
+	}()
+	file := filepath.Join(directory, "fixture.json")
+	ipc, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		out.Reason = "private_input"
+		return
+	}
+	_, writeErr := ipc.Write(input)
+	closeErr := ipc.Close()
+	if writeErr != nil || closeErr != nil {
+		out.Reason = "private_input"
+		return
+	}
+	private, err = os.OpenFile(filepath.Join(directory, "process.log"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		out.Reason = "private_log"
+		return
+	}
+	log := &pwBoundedLog{writer: private, remaining: 1048576}
+	env := []string{}
+	for _, value := range environment {
+		if !strings.HasPrefix(value, "GMA_PW_FIXTURE_FILE=") && !strings.HasPrefix(value, "GMA_PW_LIFECYCLE_PROBE=") {
+			env = append(env, value)
+		}
+	}
+	env = append(env, "GMA_PW_FIXTURE_FILE="+file, "GMA_PW_LIFECYCLE_PROBE=1")
+	probe, stopProbe := context.WithTimeout(parent, 15*time.Second)
+	defer stopProbe()
+	child, cancelChild := context.WithCancel(probe)
+	defer cancelChild()
+	cmd := pwCommand(child, node, web, engine, env, log)
+	var signaled atomic.Bool
+	signal := cmd.Cancel
+	cmd.Cancel = func() error {
+		err := signal()
+		if err == nil {
+			signaled.Store(true)
+		}
+		return err
+	}
+	if cmd.Start() != nil {
+		out.Reason = "cli_start"
+		return
+	}
+	done := make(chan struct{})
+	go func() { _ = cmd.Wait(); close(done) }()
+	finished := false
+	checkExit := func() bool {
+		if !finished {
+			select {
+			case <-done:
+				finished = true
+			default:
+			}
+		}
+		return finished
+	}
+	root, rootExists, identityErr := readPWProcess(cmd.Process.Pid)
+	seen := map[pwProcessID]bool{}
+	if identityErr != nil || !rootExists {
+		out.Reason = "ownership_unavailable"
+	}
+	tick := time.NewTicker(20 * time.Millisecond)
+	defer tick.Stop()
+	for out.Reason == "" && !out.Ready {
+		if checkExit() {
+			out.Reason = "spontaneous_exit"
+			break
+		}
+		if observePWDescendants(root.ID, seen) != nil {
+			out.Reason = "ownership_unavailable"
+			break
+		}
+		raw, exists, err := readPWPrivate(filepath.Join(directory, "cancellation-ready.json"), 4096)
+		if err != nil {
+			out.Reason = "invalid_readiness"
+			break
+		}
+		if exists {
+			ready, err := validatePWReady(raw, engine, nonce)
+			if err != nil || observePWDescendants(root.ID, seen) != nil {
+				out.Reason = "invalid_readiness"
+				break
+			}
+			if !ownedPWReady(root.ID, ready, seen) {
+				out.Reason = "empty_or_unowned_readiness"
+				break
+			}
+			if checkExit() {
+				out.Reason = "spontaneous_exit"
+				break
+			}
+			if probe.Err() != nil {
+				out.Reason = "readiness_deadline"
+				break
+			}
+			out.Ready = true
+			break
+		}
+		select {
+		case <-probe.Done():
+			out.Reason = "readiness_deadline"
+		case <-done:
+			finished = true
+			out.Reason = "spontaneous_exit"
+		case <-tick.C:
+		}
+	}
+	out.Observed = len(seen)
+	// This is the same CommandContext -> Cancel -> SIGINT path as the journey.
+	// A readiness failure still requests cleanup, but can never become success.
+	requested := out.Ready && out.Reason == "" && probe.Err() == nil
+	cancelChild()
+	deadline := time.Now().Add(5 * time.Second)
+	if absolute, ok := probe.Deadline(); ok && absolute.Before(deadline) {
+		deadline = absolute
+	}
+	remaining := []pwProcessID{}
+	for {
+		checkExit()
+		if rootExists && observePWDescendants(root.ID, seen) != nil && out.Reason == "" {
+			out.Reason = "ownership_unavailable"
+		}
+		var err error
+		remaining, err = remainingPWProcesses(seen)
+		if err != nil && out.Reason == "" {
+			out.Reason = "ownership_unavailable"
+		}
+		if finished && len(remaining) == 0 {
+			break
+		}
+		if !time.Now().Before(deadline) {
+			break
+		}
+		if finished {
+			<-tick.C
+		} else {
+			select {
+			case <-done:
+				finished = true
+			case <-tick.C:
+			}
+		}
+	}
+	if !finished || len(remaining) > 0 {
+		if out.Reason == "" {
+			out.Reason = "cleanup_deadline"
+		}
+		owned := append([]pwProcessID{}, remaining...)
+		if rootExists {
+			owned = append(owned, root.ID)
+		}
+		out.Forced = forcePWCleanup(owned)
+		if !finished {
+			select {
+			case <-done:
+				finished = true
+			case <-time.After(5 * time.Second):
+			}
+		}
+	}
+	remaining, err = remainingPWProcesses(seen)
+	if err != nil && out.Reason == "" {
+		out.Reason = "ownership_unavailable"
+	}
+	out.Remaining = len(remaining)
+	out.Observed = len(seen)
+	if signaled.Load() {
+		out.Signal = "SIGINT"
+	}
+	if out.Reason == "" && (!requested || !out.Ready || out.Observed < 2 || out.Signal != "SIGINT" || !finished || cmd.ProcessState == nil || cmd.ProcessState.ExitCode() != 130 || out.Remaining != 0 || out.Forced || log.truncated) {
+		out.Reason = "invalid_cancellation_order_or_exit"
+	}
+	if out.Reason == "" {
+		raw, exists, err := readPWPrivate(filepath.Join(directory, "receipt.json"), 262144)
+		var receipt pwReceipt
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.DisallowUnknownFields()
+		if err != nil || !exists || !uniquePWJSON(raw) || decoder.Decode(&receipt) != nil || receipt.Engine != engine || receipt.Nonce != nonce || receipt.Status != "interrupted" || receipt.TestCount != 1 || len(receipt.Scenarios) != 0 || receipt.Playwright != "1.64.1" || receipt.Revision != pwRevisions[engine] || receipt.Browser != pwVersions[engine] {
+			out.Reason = "invalid_interrupted_receipt"
+		}
+	}
+	return
+}
 
 func validatePWDebugDirectory(directory string) error {
 	fail := errors.New("invalid private browser debug directory")
@@ -275,6 +674,108 @@ func TestPlaywrightHarnessValidation(t *testing.T) {
 	if exec.Command(node, "../../web/browser/contracts.unit.cjs").Run() != nil {
 		t.Fatal("private IPC/reporter unit failed")
 	}
+	t.Run("lifecycle_readiness", func(t *testing.T) {
+		good := pwReady{Format: "gm-vector-browser-ready", SchemaVersion: 1, Nonce: "synthetic", Engine: "chromium", Playwright: "1.64.1", Revision: "1248", Browser: "156.0.8078.4", WorkerPID: os.Getpid(), Stage: "owned-page-created"}
+		encode := func(value pwReady) []byte { raw, _ := json.Marshal(value); return raw }
+		if _, err := validatePWReady(encode(good), "chromium", "synthetic"); err != nil {
+			t.Fatal("valid readiness rejected")
+		}
+		for _, mutate := range []func(*pwReady){
+			func(v *pwReady) { v.Nonce = "other" }, func(v *pwReady) { v.Engine = "webkit" },
+			func(v *pwReady) { v.Revision = "old" }, func(v *pwReady) { v.WorkerPID = 0 },
+			func(v *pwReady) { v.Stage = "before-page" }, func(v *pwReady) { v.Browser = "1.0" },
+		} {
+			invalid := good
+			mutate(&invalid)
+			if _, err := validatePWReady(encode(invalid), "chromium", "synthetic"); err == nil {
+				t.Fatal("invalid readiness admitted")
+			}
+		}
+		for _, invalid := range [][]byte{nil, []byte("{}"), bytes.Repeat([]byte("x"), 4097), bytes.Replace(encode(good), []byte(`"schema_version":1`), []byte(`"schema_version":2,"schema_version":1`), 1), bytes.Replace(encode(good), []byte(`"schema_version":1`), []byte(`"extra":1,"schema_version":1`), 1)} {
+			if _, err := validatePWReady(invalid, "chromium", "synthetic"); err == nil {
+				t.Fatal("malformed readiness admitted")
+			}
+		}
+		file := filepath.Join(t.TempDir(), "ready.json")
+		if os.WriteFile(file, encode(good), 0600) != nil {
+			t.Fatal("private readiness fixture unavailable")
+		}
+		if _, exists, err := readPWPrivate(file, 4096); err != nil || !exists {
+			t.Fatal("private readiness rejected")
+		}
+		if os.Chmod(file, 0644) != nil {
+			t.Fatal("private readiness control unavailable")
+		}
+		if _, _, err := readPWPrivate(file, 4096); err == nil {
+			t.Fatal("public readiness admitted")
+		}
+		valid := pwLifecycle{Ready: true, Signal: "SIGINT", Observed: 2}
+		if !passedPWLifecycle(valid) {
+			t.Fatal("valid lifecycle rejected")
+		}
+		for _, mutate := range []func(*pwLifecycle){func(v *pwLifecycle) { v.Ready = false }, func(v *pwLifecycle) { v.Signal = "none" }, func(v *pwLifecycle) { v.Observed = 0 }, func(v *pwLifecycle) { v.Remaining = 1 }, func(v *pwLifecycle) { v.Forced = true }, func(v *pwLifecycle) { v.Reason = "spontaneous_exit" }} {
+			invalid := valid
+			mutate(&invalid)
+			if passedPWLifecycle(invalid) {
+				t.Fatal("failed lifecycle admitted")
+			}
+		}
+	})
+	t.Run("owned_process_observation", func(t *testing.T) {
+		root, exists, err := readPWProcess(os.Getpid())
+		if err != nil || !exists {
+			t.Fatal("reference ownership observation unavailable")
+		}
+		if ownedPWReady(root.ID, pwReady{WorkerPID: os.Getpid()}, map[pwProcessID]bool{}) {
+			t.Fatal("empty ownership observation admitted")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		// Admission control only; real acceptance uses the actual CLI/worker/page.
+		child := exec.CommandContext(ctx, node, "-e", "setInterval(()=>{},1000)")
+		child.Stdout, child.Stderr = io.Discard, io.Discard
+		if child.Start() != nil {
+			t.Fatal("owned observation control unavailable")
+		}
+		waited := false
+		defer func() {
+			if !waited {
+				_ = child.Process.Kill()
+				_ = child.Wait()
+			}
+		}()
+		identity, exists, err := readPWProcess(child.Process.Pid)
+		if err != nil || !exists {
+			t.Fatal("owned control identity unavailable")
+		}
+		seen := map[pwProcessID]bool{}
+		if observePWDescendants(root.ID, seen) != nil || !seen[identity.ID] {
+			t.Fatal("owned descendant was not observed")
+		}
+		wrong := identity.ID
+		wrong.Start++
+		if forcePWCleanup([]pwProcessID{wrong}) {
+			t.Fatal("reused process identity was signaled")
+		}
+		wrong = identity.ID
+		wrong.UID++
+		if forcePWCleanup([]pwProcessID{wrong}) {
+			t.Fatal("different owner identity was signaled")
+		}
+		live, exists, err := readPWProcess(identity.ID.PID)
+		if err != nil || !exists || live.ID != identity.ID {
+			t.Fatal("identity negative controls changed owned process")
+		}
+		if !forcePWCleanup([]pwProcessID{identity.ID}) {
+			t.Fatal("owned fallback control did not signal")
+		}
+		_ = child.Wait()
+		waited = true
+		remaining, err := remainingPWProcesses(map[pwProcessID]bool{identity.ID: true})
+		if err != nil || len(remaining) != 0 {
+			t.Fatal("owned control was not reaped")
+		}
+	})
 
 	good := pwReceipt{Format: "gm-vector-browser-receipt", SchemaVersion: 1, Nonce: "synthetic", Engine: "chromium", Playwright: "1.64.1", Revision: "1248", Browser: "156.0.8078.4", Status: "passed", TestCount: 1, FunctionalTLS: "owned-loopback-self-signed-exception", StrictTLS: "unknown-ca-and-mismatch-rejected-not-isolated-hostname-proof", NativeClipboard: "write-succeeded", ClipboardUI: "controlled-success-and-denial"}
 	good.CertificateRejections = []string{"chromium-certificate-rejected", "chromium-certificate-rejected"}
@@ -650,22 +1151,18 @@ func runPWEngine(t *testing.T, parent context.Context, node, web, dsn, engine st
 		t.Fatal("private child log unavailable")
 	}
 	defer private.Close()
-	cmd := exec.CommandContext(ctx, node, filepath.Join(web, "node_modules/@playwright/test/cli.js"), "test", "--config=playwright.config.ts", "--project="+engine)
-	cmd.Dir = web
+	environment := []string{}
 	for _, name := range []string{"PATH", "HOME", "LANG", "LC_ALL", "TZ", "XDG_CACHE_HOME", "PLAYWRIGHT_BROWSERS_PATH", "LD_LIBRARY_PATH", "GIO_EXTRA_MODULES", "GST_PLUGIN_PATH", "GST_PLUGIN_SYSTEM_PATH", "FONTCONFIG_PATH", "XDG_DATA_DIRS"} {
 		if value, ok := os.LookupEnv(name); ok {
-			cmd.Env = append(cmd.Env, name+"="+value)
+			environment = append(environment, name+"="+value)
 		}
 	}
-	cmd.Env = append(cmd.Env, "GMA_PW_FIXTURE_FILE="+file)
+	environment = append(environment, "GMA_PW_FIXTURE_FILE="+file)
 	if os.Getenv("GMA_PW_DEBUG_DIRECTORY") != "" {
-		cmd.Env = append(cmd.Env, "GMA_PW_PRIVATE_DEBUG=1")
+		environment = append(environment, "GMA_PW_PRIVATE_DEBUG=1")
 	}
 	log := &pwBoundedLog{writer: private, remaining: 1048576}
-	cmd.Stdout = log
-	cmd.Stderr = log
-	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
-	cmd.WaitDelay = 5 * time.Second
+	cmd := pwCommand(ctx, node, web, engine, environment, log)
 	runErr := cmd.Run()
 	retained := false
 	retain := func() {
@@ -709,5 +1206,10 @@ func runPWEngine(t *testing.T, parent context.Context, node, web, dsn, engine st
 	if json.Unmarshal(receipt, &accepted) != nil {
 		t.Fatal("validated receipt unavailable")
 	}
+	lifecycle := runPWLifecycle(ctx, node, web, engine, runDir, nonce, raw, environment)
+	if !passedPWLifecycle(lifecycle) {
+		t.Fatalf("browser lifecycle failed; engine=%s category=%s observed=%d remaining=%d forced_cleanup=%t", engine, lifecycle.Reason, lifecycle.Observed, lifecycle.Remaining, lifecycle.Forced)
+	}
+	t.Logf("Playwright lifecycle engine=%s readiness=owned-page-created signal=SIGINT observed_scope=owned-descendants observed_count=%d remaining=0 forced_cleanup=false", engine, lifecycle.Observed)
 	t.Log("Playwright engine=" + engine + " playwright=1.64.1 browser_version=" + accepted.Browser + " browser_revision=" + accepted.Revision + " scenarios=B01-B09 passed=9 skipped=0 retries=0 functional_tls=synthetic-only native_clipboard=" + accepted.NativeClipboard + " clipboard_ui=controlled-success-and-denial")
 }
