@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import resource
 import selectors
 import signal
 import subprocess
@@ -13,7 +14,7 @@ import tarfile
 import time
 
 from image_gate import (ARCHIVE_LIMIT, DIGEST, LABELS, REVISION, SCANNER, VERSION, GateError,
-                        archive_inventory, file_hash, read_json, require,
+                        archive_inventory, file_hash, open_regular, read_json, require,
                         validate_db, validate_directory)
 
 
@@ -31,7 +32,8 @@ def write_json(path, value):
         output.write((json.dumps(value, sort_keys=True, indent=2) + '\n').encode())
 
 
-def run_bounded(command, log_path, cwd, env, capture=False, timeout=180, artifact_output=None):
+def run_bounded(command, log_path, cwd, env, capture=False, timeout=180, artifact_output=None,
+                artifact_limit=ARCHIVE_LIMIT, stdin_path=None, child_file_limit=None):
     """Stream bounded channels; never buffer a whole tool response in memory.
 
     The archive channel has its own budget. An RLIMIT_FSIZE on docker itself
@@ -41,16 +43,23 @@ def run_bounded(command, log_path, cwd, env, capture=False, timeout=180, artifac
     metadata = artifact_output or log_path.with_suffix('.stdout')
     log = private_file(log_path)
     output = None
+    input_source = None
     process = None
     exited = False
     selector = selectors.DefaultSelector()
     try:
         if capture or artifact_output:
             output = private_file(metadata)
+        if stdin_path:
+            input_source = open_regular(stdin_path, ARCHIVE_LIMIT)
+        def direct_file_limit():
+            resource.setrlimit(resource.RLIMIT_FSIZE, (child_file_limit, child_file_limit))
         process = subprocess.Popen(command, cwd=cwd, env=env, stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE, start_new_session=True)
+                                   stderr=subprocess.PIPE, stdin=input_source or subprocess.DEVNULL,
+                                   start_new_session=True,
+                                   preexec_fn=direct_file_limit if child_file_limit is not None else None)
         for stream, destination, limit in (
-            (process.stdout, output or log, ARCHIVE_LIMIT if artifact_output else 1024 * 1024),
+            (process.stdout, output or log, artifact_limit if artifact_output else 1024 * 1024),
             (process.stderr, log, 1024 * 1024),
         ):
             os.set_blocking(stream.fileno(), False)
@@ -89,6 +98,8 @@ def run_bounded(command, log_path, cwd, env, capture=False, timeout=180, artifac
         selector.close()
         if output:
             output.close()
+        if input_source:
+            input_source.close()
         log.close()
     return metadata.read_bytes() if capture else None
 

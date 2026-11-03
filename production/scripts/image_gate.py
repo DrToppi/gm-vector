@@ -115,7 +115,7 @@ def layer_stream(stream):
     """Read either Docker tar layers or OCI gzip layers without extraction."""
     prefix = stream.read(2)
     stream.seek(0)
-    return gzip.GzipFile(fileobj=stream) if prefix == b'\x1f\x8b' else stream
+    return gzip.GzipFile(fileobj=stream, mode='rb') if prefix == b'\x1f\x8b' else stream
 
 
 def archive_inventory(path, image_id, diff_ids):

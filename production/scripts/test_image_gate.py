@@ -301,6 +301,14 @@ class ImageGateTests(unittest.TestCase):
             run_bounded([sys.executable, '-c', 'import time; time.sleep(10)'],
                         self.root / 'timeout.log', self.root, os.environ.copy(), timeout=0.03)
 
+    def test_private_stdin_is_streamed_without_command_argument_data(self):
+        source = self.root / 'synthetic-input'
+        source.write_bytes(b'x' * 2000000)
+        result = run_bounded([sys.executable, '-c', 'import sys; print(len(sys.stdin.buffer.read()))'],
+                             self.root / 'stdin.log', self.root, os.environ.copy(), capture=True,
+                             stdin_path=source)
+        self.assertEqual(result.strip(), b'2000000')
+
     def test_malformed_cli_does_not_echo_argument_values(self):
         args = ['scan-images.py', '--app-image', 'a', '--proxy-image', 'b', '--postgres-image', 'c',
                 '--source-revision', 'b' * 40, '--output-dir', str(self.root / 'new'),
