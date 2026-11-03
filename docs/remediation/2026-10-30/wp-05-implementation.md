@@ -18,7 +18,7 @@ trust/artifact verification is reviewed and implemented. No individual waiver ex
 The separate [D14 contract](wp-05-exception-implementation.md) now has independent
 plan admission; its helper writer owns only the named new admission modules,
 while root retains workflow/scanner/privacy/setup ownership. Operational admission
-still waits for implementation checks and the concrete environment/UI setup gate.
+still waits for implementation checks and verified environment readback.
 The package cannot be accepted with an unimplemented selected approval path.
 
 The reviewer independently checked accepted choices, current source, exact pins,
@@ -170,6 +170,43 @@ line. Deliberate password/token/TOTP/cookie/fragment markers must be absent from
 public output; explicit debug artifacts remain private, never auto-uploaded.
 No page.pdf claim for Firefox/WebKit: PDF is the user's browser-print flow.
 
+Explicit debugging is opt-in: `verify.py --browser-debug-dir` creates a new
+canonical outside-source 0700 directory; only failed-engine bounded logs/receipt
+copies are retained as exclusive 0600 files. Never retain fixture JSON, passwords,
+TOTP keys or default browser traces. Raw error details may flow only into that
+explicit private sink; normal reporting remains redacted. The diagnostic paths
+are not part of public CI uploads.
+
+### Cancellation refinement — independently admitted bounded plan
+
+After a genuine engine journey can launch, add a separate same-engine lifecycle
+probe using the SAME Go-owned Playwright CLI/worker/fixture launch and cancellation
+path. A dedicated browser/cancellation.mjs scenario creates a real page, emits a
+private nonce/engine/version readiness marker, then waits for cancellation under
+an absolute bound. It must not substitute for, skip or count as any B01–B09 pass.
+Normal discovery and its exactly-three-engine receipt guards remain unchanged.
+Execute this probe for every required engine within the existing parent and
+per-engine envelopes. Missing/invalid readiness, unavailable ownership observation
+or an empty observed-descendant set is FAIL. Readiness must follow real same-engine
+page creation. Spontaneous process exit before requested SIGINT is not success;
+the required order is valid readiness, requested cancellation, then bounded exit.
+
+Go sends the same SIGINT cancellation used by its real child process, waits at
+most 5 seconds for cleanup and verifies observed owned descendants are gone.
+Track only descendants of the newly created probe, using PID/start-time/UID
+identity; inspect no unrelated environment/argv. Reuse of a PID is not ownership.
+Any forced cleanup is FAIL, even if the residue is removed. Keep readiness/launch/
+cancellation within a 15-second probe bound and the existing 570-second parent;
+diagnose budget failure, do not automatically inflate it. Success output contains
+only engine/readiness/signal/remaining-count enums, never PID/nonce/private paths.
+Record the observed-descendant scope honestly; this is not host-wide surveillance
+or a proof about arbitrary unobserved host processes. Frontend owns this named
+probe and narrow Go/config/admission unit refinements; root owns runner/docs.
+Fallback may signal only identity-revalidated owned PIDs. Harness-forced cleanup,
+not undocumented internal Playwright signal choices, is the failing condition.
+The READ-ONLY reviewer confirmed these refinements fit the accepted lifecycle
+scope; no application change or new permission is implied.
+
 Initial bounds: action10s, navigation/launch15s, assertion5s, enginejourney150s,
 engineprocess180s, Go parent570s/runner600s. Missing/retried/skipped required cases
 cannot count PASS. Freeze and validate the expected inventory/engine receipt.
@@ -276,3 +313,17 @@ different READ-ONLY reviewer. Any later runtime/harness fix requires relevant
 rerun and review; do not accept by budget exhaustion or only partial greens.
 Record unresolved findings separately. Only then label WP-05 PASS — INDEPENDENTLY
 VERIFIED; deployment/main/release still require their separate authorization.
+
+## Privacy receipt contract
+
+`gm-vector-artifact-privacy-v1` has exact keys format/status/source_revision/
+source_tree_clean/scanner/scan_manifest_sha256/image_ids/roots/build. A passing
+receipt has status PASS, clean true, exact full candidate SHA and manifest hash,
+three matching immutable image IDs, pinned Gitleaks8.30.1 binary identity, and
+exact P01–P06 root membership. Each root has id/status/members/body_bytes/
+inventory_sha256/content_sha256/scanner_report_sha256; counts are bounded,
+members positive and hashes SHA-256. P06 PASS means inert markers were detected,
+not silently absent. Build has binary_sha256/web_inventory_sha256/
+context_archive_sha256/source_archive_sha256/image_assets_sha256.
+The trusted workflow must actually execute the producer; a receipt on its own is
+not an authenticated claim. Raw evidence stays outside source/public uploads.

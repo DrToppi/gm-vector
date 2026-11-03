@@ -1,0 +1,14 @@
+{
+  "format": "gm-vector-exception-environment-v1",
+  "status": "verified",
+  "repository_id": "1438943020",
+  "environment_id": "26111380009",
+  "environment_name": "security-exceptions",
+  "reviewer_id": "161593815",
+  "api_settings_sha256": "daaf21593602774b044146cd667270adf0d53e0355625ec8145e4f8b7c45c886",
+  "bypass_disable_verification": {
+    "method": "api_readback",
+    "verified_at": "2026-11-03T09:11:46Z",
+    "evidence_sha256": "0b2b9bd8d3009ebe008764d7f90626ff2de241f486f3978a833aa15a26f15ea8"
+  }
+}

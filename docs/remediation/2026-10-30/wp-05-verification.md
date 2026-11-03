@@ -100,6 +100,12 @@ can_admins_bypass. PUT false succeeded and a separate independent read confirmed
 literal false. Require that exact typed state on every admission and fail closed
 on absence/change. No UI action, approval event or individual waiver was used.
 The helper/workflow admission path remains unverified and disabled.
+Actual settings SHA-256:
+`daaf21593602774b044146cd667270adf0d53e0355625ec8145e4f8b7c45c886`;
+saved API readback evidence SHA-256:
+`0b2b9bd8d3009ebe008764d7f90626ff2de241f486f3978a833aa15a26f15ea8`.
+The nonsecret setup record is .github/security-environment.json; it cannot
+authorize a waiver or replace the per-artifact owner approval.
 
 Finish and review source/build/package/all-layer privacy, all-image actual scans,
 D14 protected approval binding (no individual exception currently approved),
