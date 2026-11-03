@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sync"
 	"syscall"
@@ -304,6 +305,124 @@ func TestPlaywrightHarnessValidation(t *testing.T) {
 		if validatePWReceipt(raw, "chromium", "synthetic") == nil {
 			t.Fatal("malformed receipt admitted")
 		}
+	}
+}
+
+// A real API regression for the member preview/apply path observed in B06.
+// It never attaches to an installed application or prints response bodies.
+func TestPlaywrightMemberMilestoneRegression(t *testing.T) {
+	f := newReadPathFixture(t, 1)
+	ctx := context.Background()
+	project := f.projects[0]
+	project.Brief = "PW protected manager brief"
+	project.People = project.People[:1]
+	project.Links = []Link{}
+	project.Tasks = []Task{
+		{ID: "pw-milestone", Title: "PW milestone", Status: "todo", Responsibility: "internal", Assignments: []Assignment{}},
+		{ID: "pw-owned-leaf", Parent: "pw-milestone", Title: "PW owned leaf", Status: "todo", Responsibility: "internal", RequestedStart: project.Start, Planned: 192, Assignments: []Assignment{{EmployeeID: "profile-employee-00", Daily: 96}}},
+	}
+	if _, err := f.store.DB.Exec(ctx, "UPDATE employees SET user_id='profile-user-01' WHERE id='profile-employee-00'"); err != nil {
+		t.Fatal("member employee binding unavailable")
+	}
+	if _, err := f.store.DB.Exec(ctx, "UPDATE memberships SET role='member' WHERE project_id=$1 AND user_id='profile-user-01'", project.ID); err != nil {
+		t.Fatal("member role fixture unavailable")
+	}
+	server := httptest.NewUnstartedServer(f.app.Handler())
+	server.Config.ErrorLog = log.New(io.Discard, "", 0)
+	server.StartTLS()
+	defer server.Close()
+	client := server.Client()
+	client.Timeout = 10 * time.Second
+	serverURL, _ := url.Parse(server.URL)
+	call := func(method, path string, body any, user int) (int, []byte) {
+		t.Helper()
+		request := f.request(method, path, body, "")
+		request.URL.Scheme, request.URL.Host = serverURL.Scheme, serverURL.Host
+		request.RequestURI = ""
+		request.Header.Set("Cookie", "__Host-gma="+f.sessions[user].cookie)
+		request.Header.Set("X-CSRF-Token", f.sessions[user].csrf)
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal("member regression transport failed")
+		}
+		defer response.Body.Close()
+		raw, err := io.ReadAll(io.LimitReader(response.Body, 1048577))
+		if err != nil || len(raw) > 1048576 {
+			t.Fatal("member regression bounded response failed")
+		}
+		return response.StatusCode, raw
+	}
+	decode := func(raw []byte, target any) {
+		t.Helper()
+		if json.Unmarshal(raw, target) != nil {
+			t.Fatal("member regression response schema failed")
+		}
+	}
+	status, raw := call("PUT", "/projects/"+project.ID, saveRequest{Project: snapshotProject(project)}, 0)
+	if status != 200 {
+		t.Fatalf("member regression manager setup HTTP%d", status)
+	}
+	var stored Project
+	decode(raw, &stored)
+	if !stored.Tasks[0].Summary || stored.Tasks[0].Status != "todo" || len(stored.Tasks[0].Assignments) != 0 {
+		t.Fatal("member regression summary precondition failed")
+	}
+	status, raw = call("GET", "/auth/me", nil, 1)
+	var me struct {
+		User User `json:"user"`
+	}
+	decode(raw, &me)
+	if status != 200 || me.User.Admin || me.User.EmployeeID != "profile-employee-00" {
+		t.Fatal("member regression principal precondition failed")
+	}
+	status, raw = call("GET", "/projects/"+project.ID, nil, 1)
+	var envelope struct {
+		Role    string  `json:"role"`
+		Project Project `json:"project"`
+	}
+	decode(raw, &envelope)
+	if status != 200 || envelope.Role != "member" {
+		t.Fatal("member regression project role precondition failed")
+	}
+	stored = envelope.Project
+	var desired Project
+	cloned, _ := json.Marshal(stored)
+	decode(cloned, &desired)
+	desired.Tasks[1].Status = "doing"
+	desired.Tasks[1].Brief = "PW member brief"
+	status, raw = call("POST", "/projects/"+project.ID+"/preview", saveRequest{Project: snapshotProject(desired)}, 1)
+	if status != 200 {
+		t.Fatalf("owned leaf preview HTTP%d, expected200", status)
+	}
+	var preview Project
+	decode(raw, &preview)
+	desired.Tasks[0].Status = "doing"
+	if !reflect.DeepEqual(snapshotProject(desired), snapshotProject(preview)) {
+		t.Fatal("preview changed fields outside owned status/brief and derived milestone status")
+	}
+	status, raw = call("PUT", "/projects/"+project.ID, saveRequest{Project: snapshotProject(preview)}, 1)
+	code := "none"
+	if status != 200 {
+		var failure struct {
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		decode(raw, &failure)
+		code = "unexpected"
+		if failure.Error.Code == "forbidden" {
+			code = "forbidden"
+		}
+	}
+	t.Logf("PW_MEMBER_MILESTONE preview_http=200 apply_http=%d error=%s canonical_changes=owned_leaf.status,owned_leaf.brief,derived_milestone.status protected_fields_unchanged=true", status, code)
+	if status != 200 {
+		t.Fatalf("owned leaf preview/apply must succeed: HTTP%d code=%s, expected200", status, code)
+	}
+	var saved Project
+	decode(raw, &saved)
+	desired.Revision++
+	if !reflect.DeepEqual(snapshotProject(desired), snapshotProject(saved)) {
+		t.Fatal("member preview apply changed protected fields")
 	}
 }
 
