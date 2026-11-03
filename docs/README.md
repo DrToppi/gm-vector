@@ -34,6 +34,7 @@ has independent phase-1 admission. D14 exception admission remains held.
 | [Directory integration](directory.md) | LDAP and external directory-source behaviour |
 | [Optional integrations](integrations.md) | Mail and calendar integration configuration and limitations |
 | [Contributor guide](../CONTRIBUTING.md) | Contributions and repository workflow |
+| [Project backlog](backlog.md) | Reported issues, triage and future work outside the active package |
 | [Agent instructions](../AGENTS.md) | Document-first decisions, scope, tests and independent review |
 
 ## Security and verification
