@@ -44,6 +44,18 @@ requested-date/customer/completed-range protections. No blanket task comparison
 skip or trust in client-derived flags. A forged summary status must not persist;
 forged unowned leaf status or protected fields must still be rejected unchanged.
 
+## Executed focused GREEN
+
+Runtime/core-test checkpoint `1eeb17f` contains only the comparison correction
+and its independent unit oracles. `go test -race -count=1 -run '^TestMember'`
+passed. The exact real HTTP regression then passed preview200/apply200 in 1.17s;
+private log SHA-256:
+`b97e2a6e4ba24d676d04809a5d1b84e0d064c8227472428132e3a3da1f9f9807`.
+Those commands ran the same source blobs before their checkpoint commit; other
+package work was unfinished. This is focused evidence, not clean-source WP-05
+acceptance. Additional HTTP forged-status cases, actual B06, full security/API
+regression and independent final review remain required.
+
 ## Verification and acceptance
 
 Run the exact real HTTP RED to GREEN. Add independent unit oracles for nested
