@@ -114,7 +114,11 @@ func (w *readPathLoadWriter) Write(raw []byte) (int, error) {
 func readPathLoadDurations(t *testing.T) (bool, time.Duration, time.Duration) {
 	t.Helper()
 	smoke := os.Getenv("GMA_READ_PATH_LOAD_SMOKE") == "1"
-	values, reference := []int{600, 900}, []int{600, 900}
+	reference, err := readPathLoadReferences(os.Getenv("GMA_READ_PATH_LOAD_PROFILE"), smoke)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := append([]int(nil), reference...)
 	for i, name := range []string{"GMA_READ_PATH_LOAD_MIXED_SECONDS", "GMA_READ_PATH_LOAD_SOAK_SECONDS"} {
 		if smoke {
 			values[i] = 20
@@ -131,6 +135,47 @@ func readPathLoadDurations(t *testing.T) (bool, time.Duration, time.Duration) {
 		}
 	}
 	return smoke, time.Duration(values[0]) * time.Second, time.Duration(values[1]) * time.Second
+}
+
+func readPathLoadReferences(profile string, smoke bool) ([]int, error) {
+	switch profile {
+	case "", "wp02":
+		return []int{600, 900}, nil
+	case "operational":
+		if smoke {
+			return nil, fmt.Errorf("operational acceptance cannot use smoke")
+		}
+		return []int{600, 3600}, nil
+	default:
+		return nil, fmt.Errorf("unknown reference load profile")
+	}
+}
+
+func TestReadPathLoadDurationProfiles(t *testing.T) {
+	for _, tc := range []struct {
+		profile     string
+		smoke       bool
+		mixed, soak int
+		invalid     bool
+	}{
+		{"", false, 600, 900, false}, {"wp02", false, 600, 900, false},
+		{"", true, 600, 900, false}, {"wp02", true, 600, 900, false},
+		{"operational", false, 600, 3600, false}, {"operational", true, 0, 0, true},
+		{"typo", false, 0, 0, true},
+	} {
+		t.Run(fmt.Sprintf("%s/smoke=%t", tc.profile, tc.smoke), func(t *testing.T) {
+			values, err := readPathLoadReferences(tc.profile, tc.smoke)
+			if tc.invalid {
+				if err == nil {
+					t.Fatal("invalid profile admitted")
+				}
+				return
+			}
+			if err != nil || len(values) != 2 || values[0] != tc.mixed || values[1] != tc.soak {
+				t.Fatal("reference duration changed")
+			}
+		})
+	}
 }
 
 func readPathLoadProjectDigest(p Project) string {
@@ -522,7 +567,7 @@ func readPathLoadPhase(t *testing.T, f *readPathFixture, server *httptest.Server
 
 func TestReadPathLoad(t *testing.T) {
 	if os.Getenv("GMA_READ_PATH_LOAD") != "1" {
-		t.Skip("opt-in25-minute reference load; set GMA_READ_PATH_LOAD=1 (SMOKE is never acceptance)")
+		t.Skip("opt-in reference load; set GMA_READ_PATH_LOAD=1 (SMOKE is never acceptance)")
 	}
 	dsn, err := url.Parse(os.Getenv("GMA_TEST_DSN"))
 	if err != nil || dsn.Path != "/gma_planner_test" || (dsn.Scheme != "postgres" && dsn.Scheme != "postgresql") {
