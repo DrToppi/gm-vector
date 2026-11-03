@@ -200,9 +200,13 @@ class CompleteRecoveryVerification(unittest.TestCase):
         image = 'sha256:' + 'a' * 64
         for arguments in (['all', '--app-image', image],
                           ['unit', '--app-image', image, '--db-image', image, '--proxy-image', image],
-                          ['integration', '--only-test', 'TestPlaywrightMemberMilestoneRegression', '--app-image', image]):
+                          ['integration', '--only-test', 'TestPlaywrightMemberMilestoneRegression', '--app-image', image],
+                          ['integration', '--app-image', ''],
+                          ['all', '--app-image', '', '--db-image', '', '--proxy-image', '']):
             with self.subTest(arguments=arguments), \
                  patch('sys.argv', ['verify.py', *arguments]), \
+                 patch.dict(os.environ, {'GMA_GO_BIN': 'go', 'GMA_TEST_DSN': 'postgres://localhost/gma_planner_test'}), \
+                 patch('sys.stdout', new_callable=io.StringIO), \
                  patch('sys.stderr', new_callable=io.StringIO), patch('subprocess.run') as run:
                 with self.assertRaises(SystemExit) as result:
                     main()

@@ -76,7 +76,7 @@ def main():
     if args.playwright_diagnostic_engine and not args.only_playwright:
         parser.error('--playwright-diagnostic-engine requires explicit --only-playwright focus')
     recovery_images = {role: getattr(args, role + '_image') for role in ('app', 'db', 'proxy')}
-    if any(recovery_images.values()) and (
+    if any(value is not None for value in recovery_images.values()) and (
             args.suite not in ('integration', 'all') or args.only_test
             or not all(value and re.fullmatch(r'sha256:[0-9a-f]{64}', value) for value in recovery_images.values())):
         parser.error('recovery image overrides require all three immutable IDs and a complete integration/all suite')
