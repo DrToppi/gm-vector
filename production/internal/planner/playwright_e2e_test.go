@@ -32,12 +32,117 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var pwEngines = []string{"chromium", "firefox", "webkit"}
 var pwRevisions = map[string]string{"chromium": "1248", "firefox": "1555", "webkit": "2370"}
 var pwVersions = map[string]string{"chromium": "156.0.8078.4", "firefox": "157.0", "webkit": "27.2"}
 var pwScenarios = []string{"B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B09"}
+
+type pwBackendEvent struct {
+	Method, Route, Phase, DatabaseError string
+	Status                              int
+	ContextCanceled                     bool
+}
+type pwBackendTrace struct {
+	mu       sync.Mutex
+	failures map[string]string
+	events   []pwBackendEvent
+	overflow bool
+}
+
+// Diagnostic-only error classes. Never inspect SQL, arguments, bodies or secrets.
+func (trace *pwBackendTrace) record(ctx context.Context, err error) {
+	if err == nil || requestIDFromContext(ctx) == "" {
+		return
+	}
+	class := "other_database_error"
+	if errors.Is(err, context.Canceled) {
+		class = "context_canceled"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		class = "context_deadline"
+	}
+	trace.mu.Lock()
+	defer trace.mu.Unlock()
+	if trace.failures == nil {
+		trace.failures = map[string]string{}
+	}
+	id := requestIDFromContext(ctx)
+	if _, exists := trace.failures[id]; !exists && len(trace.failures) >= 64 {
+		trace.overflow = true
+		return
+	}
+	if existing := trace.failures[id]; existing == "" || existing == class {
+		trace.failures[id] = class
+	} else {
+		trace.failures[id] = "mixed_database_error"
+	}
+}
+func requestIDFromContext(ctx context.Context) string {
+	id, _ := ctx.Value("requestID").(string)
+	return id
+}
+func (trace *pwBackendTrace) TraceQueryStart(ctx context.Context, _ *pgx.Conn, _ pgx.TraceQueryStartData) context.Context {
+	return ctx
+}
+func (trace *pwBackendTrace) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryEndData) {
+	trace.record(ctx, data.Err)
+}
+func (trace *pwBackendTrace) TraceAcquireStart(ctx context.Context, _ *pgxpool.Pool, _ pgxpool.TraceAcquireStartData) context.Context {
+	return ctx
+}
+func (trace *pwBackendTrace) TraceAcquireEnd(ctx context.Context, _ *pgxpool.Pool, data pgxpool.TraceAcquireEndData) {
+	trace.record(ctx, data.Err)
+}
+
+func (trace *pwBackendTrace) observe(app *App, response *diagnosticResponse, request *http.Request, phase string) {
+	if response.statusCode() < 500 {
+		return
+	}
+	id, route := response.Header().Get("X-Request-ID"), "unknown"
+	for _, event := range app.diagnosticEvents.snapshot(time.Now(), "", true) {
+		if event.RequestID == id {
+			route = event.Route
+			break
+		}
+	}
+	trace.mu.Lock()
+	defer trace.mu.Unlock()
+	if len(trace.events) >= 16 {
+		trace.overflow = true
+		return
+	}
+	class := trace.failures[id]
+	if class == "" {
+		class = "unobserved"
+	}
+	trace.events = append(trace.events, pwBackendEvent{Method: safeDiagnosticMethod(request.Method), Route: route, Phase: phase, DatabaseError: class, Status: response.statusCode(), ContextCanceled: errors.Is(request.Context().Err(), context.Canceled)})
+}
+
+func expectedPWCanceledRead(event pwBackendEvent) bool {
+	return event.Status == 500 && (event.Method == "GET" || event.Method == "HEAD") && strings.HasPrefix(event.Route, "/api/v1/") && event.Phase == "lifecycle" && event.ContextCanceled && event.DatabaseError == "context_canceled"
+}
+
+func (trace *pwBackendTrace) report(t *testing.T, engine string) bool {
+	t.Helper()
+	trace.mu.Lock()
+	defer trace.mu.Unlock()
+	canceled, unexpected := 0, 0
+	for _, event := range trace.events {
+		if expectedPWCanceledRead(event) {
+			canceled++
+		} else {
+			unexpected++
+		}
+		t.Logf("Playwright backend_event engine=%s phase=%s method=%s route=%s status=%d context_canceled=%t database_error=%s", engine, event.Phase, event.Method, event.Route, event.Status, event.ContextCanceled, event.DatabaseError)
+	}
+	t.Logf("Playwright backend engine=%s responses_5xx=%d canceled_read_requests=%d unexpected=%d overflow=%t", engine, len(trace.events), canceled, unexpected, trace.overflow)
+	return unexpected == 0 && !trace.overflow
+}
 
 type pwProcessID struct {
 	PID   int
@@ -677,6 +782,38 @@ func TestPlaywrightHarnessValidation(t *testing.T) {
 	if exec.Command(node, "../../web/browser/contracts.unit.cjs").Run() != nil {
 		t.Fatal("private IPC/reporter unit failed")
 	}
+	t.Run("backend_error_classification", func(t *testing.T) {
+		valid := pwBackendEvent{Method: "GET", Route: "/api/v1/auth/status", Phase: "lifecycle", Status: 500, ContextCanceled: true, DatabaseError: "context_canceled"}
+		if !expectedPWCanceledRead(valid) {
+			t.Fatal("proven canceled read rejected")
+		}
+		for _, mutate := range []func(*pwBackendEvent){
+			func(e *pwBackendEvent) { e.Method = "POST" }, func(e *pwBackendEvent) { e.Status = 503 },
+			func(e *pwBackendEvent) { e.ContextCanceled = false }, func(e *pwBackendEvent) { e.DatabaseError = "unobserved" },
+			func(e *pwBackendEvent) { e.DatabaseError = "other_database_error" }, func(e *pwBackendEvent) { e.Route = "unknown" },
+			func(e *pwBackendEvent) { e.Phase = "unknown" },
+			func(e *pwBackendEvent) { e.Phase = "journey" },
+		} {
+			invalid := valid
+			mutate(&invalid)
+			if expectedPWCanceledRead(invalid) {
+				t.Fatal("unexpected backend error classified as cancellation")
+			}
+		}
+		trace := &pwBackendTrace{}
+		marker := token()
+		ctx := context.WithValue(context.Background(), "requestID", "synthetic-request")
+		ctx = trace.TraceQueryStart(ctx, nil, pgx.TraceQueryStartData{SQL: marker, Args: []any{marker}})
+		trace.TraceQueryEnd(ctx, nil, pgx.TraceQueryEndData{Err: context.Canceled})
+		if trace.failures["synthetic-request"] != "context_canceled" {
+			t.Fatal("query cancellation not classified")
+		}
+		trace.TraceAcquireEnd(ctx, nil, pgxpool.TraceAcquireEndData{Err: errors.New(marker)})
+		raw, _ := json.Marshal(trace.failures)
+		if trace.failures["synthetic-request"] != "mixed_database_error" || bytes.Contains(raw, []byte(marker)) {
+			t.Fatal("query diagnostics retained data or hid unexpected errors")
+		}
+	})
 	t.Run("lifecycle_readiness", func(t *testing.T) {
 		good := pwReady{Format: "gm-vector-browser-ready", SchemaVersion: 1, Nonce: "synthetic", Engine: "chromium", Playwright: "1.64.1", Revision: "1248", Browser: "156.0.8078.4", WorkerPID: os.Getpid(), Stage: "owned-page-created"}
 		encode := func(value pwReady) []byte { raw, _ := json.Marshal(value); return raw }
@@ -1058,11 +1195,23 @@ func runPWEngine(t *testing.T, parent context.Context, node, web, dsn, engine st
 	query := parsed.Query()
 	query.Set("search_path", schema)
 	parsed.RawQuery = query.Encode()
-	store, err := Open(ctx, parsed.String())
+	poolConfig, err := pgxpool.ParseConfig(parsed.String())
+	if err != nil {
+		t.Fatal("isolated store configuration unavailable")
+	}
+	poolConfig.MaxConns = 12
+	poolConfig.ConnConfig.RuntimeParams["statement_timeout"] = "10000"
+	backend := &pwBackendTrace{}
+	poolConfig.ConnConfig.Tracer = backend
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		t.Fatal("isolated store unavailable")
 	}
+	store := &Store{DB: pool}
 	defer store.DB.Close()
+	if store.DB.Ping(ctx) != nil {
+		t.Fatal("isolated store connection unavailable")
+	}
 	if store.Migrate(ctx) != nil {
 		t.Fatal("fixture migration failed")
 	}
@@ -1112,9 +1261,14 @@ func runPWEngine(t *testing.T, parent context.Context, node, web, dsn, engine st
 	mismatch.StartTLS()
 	defer mismatch.Close()
 	handler := app.Handler()
+	var phase atomic.Value
+	phase.Store("journey")
 	server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-GM-Playwright-Run", nonce)
-		handler.ServeHTTP(w, r)
+		stage := phase.Load().(string)
+		response := &diagnosticResponse{ResponseWriter: w}
+		handler.ServeHTTP(response, r)
+		backend.observe(app, response, r, stage)
 	})
 	server.StartTLS()
 	_, calendar, _ := fixture()
@@ -1190,6 +1344,8 @@ func runPWEngine(t *testing.T, parent context.Context, node, web, dsn, engine st
 	receipt, readErr := os.ReadFile(receiptFile)
 	if readErr != nil || validatePWReceipt(receipt, engine, nonce) != nil || runErr != nil {
 		retain()
+		server.Close()
+		backend.report(t, engine)
 		var partial pwReceipt
 		_ = json.Unmarshal(receipt, &partial)
 		phase := "startup"
@@ -1209,9 +1365,17 @@ func runPWEngine(t *testing.T, parent context.Context, node, web, dsn, engine st
 	if json.Unmarshal(receipt, &accepted) != nil {
 		t.Fatal("validated receipt unavailable")
 	}
+	phase.Store("lifecycle")
 	lifecycle := runPWLifecycle(ctx, node, web, engine, runDir, nonce, raw, environment)
 	if !passedPWLifecycle(lifecycle) {
+		server.Close()
+		backend.report(t, engine)
 		t.Fatalf("browser lifecycle failed; engine=%s category=%s observed=%d remaining=%d forced_cleanup=%t", engine, lifecycle.Reason, lifecycle.Observed, lifecycle.Remaining, lifecycle.Forced)
+	}
+	server.Close()
+	if !backend.report(t, engine) {
+		retain()
+		t.Fatal("unexpected or unclassified backend failure inventory")
 	}
 	t.Logf("Playwright lifecycle engine=%s readiness=owned-page-created signal=SIGINT observed_scope=owned-descendants observed_count=%d remaining=0 forced_cleanup=false", engine, lifecycle.Observed)
 	t.Log("Playwright engine=" + engine + " playwright=1.64.1 browser_version=" + accepted.Browser + " browser_revision=" + accepted.Revision + " scenarios=B01-B09 passed=9 skipped=0 retries=0 functional_tls=synthetic-only native_clipboard=" + accepted.NativeClipboard + " clipboard_ui=controlled-success-and-denial")

@@ -307,6 +307,9 @@ export async function nativeInteractions(
   const require = createRequire(import.meta.url);
   const native = require("../../scripts/wp03-browser-interactions.cjs");
   let nativePhase = "setup";
+  let pendingTabOracle = false,
+    nativeTabKeys = 0,
+    tabOracleChecks = 0;
   const focusTrail: unknown[] = [];
   const focusState = (details = true) =>
     page.evaluate((details) => {
@@ -338,7 +341,63 @@ export async function nativeInteractions(
           : undefined,
       };
     }, details);
-  const evaluate = (expression: string) => page.evaluate(expression);
+  const evaluate = async (expression: string) => {
+    if (pendingTabOracle) {
+      pendingTabOracle = false;
+      tabOracleChecks++;
+      const valid = await page.evaluate(() => {
+        const dialog = document.querySelector("dialog[open]"),
+          active = document.activeElement;
+        if (
+          !dialog ||
+          !(active instanceof HTMLElement) ||
+          !dialog.contains(active) ||
+          active.matches("[data-modal-focus-guard]")
+        )
+          return false;
+        if (
+          !active.matches(
+            "button,input:not([type=hidden]),select,textarea,summary,a[href],[tabindex]",
+          ) ||
+          active.tabIndex < 0 ||
+          active.matches(":disabled") ||
+          active.closest("[hidden],[inert],[aria-hidden=true]")
+        )
+          return false;
+        const closed = active.closest("details:not([open])");
+        if (
+          closed &&
+          !closed.querySelector(":scope > summary")?.contains(active)
+        )
+          return false;
+        const rect = active.getBoundingClientRect();
+        if (
+          !active.getClientRects().length ||
+          rect.width <= 0 ||
+          rect.height <= 0 ||
+          !active.matches(":focus-visible")
+        )
+          return false;
+        for (
+          let element: HTMLElement | null = active;
+          element && dialog.contains(element);
+          element = element.parentElement
+        ) {
+          const style = getComputedStyle(element);
+          if (
+            style.display === "none" ||
+            style.visibility === "hidden" ||
+            style.visibility === "collapse" ||
+            Number(style.opacity) === 0
+          )
+            return false;
+        }
+        return true;
+      });
+      expect(valid).toBe(true);
+    }
+    return page.evaluate(expression);
+  };
   const waitForNative = async (expression: string) => {
     await expect
       .poll(() => evaluate(expression), { timeout: 5000 })
@@ -366,6 +425,12 @@ export async function nativeInteractions(
       } else {
         await page.keyboard.up(p.key);
         if (p.modifiers & 8) await page.keyboard.up("Shift");
+        if (p.key === "Tab" && nativePhase === "wp03-native-keyboard-tab") {
+          if (pendingTabOracle)
+            throw Error("PW_NATIVE_TAB_ORACLE_NOT_CONSUMED");
+          nativeTabKeys++;
+          pendingTabOracle = true;
+        }
         if (
           process.env.GMA_PW_PRIVATE_DEBUG === "1" &&
           nativePhase.includes("keyboard") &&
@@ -399,6 +464,9 @@ export async function nativeInteractions(
         nativePhase = phase;
       },
     });
+    expect(nativeTabKeys).toBeGreaterThan(0);
+    expect(tabOracleChecks).toBe(nativeTabKeys);
+    expect(pendingTabOracle).toBe(false);
   } catch (cause) {
     if (process.env.GMA_PW_PRIVATE_DEBUG === "1") {
       const state = await focusState();

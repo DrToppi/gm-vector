@@ -85,6 +85,8 @@ class ContentStream:
                     if nested:
                         nested.write(chunk)
                 require(read == size, 'truncated artifact member')
+                if read == 0 and name.casefold().endswith('.zip'):
+                    archive_kind(b'', name)
                 if nested:
                     nested.seek(0)
                     inspect_nested(nested, kind, name, self, depth + 1)
@@ -103,11 +105,14 @@ class ContentStream:
 
 
 def archive_kind(prefix, name):
+    zip_layout = prefix.startswith((b'PK\x03\x04', b'PK\x05\x06'))
+    require(not name.casefold().endswith('.zip') or zip_layout,
+            'prefixed or unsupported named ZIP layout')
     require(not prefix.startswith((b'GMABK01', b'PGDMP', b'SQLite format 3\x00')),
             'private database or backup artifact in distribution')
     if prefix.startswith(b'\x1f\x8b'):
         return 'gzip'
-    if prefix.startswith(b'PK\x03\x04') or prefix.startswith(b'PK\x05\x06'):
+    if zip_layout:
         return 'zip'
     if prefix.startswith(b'BZh'):
         return 'bzip2'

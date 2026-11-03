@@ -265,6 +265,19 @@ class PrivacyDistributionTests(unittest.TestCase):
             walk_tar(io.BytesIO(info.tobuf() + data.ljust(512, b'\0') + b'\0' * 1024),
                      ContentStream(io.BytesIO()))
 
+    def test_named_prefixed_zip_is_rejected_before_compressed_members_can_hide(self):
+        zipped = io.BytesIO()
+        with zipfile.ZipFile(zipped, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr('public.txt', b'PREFIXED_COMPRESSED_INERT_CONTENT')
+        payload = b'INERT_SELF_EXTRACTING_PREFIX' + zipped.getvalue()
+        # Independent oracle: this is valid ZIP input for the standard library,
+        # despite its unsupported executable/prefixed leading layout.
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            self.assertEqual(archive.read('public.txt'), b'PREFIXED_COMPRESSED_INERT_CONTENT')
+        for name in ('archive.zip', 'ARCHIVE.ZIP'):
+            with self.subTest(name=name), self.assertRaises(GateError):
+                ContentStream(io.BytesIO()).consume(name, {}, io.BytesIO(payload), len(payload))
+
     def test_zip_directory_bound_checked_before_stdlib_allocation(self):
         tail = struct.pack('<4s4H2IH', b'PK\x05\x06', 0, 0, 1, 1, 40 * 1024 * 1024, 0, 0)
         value = b'PK\x03\x04' + tail
