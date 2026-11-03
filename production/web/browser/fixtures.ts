@@ -59,8 +59,16 @@ export const test = base.extend<{ fixture: Fixture }>({
     });
     const page = await context.newPage();
     const errors: string[] = [];
-    page.on("pageerror", () => {
+    page.on("pageerror", (error) => {
       if (errors.length < 10) errors.push("Error");
+      if (process.env.GMA_PW_PRIVATE_DEBUG === "1")
+        console.error(
+          "PW_PRIVATE_ERROR " +
+            JSON.stringify({
+              message: error.message.slice(0, 32768),
+              stack: error.stack?.slice(0, 32768),
+            }),
+        );
     });
     await provide(page);
     await page.close();

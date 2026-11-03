@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -33,6 +34,62 @@ var pwEngines = []string{"chromium", "firefox", "webkit"}
 var pwRevisions = map[string]string{"chromium": "1248", "firefox": "1555", "webkit": "2370"}
 var pwVersions = map[string]string{"chromium": "156.0.8078.4", "firefox": "157.0", "webkit": "27.2"}
 var pwScenarios = []string{"B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B09"}
+
+func validatePWDebugDirectory(directory string) error {
+	fail := errors.New("invalid private browser debug directory")
+	if !filepath.IsAbs(directory) || filepath.Clean(directory) != directory {
+		return fail
+	}
+	resolved, err := filepath.EvalSymlinks(directory)
+	if err != nil || resolved != directory {
+		return fail
+	}
+	info, err := os.Lstat(directory)
+	if err != nil || !info.IsDir() || info.Mode().Perm() != 0700 {
+		return fail
+	}
+	owner, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || int(owner.Uid) != os.Getuid() {
+		return fail
+	}
+	return nil
+}
+
+func retainPWFailure(directory, runDirectory, engine string) error {
+	if directory == "" {
+		return nil
+	}
+	if validatePWDebugDirectory(directory) != nil || pwRevisions[engine] == "" {
+		return errors.New("invalid private browser debug destination")
+	}
+	for name, limit := range map[string]int64{"process.log": 1048576, "receipt.json": 262144} {
+		source := filepath.Join(runDirectory, name)
+		info, err := os.Lstat(source)
+		if os.IsNotExist(err) && name == "receipt.json" {
+			continue
+		}
+		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 || info.Size() > limit {
+			return errors.New("invalid private browser diagnostic source")
+		}
+		input, err := os.Open(source)
+		if err != nil {
+			return errors.New("private browser diagnostic unavailable")
+		}
+		output, err := os.OpenFile(filepath.Join(directory, engine+"."+name), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if err != nil {
+			input.Close()
+			return errors.New("private browser diagnostic destination unavailable")
+		}
+		written, copyErr := io.Copy(output, io.LimitReader(input, limit+1))
+		closeErr := output.Close()
+		input.Close()
+		if copyErr != nil || closeErr != nil || written > limit {
+			_ = os.Remove(filepath.Join(directory, engine+"."+name))
+			return errors.New("private browser diagnostic copy failed")
+		}
+	}
+	return nil
+}
 
 // Call logs may include credentials, so they remain private and bounded. The
 // child can finish writing, but crossing the bound blocks acceptance.
@@ -170,6 +227,41 @@ func uniquePWJSON(raw []byte) bool {
 	return err == io.EOF
 }
 func TestPlaywrightHarnessValidation(t *testing.T) {
+	t.Run("private_debug", func(t *testing.T) {
+		directory := t.TempDir()
+		if os.Chmod(directory, 0700) != nil || validatePWDebugDirectory(directory) != nil {
+			t.Fatal("private debug directory rejected")
+		}
+		if validatePWDebugDirectory("relative") == nil {
+			t.Fatal("relative debug directory admitted")
+		}
+		if os.Chmod(directory, 0755) != nil || validatePWDebugDirectory(directory) == nil {
+			t.Fatal("public debug directory admitted")
+		}
+		os.Chmod(directory, 0700)
+		link := filepath.Join(t.TempDir(), "link")
+		if os.Symlink(directory, link) != nil || validatePWDebugDirectory(link) == nil {
+			t.Fatal("symlinked debug directory admitted")
+		}
+		run := t.TempDir()
+		if os.WriteFile(filepath.Join(run, "process.log"), []byte("private synthetic diagnostic"), 0600) != nil || os.WriteFile(filepath.Join(run, "fixture.json"), []byte("must not be copied"), 0600) != nil {
+			t.Fatal("debug unit fixture unavailable")
+		}
+		if retainPWFailure(directory, run, "chromium") != nil {
+			t.Fatal("private failure retention failed")
+		}
+		entries, err := os.ReadDir(directory)
+		if err != nil || len(entries) != 1 || entries[0].Name() != "chromium.process.log" {
+			t.Fatal("unexpected debug artifact retained")
+		}
+		info, err := os.Stat(filepath.Join(directory, "chromium.process.log"))
+		if err != nil || info.Mode().Perm() != 0600 || retainPWFailure(directory, run, "chromium") == nil {
+			t.Fatal("private exclusive diagnostic guard failed")
+		}
+		if os.WriteFile(filepath.Join(run, "process.log"), bytes.Repeat([]byte("x"), 1048577), 0600) != nil || retainPWFailure(directory, run, "firefox") == nil {
+			t.Fatal("oversized debug source admitted")
+		}
+	})
 	var bounded bytes.Buffer
 	log := &pwBoundedLog{writer: &bounded, remaining: 4}
 	if n, err := log.Write([]byte("abcdef")); n != 6 || err != nil || !log.truncated || bounded.String() != "abcd" {
@@ -220,6 +312,9 @@ func TestPlaywrightHarnessValidation(t *testing.T) {
 func TestPlaywrightE2E(t *testing.T) {
 	if os.Getenv("GMA_PLAYWRIGHT_E2E") != "1" {
 		t.Skip("set GMA_PLAYWRIGHT_E2E=1 for isolated three-engine E2E")
+	}
+	if directory := os.Getenv("GMA_PW_DEBUG_DIRECTORY"); directory != "" && validatePWDebugDirectory(directory) != nil {
+		t.Fatal("explicit private browser debug directory refused")
 	}
 	dsn, err := url.Parse(os.Getenv("GMA_TEST_DSN"))
 	if err != nil || dsn.Path != "/gma_planner_test" || (dsn.Scheme != "postgres" && dsn.Scheme != "postgresql") {
@@ -376,22 +471,38 @@ func runPWEngine(t *testing.T, parent context.Context, node, web, dsn, engine st
 		}
 	}
 	cmd.Env = append(cmd.Env, "GMA_PW_FIXTURE_FILE="+file)
+	if os.Getenv("GMA_PW_DEBUG_DIRECTORY") != "" {
+		cmd.Env = append(cmd.Env, "GMA_PW_PRIVATE_DEBUG=1")
+	}
 	log := &pwBoundedLog{writer: private, remaining: 1048576}
 	cmd.Stdout = log
 	cmd.Stderr = log
 	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 	cmd.WaitDelay = 5 * time.Second
 	runErr := cmd.Run()
+	retained := false
+	retain := func() {
+		if retained {
+			return
+		}
+		retained = true
+		if retainPWFailure(os.Getenv("GMA_PW_DEBUG_DIRECTORY"), runDir, engine) != nil {
+			t.Error("explicit private browser diagnostics could not be retained")
+		}
+	}
 	if log.truncated {
+		retain()
 		t.Fatal("private browser diagnostics exceeded 1MiB bound")
 	}
 	receiptFile := filepath.Join(runDir, "receipt.json")
 	info, statErr := os.Lstat(receiptFile)
 	if statErr != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || info.Size() > 262144 {
+		retain()
 		t.Fatal("required private engine receipt unavailable")
 	}
 	receipt, readErr := os.ReadFile(receiptFile)
 	if readErr != nil || validatePWReceipt(receipt, engine, nonce) != nil || runErr != nil {
+		retain()
 		var partial pwReceipt
 		_ = json.Unmarshal(receipt, &partial)
 		phase := "startup"

@@ -5,6 +5,7 @@ const fs = require("node:fs"),
   vm = require("node:vm"),
   assert = require("node:assert/strict"),
   crypto = require("node:crypto");
+const { spawnSync } = require("node:child_process");
 const ts = require("../node_modules/typescript");
 const output = [],
   cache = new Map();
@@ -16,7 +17,10 @@ function load(name) {
       Buffer,
       URL,
       process,
-      console: { log: (value) => output.push(String(value)) },
+      console: {
+        log: (value) => output.push(String(value)),
+        error: (value) => output.push(String(value)),
+      },
       require: (specifier) =>
         specifier.startsWith("./")
           ? load(specifier.slice(2))
@@ -39,6 +43,8 @@ function load(name) {
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), "gm-vector-pw-unit-"));
 fs.chmodSync(directory, 0o700);
 const previous = process.env.GMA_PW_FIXTURE_FILE;
+const previousDebug = process.env.GMA_PW_PRIVATE_DEBUG;
+delete process.env.GMA_PW_PRIVATE_DEBUG;
 try {
   const {
       loadFixture,
@@ -177,6 +183,27 @@ try {
   process.env.GMA_PW_FIXTURE_FILE = path.join(linkedParent, "fixture.json");
   assert.throws(() => loadFixture());
   process.env.GMA_PW_FIXTURE_FILE = file;
+  const discovery = spawnSync(
+    process.execPath,
+    [
+      path.join(__dirname, "../node_modules/@playwright/test/cli.js"),
+      "test",
+      "--config=playwright.config.ts",
+      "--list",
+      "--reporter=list",
+    ],
+    {
+      cwd: path.join(__dirname, ".."),
+      env: process.env,
+      encoding: "utf8",
+      timeout: 15000,
+      maxBuffer: 65536,
+    },
+  );
+  assert.equal(discovery.status, 0);
+  assert(discovery.stdout.includes("Total: 3 tests in 1 file"));
+  for (const engine of ["chromium", "firefox", "webkit"])
+    assert(discovery.stdout.includes("[" + engine + "]"));
   const Reporter = load("redacted-reporter").default,
     reporter = new Reporter();
   reporter.onTestEnd(
@@ -212,6 +239,15 @@ try {
     () => reporter.onEnd({ status: "failed" }),
     (error) => error.code === "EEXIST",
   );
+  process.env.GMA_PW_PRIVATE_DEBUG = "1";
+  reporter.onError({ message: marker, stack: marker });
+  assert(
+    output.some(
+      (value) =>
+        value.startsWith("PW_PRIVATE_ERROR ") && value.includes(marker),
+    ),
+  );
+  delete process.env.GMA_PW_PRIVATE_DEBUG;
   console.log(
     "Playwright contract unit PASS: origin/schema/ownership/mode/symlink/size/duplicate-key guards, private exclusive receipt, adversarial secret-free reporter",
   );
@@ -223,5 +259,7 @@ try {
 } finally {
   if (previous === undefined) delete process.env.GMA_PW_FIXTURE_FILE;
   else process.env.GMA_PW_FIXTURE_FILE = previous;
+  if (previousDebug === undefined) delete process.env.GMA_PW_PRIVATE_DEBUG;
+  else process.env.GMA_PW_PRIVATE_DEBUG = previousDebug;
   fs.rmSync(directory, { recursive: true, force: true });
 }

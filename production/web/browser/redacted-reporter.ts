@@ -5,6 +5,7 @@ import type {
   TestCase,
   TestResult,
   FullResult,
+  TestError,
 } from "@playwright/test/reporter";
 import { loadFixture, scenarios, revisions } from "./contracts";
 export default class RedactedReporter implements Reporter {
@@ -18,6 +19,18 @@ export default class RedactedReporter implements Reporter {
   private failurePhase = "";
   private failureSite = "";
   private failureClass = "";
+  private debug(error?: TestError) {
+    if (process.env.GMA_PW_PRIVATE_DEBUG !== "1" || !error) return;
+    // The Go fixture directs both streams exclusively into its capped0600 log.
+    // This explicit diagnostic mode never prints snippets/DOM/config/attachments.
+    console.error(
+      "PW_PRIVATE_ERROR " +
+        JSON.stringify({
+          message: error.message?.slice(0, 32768),
+          stack: error.stack?.slice(0, 32768),
+        }),
+    );
+  }
   onTestEnd(test: TestCase, result: TestResult) {
     this.count++;
     for (const item of test.annotations) {
@@ -54,6 +67,7 @@ export default class RedactedReporter implements Reporter {
         this.certificateRejections.push(item.description);
     }
     if (result.status !== "passed") {
+      for (const error of result.errors.slice(0, 3)) this.debug(error);
       this.failurePhase = scenarios[this.results.length] || "cleanup";
       this.failureClass =
         result.status === "timedOut" ? "TimeoutError" : "Error";
@@ -73,7 +87,8 @@ export default class RedactedReporter implements Reporter {
           (result.status === "timedOut" ? "TimeoutError" : "Error"),
       );
   }
-  onError() {
+  onError(error?: TestError) {
+    this.debug(error);
     console.log("PW_FAILURE kind=runner exception=Error");
   }
   onEnd(result: FullResult) {

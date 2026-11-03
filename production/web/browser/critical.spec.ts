@@ -1,4 +1,4 @@
-import ru from "../src/locales/ru.json";
+import ru from "../src/locales/ru.json" with { type: "json" };
 import {
   test,
   expect,
@@ -219,6 +219,10 @@ test("critical real workspace B01-B09", async ({
       await installGate(page, "/projects/" + projectID, "PUT");
       await click(page, "Применить изменения");
       await page.waitForFunction(() => (window as any).__pwGate.ready);
+      // The actual write is committed, but its response is held. Close the
+      // still-open preview using its real control before changing selection.
+      await page.locator("dialog header button").click();
+      await expect(page.locator("dialog")).toHaveCount(0);
       await selectProject(page, "PW other project");
       await releaseGate(page);
       await expect(page.locator(".project-header h1")).toHaveText(
