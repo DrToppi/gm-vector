@@ -70,6 +70,15 @@ after candidate images exist. Also require existing `TestSecurityAuditResilience
 and `TestSecurityAuditRevocationSeatRace` explicitly: their mere existence in the
 tree does not make the present `verify.py all` execute their opt-in DB bodies.
 
+The complete integration/all runner accepts an optional all-or-none set of
+`--app-image`, `--db-image`, `--proxy-image` immutable image IDs and forwards it to
+primary recovery. CI/reference checks supply all three; focused checks, unit and
+browser-only runs refuse irrelevant overrides. Retain existing invocation defaults
+for compatibility, but the recovery fixture still checks the actual source/image
+identity: an old local image cannot pass a new candidate. Add the deterministic
+member/milestone authorization regression to mandatory integration, not only its
+focused entry point.
+
 Root scanner/privacy helpers use Python stdlib, existing pinned Trivy **0.76.1**,
 and Gitleaks **8.30.1**. The read-only local Linux x86-64 binary fingerprint is
 `88f91962aa2f93ac6ab281d553b9e125f5197bbbce38f9f2437f7299c32e5509`;
@@ -298,6 +307,20 @@ no automatic mutation retries, no excluded late cancellation/timeout/lost ack.
 Record exact source/harness/runtime metadata, machine/cgroup resources, DB/CPU/heap
 series, rates/counts/latencies and quiet execution window. No competing DB/Chrome
 benchmarks or code changes during the hour; READ-ONLY review may proceed.
+
+The final wrapper uses an explicit80-minute owned-process deadline and a16MiB
+private Go JSON output budget; the ordinary runner retains600-second bounds.
+Refuse smoke/duration overrides, non-disposable/non-loopback DSNs, dirty sources,
+missing/skipped/shortened phase evidence and stale source after the run. Record
+CPU count/affinity, OS/kernel and bounded cgroup CPU/memory limits without a
+hostname or unrelated process data. The existing fixture supplies combined
+client/server Go CPU/heap/pool/SQL series. Supplement its explicitly excluded
+PostgreSQL resource scope with ten-second read-only Docker statistics for the
+verified disposable `gma-planner-test-db` container bound to local15432, recording
+its immutable image/container identity and limits. Never read container secrets,
+monitor unrelated workloads or change DB settings. Missing resource observations
+remain a verification failure, not an invented zero. This is reference-test
+instrumentation, not a product monitoring agent or production telemetry.
 
 Required candidate CI must run three browsers, all-image gates, existing frontend/
 unit/API/security/backup/upgrade/HTTPS/install/updater checks with expected roots
