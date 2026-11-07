@@ -1,4 +1,10 @@
-# Implementation checkpoint — updated 2026-10-31
+# Implementation checkpoint — updated 2026-11-07
+
+Latest: [saved checkpoint, 2026-11-07](remediation/2026-10-30/checkpoint-2026-11-07.md).
+The remaining browser diagnostics and private CI proposal/evidence have been
+preserved. WP-05 remains in progress; privacy-policy disposition, final native
+checks, CI integration and operational acceptance remain open. This save did not
+change the working deployment or main.
 
 Status: **RESUMED BY EXPLICIT USER REQUEST**. The pause below is historical.
 The reviewed updater commit has now been deployed and its host service enabled.
