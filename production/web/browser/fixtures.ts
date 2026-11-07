@@ -314,6 +314,25 @@ export async function nativeInteractions(
   const focusState = (details = true) =>
     page.evaluate((details) => {
       const dialog = document.querySelector("dialog");
+      const active = document.activeElement as HTMLElement | null;
+      const rect = active?.getBoundingClientRect();
+      const style = active ? getComputedStyle(active) : null;
+      const closed = active?.closest("details:not([open])");
+      let ancestorsVisible = true;
+      for (
+        let element = active;
+        element && dialog?.contains(element);
+        element = element.parentElement
+      ) {
+        const current = getComputedStyle(element);
+        if (
+          current.display === "none" ||
+          current.visibility === "hidden" ||
+          current.visibility === "collapse" ||
+          Number(current.opacity) === 0
+        )
+          ancestorsVisible = false;
+      }
       const controls = [
         ...(dialog?.querySelectorAll<HTMLElement>(
           "button,input,select,textarea,summary,[tabindex]",
@@ -325,6 +344,30 @@ export async function nativeInteractions(
       return {
         activeTag: document.activeElement?.tagName,
         activeType: document.activeElement?.getAttribute("type"),
+        hostFocusVisible: !!active?.matches(":focus-visible"),
+        hostFocused: !!active?.matches(":focus"),
+        isFocusGuard: !!active?.matches("[data-modal-focus-guard]"),
+        currentControl: !!active?.matches(
+          "button,input:not([type=hidden]),select,textarea,summary,a[href],[tabindex]",
+        ),
+        closedDetailsBlocked:
+          !!closed &&
+          !closed.querySelector(":scope > summary")?.contains(active),
+        ancestorsVisible,
+        activeEnabled: !!active && !active.matches(":disabled"),
+        activeTabIndex: active?.tabIndex,
+        positiveGeometry:
+          !!rect &&
+          rect.width > 0 &&
+          rect.height > 0 &&
+          !!active?.getClientRects().length,
+        visibleStyle:
+          !!style &&
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          style.visibility !== "collapse" &&
+          Number(style.opacity) > 0,
+        inertOrHidden: !!active?.closest("[hidden],[inert],[aria-hidden=true]"),
         activeControlIndex: controls.indexOf(
           document.activeElement as HTMLElement,
         ),
@@ -348,13 +391,14 @@ export async function nativeInteractions(
       const valid = await page.evaluate(() => {
         const dialog = document.querySelector("dialog[open]"),
           active = document.activeElement;
+        if (!document.hasFocus()) return "document_not_focused";
         if (
           !dialog ||
           !(active instanceof HTMLElement) ||
           !dialog.contains(active) ||
           active.matches("[data-modal-focus-guard]")
         )
-          return false;
+          return "not_dialog_control_or_focus_guard";
         if (
           !active.matches(
             "button,input:not([type=hidden]),select,textarea,summary,a[href],[tabindex]",
@@ -363,21 +407,20 @@ export async function nativeInteractions(
           active.matches(":disabled") ||
           active.closest("[hidden],[inert],[aria-hidden=true]")
         )
-          return false;
+          return "not_current_enabled_control";
         const closed = active.closest("details:not([open])");
         if (
           closed &&
           !closed.querySelector(":scope > summary")?.contains(active)
         )
-          return false;
+          return "closed_details_control";
         const rect = active.getBoundingClientRect();
         if (
           !active.getClientRects().length ||
           rect.width <= 0 ||
-          rect.height <= 0 ||
-          !active.matches(":focus-visible")
+          rect.height <= 0
         )
-          return false;
+          return "not_rendered_control";
         for (
           let element: HTMLElement | null = active;
           element && dialog.contains(element);
@@ -390,10 +433,15 @@ export async function nativeInteractions(
             style.visibility === "collapse" ||
             Number(style.opacity) === 0
           )
-            return false;
+            return "hidden_ancestor";
         }
         return true;
       });
+      if (valid !== true && process.env.GMA_PW_PRIVATE_DEBUG === "1")
+        console.error(
+          "PW_PRIVATE_ERROR " +
+            JSON.stringify({ message: "PW_NATIVE_TAB_PREDICATE " + valid }),
+        );
       expect(valid).toBe(true);
     }
     return page.evaluate(expression);
